@@ -1,0 +1,52 @@
+#define FME_COMPONENT "FMECITYJSON"
+#define FME_EXTENSION ".DLL"
+
+#ifndef FME_ORIGINAL_FILENAME
+#define FME_ORIGINAL_FILENAME FME_COMPONENT "." FME_EXTENSION
+#endif
+
+#include "windows.h"
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x2L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Safe Software Inc.\0"
+            VALUE "FileDescription", FME_COMPONENT " " FME_EXTENSION "\0"
+            VALUE "FileVersion", "1.0.0.0\0"
+            VALUE "InternalName", FME_COMPONENT "\0"
+            VALUE "LegalCopyright", "Copyright (c) 1994 - 2018, Safe Software Inc. \0"
+            VALUE "LegalTrademarks", "\0"
+            VALUE "OriginalFilename", FME_ORIGINAL_FILENAME "\0"
+            VALUE "ProductName", "FME(R) 2018\0"
+            VALUE "ProductVersion",  "\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+

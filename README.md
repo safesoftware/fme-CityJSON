@@ -60,5 +60,4 @@ schemas and so on.)
 * Restart FME
 
 ## Licenses
-* [FME AR](https://github.com/safesoftware/fme-CityJSON/blob/master/LICENSE)
 * [JSON parser](https://github.com/nlohmann/json/blob/master/LICENSE)
