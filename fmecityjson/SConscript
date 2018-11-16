@@ -1,0 +1,12 @@
+Import('pluginbuilder_env', 'fme_home')
+
+pluginbuilder_env.Append(CPPPATH = [fme_home.Dir('pluginbuilder/cpp'),
+                                    fme_home.Dir('fmeobjects/cpp')])
+
+plugin = pluginbuilder_env.LoadableModule('fmecityjson',
+                                          ['fmecityjsongeometryvisitor.cpp',
+                                           'fmecityjsonentrypoints.cpp',
+                                           'fmecityjsonreader.cpp',
+                                           'fmecityjsonwriter.cpp'])
+
+pluginbuilder_env.Install(fme_home.Dir('plugins'), plugin)
