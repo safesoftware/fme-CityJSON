@@ -82,7 +82,11 @@ END_PREAMBLE
 ! --------------------------------------------------------------------------------
 GEOM_MAP cityjson_point                fme_point
 
-GEOM_MAP cityjson_line                 fme_line
+GEOM_MAP cityjson_multipoint                fme_point
+
+GEOM_MAP cityjson_linestring                 fme_line
+
+GEOM_MAP cityjson_multilinestring                 fme_line
 
 GEOM_MAP cityjson_polygon              fme_polygon
 
@@ -101,12 +105,13 @@ GEOM_MAP cityjson_polygon              fme_polygon
 ! into a line; it is very important and must be present.
 ! --------------------------------------------------------------------------------
 
-GEOM_MAP cityjson_arc             fme_arc                \
+GEOM_MAP cityjson_line             fme_arc                \
          fme_primary_axis         fme_primary_axis       \
          fme_secondary_axis       fme_secondary_axis     \
          fme_rotation             fme_rotation           \
          fme_start_angle          fme_start_angle        \
-         fme_sweep_angle          fme_sweep_angle        
+         fme_sweep_angle          fme_sweep_angle         \
+         @Arc(&fme_primary_axis,&fme_secondary_axis,0, &fme_rotation,&fme_start_angle,&fme_sweep_angle)
          
 GEOM_MAP cityjson_text            fme_text               \
          fme_text_string          fme_text_string        \
@@ -131,10 +136,11 @@ GEOM_MAP cityjson_multi_text      fme_text               \
 ! into a polygon; it is very important and must be present.
 ! --------------------------------------------------------------------------------
 
-GEOM_MAP cityjson_ellipse         fme_ellipse            \
+GEOM_MAP cityjson_polygon         fme_ellipse            \
          fme_primary_axis         fme_primary_axis       \
          fme_secondary_axis       fme_secondary_axis     \
-         fme_rotation             fme_rotation
+         fme_rotation             fme_rotation           \
+         @Arc(0, MAKEPOLY_FOR_360ARC)
          
 GEOM_MAP cityjson_polygon         fme_rectangle          
          
@@ -146,7 +152,13 @@ GEOM_MAP cityjson_surface         fme_surface
 
 GEOM_MAP cityjson_multisurface    fme_surface
 
+GEOM_MAP cityjson_compositesurface    fme_surface
+
 GEOM_MAP cityjson_solid           fme_solid
+
+GEOM_MAP cityjson_multisolid           fme_solid
+
+GEOM_MAP cityjson_compositesolid           fme_solid
 
 GEOM_MAP cityjson_null            fme_no_geom            
          

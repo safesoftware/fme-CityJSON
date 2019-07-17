@@ -255,12 +255,12 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
          for (json::iterator it = boundary.begin(); it != boundary.end(); ++it) 
          {
             std::string coords = it.value().dump();
-            gLogFile->logMessageString(coords.c_str(), FME_INFORM);
+//            gLogFile->logMessageString(coords.c_str(), FME_INFORM);
 
             for(int vertex : it.value())
             {
                std::string vertexArray = inputJSON_.at("vertices")[vertex].dump();
-               gLogFile->logMessageString(vertexArray.c_str(), FME_INFORM);
+//               gLogFile->logMessageString(vertexArray.c_str(), FME_INFORM);
 
                line->appendPointXYZ(inputJSON_.at("vertices")[vertex][0],
                                     inputJSON_.at("vertices")[vertex][1],
@@ -268,86 +268,86 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
             }
          }
 
-         auto textureCoordinates = nextObject_.value().at("geometry")[0].at("texture").at("rgbTexture").at("values")[i];
-         std::string tcString = textureCoordinates.dump();
-         gLogFile->logMessageString(tcString.c_str(), FME_INFORM);
-
-         if (!textureCoordinates.empty())
-         {
-            // add some texture coordinates
-            FME_Real64 textureCoordsU[100];  // TODO: set size dynamically
-            FME_Real64 textureCoordsV[100];
-
-            for (auto & textureCoordinate : textureCoordinates)
-            {
-               std::string textureCoords = textureCoordinate.dump();
-               gLogFile->logMessageString(textureCoords.c_str(), FME_INFORM);
-
-               // We need to check for cases where it is "[null]"
-               if (textureCoordinate.size() > 1)
-               {
-                  for (int k(0); k < textureCoordinate.size(); ++k)
-                  {
-                     if (k==0)
-                     {
-                        // This is the index of the texture to use, I think.
-                        int textureFilenameIndex = textureCoordinate[k];
-                        std::string textureFilename = inputJSON_.at("appearance").at("textures")[textureFilenameIndex].at("image");
-
-                        // This is really gross code here.  Should be a separate method, etc.
-                        // but I thought it would just be a good example starting point.
-                        std::string fullFileName = dataset_;
-                        // TODO: I guess finding the directory the dataset is in may be tricky,
-                        // and different on Windows and Linux, etc.   This is quick and dirty.
-                        if (fullFileName.find_last_of("/") != std::string::npos)
-                        {
-                           fullFileName.erase(fullFileName.find_last_of("/")+1, std::string::npos);
-                        }
-                        if (fullFileName.find_last_of("\\") != std::string::npos)
-                        {
-                           fullFileName.erase(fullFileName.find_last_of("\\")+1, std::string::npos);
-                        }
-                        fullFileName += textureFilename;
-                        // TODO: We are using "GENERIC" to guess at what type the image is.  But
-                        // I think CityJSON knows the image type, so that hint could be passed in here
-                        // instead if we wished, I guess.
-                        badLuck = readRaster(fullFileName, appearanceReference, "GENERIC");
-                        if (badLuck != FME_SUCCESS) return badLuck;
-                     }
-                     else
-                     {
-                        // These are the indexes of the texture coordinates.
-                        int tcvertex = textureCoordinate[k];
-                        std::string vertexArray = inputJSON_.at("appearance").at("vertices-texture")[tcvertex].dump();
-                        gLogFile->logMessageString(vertexArray.c_str(), FME_INFORM);
-
-                        if (k-1 >= line->numPoints())
-                        {
-                           // There is a mismatch of # texture coordinates with real vertices.
-                           // TODO: Log some error message
-                           int bob(0);
-                        }
-                        else
-                        {
-                           badLuck = line->setNamedMeasureAt(*textureCoordUName_, k-1, inputJSON_.at("appearance").at("vertices-texture")[tcvertex][0]);
-                           if (badLuck != FME_SUCCESS) return badLuck;
-                           badLuck = line->setNamedMeasureAt(*textureCoordVName_, k-1, inputJSON_.at("appearance").at("vertices-texture")[tcvertex][1]);
-                           if (badLuck != FME_SUCCESS) return badLuck;
-                        }
-                     }
-                  }
-               }
-            }
-         }
+//         auto textureCoordinates = nextObject_.value().at("geometry")[0].at("texture").at("rgbTexture").at("values")[i];
+//         std::string tcString = textureCoordinates.dump();
+//         gLogFile->logMessageString(tcString.c_str(), FME_INFORM);
+//
+//         if (!textureCoordinates.empty())
+//         {
+//            // add some texture coordinates
+//            FME_Real64 textureCoordsU[100];  // TODO: set size dynamically
+//            FME_Real64 textureCoordsV[100];
+//
+//            for (auto & textureCoordinate : textureCoordinates)
+//            {
+//               std::string textureCoords = textureCoordinate.dump();
+//               gLogFile->logMessageString(textureCoords.c_str(), FME_INFORM);
+//
+//               // We need to check for cases where it is "[null]"
+//               if (textureCoordinate.size() > 1)
+//               {
+//                  for (int k(0); k < textureCoordinate.size(); ++k)
+//                  {
+//                     if (k==0)
+//                     {
+//                        // This is the index of the texture to use, I think.
+//                        int textureFilenameIndex = textureCoordinate[k];
+//                        std::string textureFilename = inputJSON_.at("appearance").at("textures")[textureFilenameIndex].at("image");
+//
+//                        // This is really gross code here.  Should be a separate method, etc.
+//                        // but I thought it would just be a good example starting point.
+//                        std::string fullFileName = dataset_;
+//                        // TODO: I guess finding the directory the dataset is in may be tricky,
+//                        // and different on Windows and Linux, etc.   This is quick and dirty.
+//                        if (fullFileName.find_last_of("/") != std::string::npos)
+//                        {
+//                           fullFileName.erase(fullFileName.find_last_of("/")+1, std::string::npos);
+//                        }
+//                        if (fullFileName.find_last_of("\\") != std::string::npos)
+//                        {
+//                           fullFileName.erase(fullFileName.find_last_of("\\")+1, std::string::npos);
+//                        }
+//                        fullFileName += textureFilename;
+//                        // TODO: We are using "GENERIC" to guess at what type the image is.  But
+//                        // I think CityJSON knows the image type, so that hint could be passed in here
+//                        // instead if we wished, I guess.
+//                        badLuck = readRaster(fullFileName, appearanceReference, "GENERIC");
+//                        if (badLuck != FME_SUCCESS) return badLuck;
+//                     }
+//                     else
+//                     {
+//                        // These are the indexes of the texture coordinates.
+//                        int tcvertex = textureCoordinate[k];
+//                        std::string vertexArray = inputJSON_.at("appearance").at("vertices-texture")[tcvertex].dump();
+//                        gLogFile->logMessageString(vertexArray.c_str(), FME_INFORM);
+//
+//                        if (k-1 >= line->numPoints())
+//                        {
+//                           // There is a mismatch of # texture coordinates with real vertices.
+//                           // TODO: Log some error message
+//                           int bob(0);
+//                        }
+//                        else
+//                        {
+//                           badLuck = line->setNamedMeasureAt(*textureCoordUName_, k-1, inputJSON_.at("appearance").at("vertices-texture")[tcvertex][0]);
+//                           if (badLuck != FME_SUCCESS) return badLuck;
+//                           badLuck = line->setNamedMeasureAt(*textureCoordVName_, k-1, inputJSON_.at("appearance").at("vertices-texture")[tcvertex][1]);
+//                           if (badLuck != FME_SUCCESS) return badLuck;
+//                        }
+//                     }
+//                  }
+//               }
+//            }
+//         }
 
          IFMEArea* area = fmeGeometryTools_->createSimpleAreaByCurve(line);
          IFMEFace* face = fmeGeometryTools_->createFaceByArea(area, FME_CLOSE_3D_EXTEND_MODE);
 
-         // For now we'll leave the face single-sided.
-         if (appearanceReference != 0) // Only set one if we found one.
-         {
-            face->setAppearanceReference(appearanceReference, FME_TRUE);
-         }
+//         // For now we'll leave the face single-sided.
+//         if (appearanceReference != 0) // Only set one if we found one.
+//         {
+//            face->setAppearanceReference(appearanceReference, FME_TRUE);
+//         }
 
          // Here we could scan the CityJSON and see what optional GeometryName we could set.
          // Actually, the line, area, face, and ms could all have a GeometryName, if it is relevant.
@@ -479,16 +479,11 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature& feature, FME_Boolean& endO
          // may have many possible geometry types.
          sf->setAttribute("fme_geometry{0}", "cityjson_point");
 
-         sf->setAttribute("fme_geometry{1}", "cityjson_line");
+         sf->setAttribute("fme_geometry{1}", "cityjson_linestring");
 
-         sf->setAttribute("fme_geometry{2}", "cityjson_polygon");
+         sf->setAttribute("fme_geometry{2}", "cityjson_multilinestring");
 
-         sf->setAttribute("fme_geometry{3}", "cityjson_arc");
-         sf->setAttribute("fme_geometry{3}.fme_primary_axis", "number(31,15)");
-         sf->setAttribute("fme_geometry{3}.fme_secondary_axis", "number(31,15)");
-         sf->setAttribute("fme_geometry{3}.fme_rotation", "number(31,15)");
-         sf->setAttribute("fme_geometry{3}.fme_start_angle", "number(31,15)");
-         sf->setAttribute("fme_geometry{3}.fme_sweep_angle", "number(31,15)");
+         sf->setAttribute("fme_geometry{3}", "cityjson_polygon");
 
          sf->setAttribute("fme_geometry{4}", "cityjson_text");
          sf->setAttribute("fme_geometry{4}.fme_text_string", "string");
@@ -498,20 +493,21 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature& feature, FME_Boolean& endO
          sf->setAttribute("fme_geometry{5}.fme_text_string", "string");
          sf->setAttribute("fme_geometry{5}.fme_text_size", "number(31,15)");
 
-         sf->setAttribute("fme_geometry{6}", "cityjson_ellipse");
-         sf->setAttribute("fme_geometry{6}.fme_primary_axis", "number(31,15)");
-         sf->setAttribute("fme_geometry{6}.fme_secondary_axis", "number(31,15)");
-         sf->setAttribute("fme_geometry{6}.fme_rotation", "number(31,15)");
+         sf->setAttribute("fme_geometry{6}", "cityjson_collection");
 
-         sf->setAttribute("fme_geometry{7}", "cityjson_collection");
+         sf->setAttribute("fme_geometry{7}", "cityjson_null");
 
-         sf->setAttribute("fme_geometry{8}", "cityjson_null");
+         sf->setAttribute("fme_geometry{8}", "cityjson_surface");
 
-         sf->setAttribute("fme_geometry{9}", "cityjson_surface");
+         sf->setAttribute("fme_geometry{9}", "cityjson_multisurface");
 
-         sf->setAttribute("fme_geometry{10}", "cityjson_multisurface");
+         sf->setAttribute("fme_geometry{10}", "cityjson_compositesurface");
 
          sf->setAttribute("fme_geometry{11}", "cityjson_solid");
+
+         sf->setAttribute("fme_geometry{12}", "cityjson_multisolid");
+
+         sf->setAttribute("fme_geometry{13}", "cityjson_compositesolid");
       }
 
       schemaScanDone_ = true;
