@@ -144,6 +144,8 @@ GEOM_MAP cityjson_collection      fme_collection
 
 GEOM_MAP cityjson_surface         fme_surface
 
+GEOM_MAP cityjson_multisurface    fme_surface
+
 GEOM_MAP cityjson_solid           fme_solid
 
 GEOM_MAP cityjson_null            fme_no_geom            

@@ -123,12 +123,12 @@ FME_Status FMECityJSONReader::open(const char* datasetName, const IFMEStringArra
    // Let's make sure we're parsing this correctly.
    if (inputJSON_.at("type") != "CityJSON")
    {
-      // TODO: Should log a message
+       gLogFile->logMessageString("Not a CityJSON file", FME_ERROR);
       return FME_FAILURE;
    }
-   if (inputJSON_.at("version") > "0.8")
+   if (inputJSON_.at("version") < "1.0")
    {
-      // TODO: Should log a message
+      gLogFile->logMessageString("Unsupported CityJSON version", FME_ERROR);
       return FME_FAILURE;
    }
 
@@ -141,6 +141,7 @@ FME_Status FMECityJSONReader::open(const char* datasetName, const IFMEStringArra
    inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
    coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
 
+   gLogFile->logMessageString("L144", FME_INFORM);
    // start by pointing to the first object to read
    nextObject_ = inputJSON_.at("CityObjects").begin();
 
@@ -205,7 +206,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    // TODO: I'm not sure how you want to set this up, but one way is to
    // have a class iterator that is progressively going through the CityJSON
    // file.  I'll use that method as a starting example.
-
+   gLogFile->logMessageString("L208", FME_INFORM);
    if (nextObject_ == inputJSON_.at("CityObjects").end())
    {
       endOfFile = FME_TRUE;
@@ -219,6 +220,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    // iterate through every attribute on this object.
    for (json::iterator it = nextObject_.value().at("attributes").begin(); it != nextObject_.value().at("attributes").end(); ++it) 
    {
+       gLogFile->logMessageString("L222", FME_INFORM);
       const std::string& attributeName = it.key();
       const auto& attributeValue = it.value();
       // For now, I'm just guessing at the type of this attribute.
@@ -233,6 +235,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    if (nextObject_.value().at("geometry")[0].at("type") == "MultiSurface")
    {
       std::string geometry = nextObject_.value().at("geometry")[0].dump();
+      gLogFile->logMessageString("L236", FME_INFORM);
       gLogFile->logMessageString(geometry.c_str(), FME_INFORM);
 
       IFMEMultiSurface* ms = fmeGeometryTools_->createMultiSurface();
@@ -379,7 +382,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    feature.setCoordSys(coordSys_.c_str());
 
    // Log the feature
-   // gLogFile->logFeature(feature);
+   gLogFile->logFeature(feature);
 
    ++nextObject_;
 
@@ -412,6 +415,7 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature& feature, FME_Boolean& endO
          // I'm not sure exactly what types of features this reader will
          // produce, so this is just a wild guess as an example.
          std::string object = cityObject.dump();
+         gLogFile->logMessageString("L416", FME_INFORM);
          gLogFile->logMessageString(object.c_str(), FME_INFORM);
 
          // Let's find out what we will be using as the "feature_type", and
@@ -425,18 +429,22 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature& feature, FME_Boolean& endO
          IFMEFeature* sf(nullptr);
          if (schemaFeature == schemaFeatures_.end())
          {
+             gLogFile->logMessageString("schemaFeature == schemaFeatures_.end()", FME_INFORM);
             sf = gFMESession->createFeature();
             sf->setFeatureType(featureType.c_str());
+             gLogFile->logMessageString(featureType.c_str(), FME_INFORM);
             schemaFeatures_[featureType] = sf; // gives up ownership
          }
          else
          {
+             gLogFile->logMessageString("schemaFeature != schemaFeatures_.end()", FME_INFORM);
             sf = schemaFeature->second;
          }
 
          // iterate through every attribute on this object.
          for (json::iterator it = cityObject.at("attributes").begin(); it != cityObject.at("attributes").end(); ++it) 
          {
+             gLogFile->logMessageString("attributes iterator", FME_INFORM);
             const std::string& attributeName = it.key();
             const auto& attributeValue = it.value();
             // For now, I'm just guessing at the type of this attribute.
@@ -469,39 +477,41 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature& feature, FME_Boolean& endO
 
          // For now, I'll just hard code that each schema feature type 
          // may have many possible geometry types.
-         feature.setAttribute("fme_geometry{0}", "cityjson_point");
+         sf->setAttribute("fme_geometry{0}", "cityjson_point");
 
-         feature.setAttribute("fme_geometry{1}", "cityjson_line");
+         sf->setAttribute("fme_geometry{1}", "cityjson_line");
 
-         feature.setAttribute("fme_geometry{2}", "cityjson_polygon");
+         sf->setAttribute("fme_geometry{2}", "cityjson_polygon");
 
-         feature.setAttribute("fme_geometry{3}", "cityjson_arc");
-         feature.setAttribute("fme_geomattr{3}.fme_primary_axis", "number(31,15)");
-         feature.setAttribute("fme_geomattr{3}.fme_secondary_axis", "number(31,15)");
-         feature.setAttribute("fme_geomattr{3}.fme_rotation", "number(31,15)");
-         feature.setAttribute("fme_geomattr{3}.fme_start_angle", "number(31,15)");
-         feature.setAttribute("fme_geomattr{3}.fme_sweep_angle", "number(31,15)");
+         sf->setAttribute("fme_geometry{3}", "cityjson_arc");
+         sf->setAttribute("fme_geometry{3}.fme_primary_axis", "number(31,15)");
+         sf->setAttribute("fme_geometry{3}.fme_secondary_axis", "number(31,15)");
+         sf->setAttribute("fme_geometry{3}.fme_rotation", "number(31,15)");
+         sf->setAttribute("fme_geometry{3}.fme_start_angle", "number(31,15)");
+         sf->setAttribute("fme_geometry{3}.fme_sweep_angle", "number(31,15)");
 
-         feature.setAttribute("fme_geometry{4}", "cityjson_text");
-         feature.setAttribute("fme_geomattr{4}.fme_text_string", "string");
-         feature.setAttribute("fme_geomattr{4}.fme_text_size", "number(31,15)");
+         sf->setAttribute("fme_geometry{4}", "cityjson_text");
+         sf->setAttribute("fme_geometry{4}.fme_text_string", "string");
+         sf->setAttribute("fme_geometry{4}.fme_text_size", "number(31,15)");
 
-         feature.setAttribute("fme_geometry{5}", "cityjson_multi_text");
-         feature.setAttribute("fme_geomattr{5}.fme_text_string", "string");
-         feature.setAttribute("fme_geomattr{5}.fme_text_size", "number(31,15)");
+         sf->setAttribute("fme_geometry{5}", "cityjson_multi_text");
+         sf->setAttribute("fme_geometry{5}.fme_text_string", "string");
+         sf->setAttribute("fme_geometry{5}.fme_text_size", "number(31,15)");
 
-         feature.setAttribute("fme_geometry{6}", "cityjson_ellipse");
-         feature.setAttribute("fme_geomattr{6}.fme_primary_axis", "number(31,15)");
-         feature.setAttribute("fme_geomattr{6}.fme_secondary_axis", "number(31,15)");
-         feature.setAttribute("fme_geomattr{6}.fme_rotation", "number(31,15)");
+         sf->setAttribute("fme_geometry{6}", "cityjson_ellipse");
+         sf->setAttribute("fme_geometry{6}.fme_primary_axis", "number(31,15)");
+         sf->setAttribute("fme_geometry{6}.fme_secondary_axis", "number(31,15)");
+         sf->setAttribute("fme_geometry{6}.fme_rotation", "number(31,15)");
 
-         feature.setAttribute("fme_geometry{7}", "cityjson_collection");
+         sf->setAttribute("fme_geometry{7}", "cityjson_collection");
 
-         feature.setAttribute("fme_geometry{8}", "cityjson_null");
+         sf->setAttribute("fme_geometry{8}", "cityjson_null");
 
-         feature.setAttribute("fme_geometry{9}", "cityjson_surface");
+         sf->setAttribute("fme_geometry{9}", "cityjson_surface");
 
-         feature.setAttribute("fme_geometry{10}", "cityjson_solid");
+         sf->setAttribute("fme_geometry{10}", "cityjson_multisurface");
+
+         sf->setAttribute("fme_geometry{11}", "cityjson_solid");
       }
 
       schemaScanDone_ = true;
@@ -509,6 +519,7 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature& feature, FME_Boolean& endO
 
    if (schemaFeatures_.empty())
    {
+       gLogFile->logMessageString("schemaFeatures_.empty()", FME_INFORM);
       endOfSchema = FME_TRUE;
       return FME_SUCCESS;
    }
@@ -536,11 +547,13 @@ void FMECityJSONReader::readParametersDialog()
 
       // Let's log to the user that a parameter value has been specified.
       std::string paramMsg = (kCityJSONParamTag + cityJsonParameters_).c_str();
+      gLogFile->logMessageString("Let's log to the user that a parameter value has been specified.", FME_INFORM);
       gLogFile->logMessageString(paramMsg.c_str(), FME_INFORM);
    }
    else
    {
       // Log that no parameter value was entered.
+      gLogFile->logMessageString("Log that no parameter value was entered", FME_INFORM);
       gLogFile->logMessageString(kMsgNoCityJSONParam, FME_INFORM);
    }
    gFMESession->destroyString(paramValue);
