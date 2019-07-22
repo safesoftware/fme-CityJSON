@@ -42,7 +42,7 @@
 #include <fmemap.h>
 #include <isession.h>
 #include <ifeature.h>
-#include <iline.h>
+
 #include <iarea.h>
 #include <isimplearea.h>
 #include <iface.h>
@@ -52,6 +52,7 @@
 #include <iraster.h>
 #include <ilibrary.h>
 
+#include <typeinfo>
 
 // These are initialized externally when a reader object is created so all
 // methods in this file can assume they are ready to use.
@@ -244,29 +245,16 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
       for (int i(0); i < nextObject_.value().at("geometry")[0].at("boundaries").size(); ++i)
       {
          FME_UInt32 appearanceReference(0);
-         auto boundary = nextObject_.value().at("geometry")[0].at("boundaries")[i];
+         json::value_type boundary = nextObject_.value().at("geometry")[0].at("boundaries")[i];
+         gLogFile->logMessageString(typeid(boundary).name(), FME_INFORM);
+        // N8nlohmann10basic_jsonISt3mapSt6vectorNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEblmdSaNS_14adl_serializerEEE
 
          // Let's build up this boundary.
          std::string boundaryString = boundary.dump();
-         gLogFile->logMessageString(boundaryString.c_str(), FME_INFORM);
 
          // add some coordinates
          IFMELine* line = fmeGeometryTools_->createLine();
-         for (json::iterator it = boundary.begin(); it != boundary.end(); ++it) 
-         {
-            std::string coords = it.value().dump();
-//            gLogFile->logMessageString(coords.c_str(), FME_INFORM);
-
-            for(int vertex : it.value())
-            {
-               std::string vertexArray = inputJSON_.at("vertices")[vertex].dump();
-//               gLogFile->logMessageString(vertexArray.c_str(), FME_INFORM);
-
-               line->appendPointXYZ(inputJSON_.at("vertices")[vertex][0],
-                                    inputJSON_.at("vertices")[vertex][1],
-                                    inputJSON_.at("vertices")[vertex][2]);
-            }
-         }
+         FMECityJSONReader::parseCityJSONRing(inputJSON_, line, boundary);
 
 //         auto textureCoordinates = nextObject_.value().at("geometry")[0].at("texture").at("rgbTexture").at("values")[i];
 //         std::string tcString = textureCoordinates.dump();
@@ -388,6 +376,24 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
 
    endOfFile = FME_FALSE;
    return FME_SUCCESS;
+}
+
+void FMECityJSONReader::parseCityJSONRing(json& inputJSON_, IFMELine* line, json::value_type& boundary) {
+  std::string bdr = boundary.dump();
+  gLogFile->logMessageString(("parseCityJSONRing input boundary: " + bdr).c_str(), FME_INFORM);
+//  [[49,50,51,52,53,54]]
+  for (json::iterator it = boundary.begin(); it != boundary.end(); ++it)
+  {
+    std::string coords = it.value().dump();
+    for(int vertex : it.value())
+    {
+      std::string vertexArray = inputJSON_.at("vertices")[vertex].dump();
+
+      line->appendPointXYZ(inputJSON_.at("vertices")[vertex][0],
+                           inputJSON_.at("vertices")[vertex][1],
+                           inputJSON_.at("vertices")[vertex][2]);
+    }
+  }
 }
 
 //===========================================================================

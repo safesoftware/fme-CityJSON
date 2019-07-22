@@ -40,6 +40,8 @@
 #include <string>
 #include <map>
 
+#include <iline.h>
+
 #include <nlohmann/json.hpp>
 // for convenience
 using json = nlohmann::json;
@@ -93,6 +95,7 @@ public:
 
    // -----------------------------------------------------------------------
    // read()
+   // adaptation of the CityJSON parser from https://github.com/tudelft3d/azul
    FME_Status read(IFMEFeature& feature, FME_Boolean& endOfFile) override;
 
    // -----------------------------------------------------------------------
@@ -156,6 +159,9 @@ private:
    // -----------------------------------------------------------------------
 
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
+
+   // parse a single Ring to an IFMELine
+   void parseCityJSONRing(json& inputJSON_, IFMELine* line, json::value_type& boundary);
 
    // Data members
 
