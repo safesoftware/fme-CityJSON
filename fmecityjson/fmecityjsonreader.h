@@ -160,6 +160,7 @@ private:
 
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
+   void parseCityJSONObjectGeometry(json &inputJSON_, json::value_type &currentGeometry);
    // parse a single Ring to an IFMELine
    void parseCityJSONRing(json& inputJSON_, IFMELine* line, json::value_type& boundary);
 

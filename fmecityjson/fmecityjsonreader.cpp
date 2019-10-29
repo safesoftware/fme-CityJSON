@@ -53,6 +53,8 @@
 #include <ilibrary.h>
 
 #include <typeinfo>
+#include <sstream>
+#include <iomanip>
 
 // These are initialized externally when a reader object is created so all
 // methods in this file can assume they are ready to use.
@@ -203,25 +205,29 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    // -----------------------------------------------------------------------
    // Perform read actions here
    // -----------------------------------------------------------------------
+    gLogFile->logMessageString("read() START ============",FME_INFORM);
 
    // TODO: I'm not sure how you want to set this up, but one way is to
    // have a class iterator that is progressively going through the CityJSON
    // file.  I'll use that method as a starting example.
-   gLogFile->logMessageString("L208", FME_INFORM);
+//   gLogFile->logMessageString("L208", FME_INFORM);
    if (nextObject_ == inputJSON_.at("CityObjects").end())
    {
       endOfFile = FME_TRUE;
       return FME_SUCCESS;
    }
 
+   std::string objectId = nextObject_.key();
+   gLogFile->logMessageString(("Parsing CityObject: " + objectId).c_str(),FME_INFORM);
+
    // Set the feature type
    std::string featureType = nextObject_.value().at("type");
    feature.setFeatureType(featureType.c_str());
 
    // iterate through every attribute on this object.
-   for (json::iterator it = nextObject_.value().at("attributes").begin(); it != nextObject_.value().at("attributes").end(); ++it) 
+   for (json::iterator it = nextObject_.value().at("attributes").begin(); it != nextObject_.value().at("attributes").end(); ++it)
    {
-      gLogFile->logMessageString("L222", FME_INFORM);
+//      gLogFile->logMessageString("L222", FME_INFORM);
       const std::string& attributeName = it.key();
       const auto& attributeValue = it.value();
       // For now, I'm just guessing at the type of this attribute.
@@ -231,76 +237,66 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    }
 
    // Set the geometry
-
-   // TODO: For now, I'm just going to see if the first geometry is a MultiSurface
-   // and do that.  If it is anything else, it will stay as a NULL geometry.
-   // TODO BD: Can FME handle multiple geometries for the same object? Lod 1 an lod2?
-   if (nextObject_.value().at("geometry")[0].at("type") == "MultiSurface")
+   for (auto &geometry: nextObject_.value()["geometry"])
    {
-      std::string geometry = nextObject_.value().at("geometry")[0].dump();
-      gLogFile->logMessageString("L236", FME_INFORM);
-      gLogFile->logMessageString(geometry.c_str(), FME_INFORM);
-
-      IFMEMultiSurface* ms = fmeGeometryTools_->createMultiSurface();
-
-      // Loop through each Surface.
-      for (int i(0); i < nextObject_.value().at("geometry")[0].at("boundaries").size(); ++i)
-      {
-         FME_UInt32 appearanceReference(0);
-         json::value_type boundary = nextObject_.value().at("geometry")[0].at("boundaries")[i];
-         gLogFile->logMessageString(typeid(boundary).name(), FME_INFORM);
-        // N8nlohmann10basic_jsonISt3mapSt6vectorNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEblmdSaNS_14adl_serializerEEE
-
-         // Let's build up this boundary.
-         std::string boundaryString = boundary.dump();
-
-         // add some coordinates
-         IFMELine* line = fmeGeometryTools_->createLine();
-         FMECityJSONReader::parseCityJSONRing(inputJSON_, line, boundary);
-
-         IFMEArea* area = fmeGeometryTools_->createSimpleAreaByCurve(line);
-         IFMEFace* face = fmeGeometryTools_->createFaceByArea(area, FME_CLOSE_3D_EXTEND_MODE);
-
-         // Here we could scan the CityJSON and see what optional GeometryName we could set.
-         // Actually, the line, area, face, and ms could all have a GeometryName, if it is relevant.
-         // Any FME geometry can have one.
-         // TODO: For now, I'll just hardcode one.
-         IFMEString* geometryName = gFMESession->createString();
-         *geometryName = "WallSurface";
-         face->setName(*geometryName, nullptr);
-         gFMESession->destroyString(geometryName);
-         
-         // Here we could scan the CityJSON and see what optional GeometryName we could set
-         ms->appendPart(face);
-      }
-
-      // Here we could scan the CityJSON and see what optional Geometry Traits we could set.
-      // (A Geometry Trait is just an attribute stored at the geometry level, not at the top feature level.)
-      // Actually, the line, area, face, and ms could all have Traits, if they are relevant.
-      // Any FME geometry can have them.
-      // TODO: For now, I'll just hardcode some.
-      IFMEString* geometryTrait = gFMESession->createString();
-      *geometryTrait = "Custom Float Value";
-      ms->setTraitReal64(*geometryTrait, 42.0);
-      *geometryTrait = "Custom Unsigned Integer Value";
-      ms->setTraitUInt32(*geometryTrait, 1234);
-      gFMESession->destroyString(geometryTrait);
-
-      // Place the geometry on the feature
-      feature.setGeometry(ms);
+     // TODO: Can FME handle multiple geometries for the same object? Lod 1 an lod2? How?
+     FMECityJSONReader::parseCityJSONObjectGeometry(inputJSON_, geometry);
    }
-
-   // Set the coordinate system
-   feature.setCoordSys(coordSys_.c_str());
-
-   // Log the feature
-   gLogFile->logFeature(feature);
 
    ++nextObject_;
 
    endOfFile = FME_FALSE;
+   gLogFile->logMessageString("read() DONE ============",FME_INFORM);
    return FME_SUCCESS;
 }
+
+void FMECityJSONReader::parseCityJSONObjectGeometry(json& inputJSON_, json::value_type& currentGeometry) {
+
+  if (currentGeometry.is_object()) {
+    std::vector<std::map<std::string, std::string>> semanticSurfaces;
+    std::string geometryType, geometryLod;
+    std::size_t templateIndex = 0;
+    std::vector<double> transformationMatrix;
+
+    geometryType = currentGeometry.at("type");
+    if (currentGeometry.at("lod").is_number_integer()) geometryLod = std::to_string(int(currentGeometry.at("lod")));
+    else if (currentGeometry.at("lod").is_number_float()) {
+      std::stringstream stream;
+      stream << std::fixed << std::setprecision(1) << float(currentGeometry.at("lod"));
+      geometryLod = stream.str();
+    }
+    else geometryLod = currentGeometry.at("lod");
+    gLogFile->logMessageString(("parseCityJSONObjectGeometry; geometryType: " + geometryType + "; geometryLod: " + geometryLod).c_str(),
+                               FME_INFORM);
+    // TODO: need to set type and lod for the geometry
+    // TODO: get "template"
+    // TODO: get "transformationMatrix"
+
+    if (!geometryType.empty()) {
+      if (geometryType == "MultiSurface" || geometryType == "CompositeSurface") {
+        gLogFile->logMessageString("parseCityJSONObjectGeometry MultiSurface or CompositeSurface",
+                                   FME_INFORM);
+      }
+      else if (geometryType == "Solid") {
+        gLogFile->logMessageString("parseCityJSONObjectGeometry Solid", FME_INFORM);
+      }
+      else if (geometryType == "MultiSolid" || geometryType == "CompositeSolid") {
+        gLogFile->logMessageString("parseCityJSONObjectGeometry MultiSolid or CompositeSolid", FME_INFORM);
+      }
+      else if (geometryType == "GeometryInstance") {
+        gLogFile->logMessageString("parseCityJSONObjectGeometry GeometryInstance", FME_INFORM);
+      }
+      else {
+        gLogFile->logMessageString(("Unknown geometry type " + geometryType).c_str(), FME_WARN);
+      }
+    }
+    else {
+      gLogFile->logMessageString("CityObject Geometry type is not set",
+                                 FME_WARN);
+    }
+  }
+}
+
 
 void FMECityJSONReader::parseCityJSONRing(json& inputJSON_, IFMELine* line, json::value_type& boundary) {
   std::string bdr = boundary.dump();
@@ -311,6 +307,7 @@ void FMECityJSONReader::parseCityJSONRing(json& inputJSON_, IFMELine* line, json
     std::string coords = it.value().dump();
     for(int vertex : it.value())
     {
+      // FIXME: no need for this vertexArray here since we operate on the JSON directly
       std::string vertexArray = inputJSON_.at("vertices")[vertex].dump();
 
       line->appendPointXYZ(inputJSON_.at("vertices")[vertex][0],
