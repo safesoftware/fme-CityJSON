@@ -1,7 +1,39 @@
-Import('pluginbuilder_env', 'fme_home')
+import platform
+
+pluginbuilder_env = Environment()
+
+Import('fme_home', 'json_home')
+
+pluginbuilder_env.Replace(LIBDIR = fme_home.Dir('fmecore'),
+                          LDMODULEPREFIX = '',
+                          LDMODULESUFFIX = '.so')
+
+pluginbuilder_env.Append(CXXFLAGS = ['--std=c++11'],
+                         CCFLAGS = ['-Wall', '-Werror', '-Wno-deprecated',
+                                    '-Wno-unused-variable', # remove after code is clean
+                                    '-O3', '-fvisibility=hidden'],
+                         LIBPATH = ['$LIBDIR'],
+                         LIBS = ['fmeobj'])
+
+if platform.uname()[0].lower() == 'linux':
+    pluginbuilder_env.Append(CCFLAGS = ['-finline-functions'],
+                             CPPDEFINES = ['LINUX'],
+                             LINKFLAGS = ['-Wl,-rpath-link,$LIBDIR',
+                                          '-z', 'defs'])
+
+elif platform.uname()[0].lower() == 'darwin':
+    pluginbuilder_env.Append(CPPDEFINES = ['MACOSX'],
+                             CXXFLAGS = ['-stdlib=libc++'],
+                             LINKFLAGS = ['-stdlib=libc++',
+                                          '-undefined', 'error',
+                                          '-multiply_defined', 'suppress',
+                                          '-twolevel_namespace'])
+else:
+    raise SCons.Errors.UserError('Unknown Platform')
 
 pluginbuilder_env.Append(CPPPATH = [fme_home.Dir('pluginbuilder/cpp'),
-                                    fme_home.Dir('fmeobjects/cpp')])
+                                    fme_home.Dir('fmeobjects/cpp'),
+                                    json_home.Dir('include')])
 
 plugin = pluginbuilder_env.LoadableModule('fmecityjson',
                                           ['fmecityjsongeometryvisitor.cpp',
@@ -9,4 +41,3 @@ plugin = pluginbuilder_env.LoadableModule('fmecityjson',
                                            'fmecityjsonreader.cpp',
                                            'fmecityjsonwriter.cpp'])
 
-pluginbuilder_env.Install(fme_home.Dir('plugins'), plugin)
