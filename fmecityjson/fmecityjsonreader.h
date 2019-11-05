@@ -164,13 +164,13 @@ private:
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
    // parse a single Geometry of a CityObject
-   void parseCityJSONObjectGeometry(IFMEFeature& feature, json &inputJSON_, json::value_type &currentGeometry);
+   void parseCityJSONObjectGeometry(IFMEFeature& feature, json::value_type &currentGeometry);
    // parse the boundaries of a single Geometry
    void parseCityJSONBoundaryGeometry(json::value_type& jsonBoundaries, IFMEMultiSurface* msurface, int nesting);
 
    void parseCityJSONPolygon(json::value_type& boundary, IFMEMultiSurface* msurface);
    // parse a single Ring to an IFMELine
-   void parseCityJSONRing(json& inputJSON_, IFMELine* line, json::value_type& boundary);
+   void parseCityJSONRing(IFMELine* line, json::value_type& boundary);
 
    // Data members
 
@@ -208,6 +208,7 @@ private:
    std::ifstream inputFile_;
    json inputJSON_;
    json::iterator nextObject_;
+   std::vector<std::tuple<double, double, double>> vertices_;
 
    bool schemaScanDone_;
    std::map<std::string, IFMEFeature*> schemaFeatures_;

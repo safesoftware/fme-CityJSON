@@ -144,7 +144,35 @@ FME_Status FMECityJSONReader::open(const char* datasetName, const IFMEStringArra
    inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
    coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
 
-   gLogFile->logMessageString("L144", FME_INFORM);
+  // Transform object
+  std::vector<double> scale{1.0, 1.0, 1.0};
+  std::vector<double> translation{0.0, 0.0, 0.0};
+  try {
+    json transformObject = inputJSON_.at("transform");
+    scale.clear();
+    for (double const s: transformObject.at("scale")) {
+      scale.push_back(s);
+    }
+    translation.clear();
+    for (double const t: transformObject.at("translate")) {
+      translation.push_back(t);
+    }
+  }
+  catch (json::out_of_range& e) {
+    gLogFile->logMessageString("CityJSON file is not transformed",FME_INFORM);
+  }
+
+  // Vertices
+  for (auto vtx: inputJSON_.at("vertices")) {
+    double x = vtx[0];
+    double y = vtx[1];
+    double z = vtx[2];
+    x = scale[0] * x + translation[0];
+    y = scale[1] * y + translation[1];
+    z = scale[2] * z +translation[2];
+    vertices_.emplace_back(x, y, z);
+  }
+
    // start by pointing to the first object to read
    nextObject_ = inputJSON_.at("CityObjects").begin();
 
@@ -239,7 +267,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    {
      // TODO: Can FME handle multiple geometries for the same object? Lod 1 an lod2? How?
      // Set the geometry for the feature
-     FMECityJSONReader::parseCityJSONObjectGeometry(feature, inputJSON_, geometry);
+     FMECityJSONReader::parseCityJSONObjectGeometry(feature, geometry);
    }
   // Set the coordinate system
   feature.setCoordSys(coordSys_.c_str());
@@ -251,7 +279,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    return FME_SUCCESS;
 }
 
-void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json& inputJSON_, json::value_type& currentGeometry) {
+void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::value_type& currentGeometry) {
 
   if (currentGeometry.is_object()) {
     std::vector<std::map<std::string, std::string>> semanticSurfaces;
@@ -346,7 +374,7 @@ void FMECityJSONReader::parseCityJSONBoundaryGeometry(json::value_type& jsonBoun
 
 void FMECityJSONReader::parseCityJSONPolygon(json::value_type& boundary, IFMEMultiSurface* msurface) {
   IFMELine* line = fmeGeometryTools_->createLine();
-  FMECityJSONReader::parseCityJSONRing(inputJSON_, line, boundary);
+  FMECityJSONReader::parseCityJSONRing(line, boundary);
 
   IFMEArea* area = fmeGeometryTools_->createSimpleAreaByCurve(line);
   IFMEFace* face = fmeGeometryTools_->createFaceByArea(area, FME_CLOSE_3D_EXTEND_MODE);
@@ -361,14 +389,13 @@ void FMECityJSONReader::parseCityJSONPolygon(json::value_type& boundary, IFMEMul
   msurface->appendPart(face);
 }
 
-void FMECityJSONReader::parseCityJSONRing(json& inputJSON_, IFMELine* line, json::value_type& boundary) {
-  for (json::iterator it = boundary.begin(); it != boundary.end(); ++it)
-  {
-    for(int vertex : it.value())
-    {
-      line->appendPointXYZ(inputJSON_.at("vertices")[vertex][0],
-                           inputJSON_.at("vertices")[vertex][1],
-                           inputJSON_.at("vertices")[vertex][2]);
+void FMECityJSONReader::parseCityJSONRing(IFMELine *line,
+                                          json::value_type &boundary) {
+  for (json::iterator it = boundary.begin(); it != boundary.end(); ++it) {
+    for (int vertex : it.value()) {
+      line->appendPointXYZ(std::get<0>(vertices_[vertex]),
+                           std::get<1>(vertices_[vertex]),
+                           std::get<2>(vertices_[vertex]));
     }
   }
 }
