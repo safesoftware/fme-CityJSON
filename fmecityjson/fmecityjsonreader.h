@@ -40,7 +40,10 @@
 #include <string>
 #include <map>
 
+#include <igeometry.h>
 #include <iline.h>
+#include <imulticurve.h>
+#include <imultisurface.h>
 
 #include <nlohmann/json.hpp>
 // for convenience
@@ -160,7 +163,12 @@ private:
 
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
-   void parseCityJSONObjectGeometry(json &inputJSON_, json::value_type &currentGeometry);
+   // parse a single Geometry of a CityObject
+   void parseCityJSONObjectGeometry(IFMEFeature& feature, json &inputJSON_, json::value_type &currentGeometry);
+   // parse the boundaries of a single Geometry
+   void parseCityJSONBoundaryGeometry(json::value_type& jsonBoundaries, IFMEMultiSurface* msurface, int nesting);
+
+   void parseCityJSONPolygon(json::value_type& boundary, IFMEMultiSurface* msurface);
    // parse a single Ring to an IFMELine
    void parseCityJSONRing(json& inputJSON_, IFMELine* line, json::value_type& boundary);
 

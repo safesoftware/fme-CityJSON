@@ -210,7 +210,6 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    // TODO: I'm not sure how you want to set this up, but one way is to
    // have a class iterator that is progressively going through the CityJSON
    // file.  I'll use that method as a starting example.
-//   gLogFile->logMessageString("L208", FME_INFORM);
    if (nextObject_ == inputJSON_.at("CityObjects").end())
    {
       endOfFile = FME_TRUE;
@@ -227,7 +226,6 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    // iterate through every attribute on this object.
    for (json::iterator it = nextObject_.value().at("attributes").begin(); it != nextObject_.value().at("attributes").end(); ++it)
    {
-//      gLogFile->logMessageString("L222", FME_INFORM);
       const std::string& attributeName = it.key();
       const auto& attributeValue = it.value();
       // For now, I'm just guessing at the type of this attribute.
@@ -240,8 +238,11 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    for (auto &geometry: nextObject_.value()["geometry"])
    {
      // TODO: Can FME handle multiple geometries for the same object? Lod 1 an lod2? How?
-     FMECityJSONReader::parseCityJSONObjectGeometry(inputJSON_, geometry);
+     // Set the geometry for the feature
+     FMECityJSONReader::parseCityJSONObjectGeometry(feature, inputJSON_, geometry);
    }
+  // Set the coordinate system
+  feature.setCoordSys(coordSys_.c_str());
 
    ++nextObject_;
 
@@ -250,7 +251,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    return FME_SUCCESS;
 }
 
-void FMECityJSONReader::parseCityJSONObjectGeometry(json& inputJSON_, json::value_type& currentGeometry) {
+void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json& inputJSON_, json::value_type& currentGeometry) {
 
   if (currentGeometry.is_object()) {
     std::vector<std::map<std::string, std::string>> semanticSurfaces;
@@ -261,6 +262,7 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(json& inputJSON_, json::valu
     geometryType = currentGeometry.at("type");
     if (currentGeometry.at("lod").is_number_integer()) geometryLod = std::to_string(int(currentGeometry.at("lod")));
     else if (currentGeometry.at("lod").is_number_float()) {
+      // We want the LoD as string, even though CityJSON specs currently prescribe a number
       std::stringstream stream;
       stream << std::fixed << std::setprecision(1) << float(currentGeometry.at("lod"));
       geometryLod = stream.str();
@@ -273,18 +275,39 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(json& inputJSON_, json::valu
     // TODO: get "transformationMatrix"
 
     if (!geometryType.empty()) {
-      if (geometryType == "MultiSurface" || geometryType == "CompositeSurface") {
-        gLogFile->logMessageString("parseCityJSONObjectGeometry MultiSurface or CompositeSurface",
+      if (geometryType == "MultiPoint") {
+        gLogFile->logMessageString("Geometry type 'MultiPoint' is not supported yet", FME_WARN);
+      }
+      else if (geometryType == "MultiSurface") {
+        gLogFile->logMessageString("parseCityJSONObjectGeometry MultiSurface",
                                    FME_INFORM);
+        IFMEMultiSurface* msurface = fmeGeometryTools_->createMultiSurface();
+        FMECityJSONReader::parseCityJSONBoundaryGeometry(currentGeometry.at("boundaries"), msurface, 2);
+        // Append the geometry to the FME feature
+        feature.setGeometry(msurface);
+      }
+      else if (geometryType == "CompositeSurface") {
+        gLogFile->logMessageString("parseCityJSONObjectGeometry CompositeSurface",
+                                   FME_INFORM);
+        IFMEMultiSurface* msurface = fmeGeometryTools_->createMultiSurface();
+        IFMECompositeSurface* csurface = fmeGeometryTools_->createCompositeSurface();
       }
       else if (geometryType == "Solid") {
         gLogFile->logMessageString("parseCityJSONObjectGeometry Solid", FME_INFORM);
+        // TODO: I don't know how to create a Solid
+        IFMESurface* outerSurface; // an array of IFMEFace returned by parseCityJSONPolygon or sth.
+        // IFMEBRepSolid* solid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface)
       }
-      else if (geometryType == "MultiSolid" || geometryType == "CompositeSolid") {
-        gLogFile->logMessageString("parseCityJSONObjectGeometry MultiSolid or CompositeSolid", FME_INFORM);
+      else if (geometryType == "MultiSolid") {
+        gLogFile->logMessageString("parseCityJSONObjectGeometry MultiSolid", FME_INFORM);
+        IFMEMultiSolid* msolid = fmeGeometryTools_->createMultiSolid();
+      }
+      else if (geometryType == "CompositeSolid") {
+        gLogFile->logMessageString("parseCityJSONObjectGeometry CompositeSolid", FME_INFORM);
+        IFMECompositeSolid* csolid = fmeGeometryTools_->createCompositeSolid();
       }
       else if (geometryType == "GeometryInstance") {
-        gLogFile->logMessageString("parseCityJSONObjectGeometry GeometryInstance", FME_INFORM);
+        gLogFile->logMessageString("Geometry type 'GeometryInstance' is not supported yet", FME_WARN);
       }
       else {
         gLogFile->logMessageString(("Unknown geometry type " + geometryType).c_str(), FME_WARN);
@@ -297,19 +320,52 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(json& inputJSON_, json::valu
   }
 }
 
+void FMECityJSONReader::parseCityJSONBoundaryGeometry(json::value_type& jsonBoundaries, IFMEMultiSurface* msurface, int nesting) {
+
+  if (jsonBoundaries == NULL) return;
+
+  if (nesting > 1) {
+    json::iterator currentBoundary = jsonBoundaries.begin();
+    do {
+      gLogFile->logMessageString("parseCityJSONGeometry nesting > 1",
+                                 FME_INFORM);
+      FMECityJSONReader::parseCityJSONBoundaryGeometry(*currentBoundary, msurface, nesting-1);
+      ++currentBoundary;
+    } while (currentBoundary != jsonBoundaries.end());
+  }  else if (nesting == 1) {
+//    gLogFile->logMessageString("parseCityJSONGeometry nesting == 1",
+//                               FME_INFORM);
+//    for (json::iterator it = jsonBoundaries.begin(); it != jsonBoundaries.end(); it++) {
+//      std::string bdry = it.value().dump();
+//      gLogFile->logMessageString(bdry.c_str(),
+//                                 FME_INFORM);
+//    }
+    FMECityJSONReader::parseCityJSONPolygon(jsonBoundaries, msurface);
+  }
+}
+
+void FMECityJSONReader::parseCityJSONPolygon(json::value_type& boundary, IFMEMultiSurface* msurface) {
+  IFMELine* line = fmeGeometryTools_->createLine();
+  FMECityJSONReader::parseCityJSONRing(inputJSON_, line, boundary);
+
+  IFMEArea* area = fmeGeometryTools_->createSimpleAreaByCurve(line);
+  IFMEFace* face = fmeGeometryTools_->createFaceByArea(area, FME_CLOSE_3D_EXTEND_MODE);
+  // Here we could scan the CityJSON and see what optional GeometryName we could set.
+  // Actually, the line, area, face, and ms could all have a GeometryName, if it is relevant.
+  // Any FME geometry can have one.
+  // TODO: For now, I'll just hardcode one.
+  IFMEString* geometryName = gFMESession->createString();
+  *geometryName = "WallSurface";
+  face->setName(*geometryName, nullptr);
+  gFMESession->destroyString(geometryName);
+  msurface->appendPart(face);
+}
 
 void FMECityJSONReader::parseCityJSONRing(json& inputJSON_, IFMELine* line, json::value_type& boundary) {
-  std::string bdr = boundary.dump();
-  gLogFile->logMessageString(("parseCityJSONRing input boundary: " + bdr).c_str(), FME_INFORM);
-//  [[49,50,51,52,53,54]]
   for (json::iterator it = boundary.begin(); it != boundary.end(); ++it)
   {
-    std::string coords = it.value().dump();
     for(int vertex : it.value())
     {
-      // FIXME: no need for this vertexArray here since we operate on the JSON directly
-      std::string vertexArray = inputJSON_.at("vertices")[vertex].dump();
-
       line->appendPointXYZ(inputJSON_.at("vertices")[vertex][0],
                            inputJSON_.at("vertices")[vertex][1],
                            inputJSON_.at("vertices")[vertex][2]);
