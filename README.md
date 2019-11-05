@@ -28,11 +28,14 @@ We are working toward full CityJSON support.  We have tested ...
 For CMake place the `json.hpp` file to `./includes/nlohmann/json.hpp` so it can find it.
 
 ### Linux and macOS
+
+**With SCons:**
+
 1. Install scons (package manager on Linux, python pip on macOS)
 2. Edit fmecityjson/SConstruct to point at FME install folder and nlohmann's json project
 3. From within fmecityjson, run `scons`
 
-*With CMake*
+**With CMake:**
 
 Do the usual CMake build setup in the source dir.
 ```
