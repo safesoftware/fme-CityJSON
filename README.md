@@ -23,11 +23,17 @@ FME 2018.0 or later installed on either
 We are working toward full CityJSON support.  We have tested ...
 
 ## How to build
-Requires this [JSON parser](https://github.com/nlohmann/json)
+* Requires this [JSON parser](https://github.com/nlohmann/json)
 
 For CMake place the `json.hpp` file to `./includes/nlohmann/json.hpp` so it can find it.
 
-### Linux
+### Linux and macOS
+1. Install scons (package manager on Linux, python pip on macOS)
+2. Edit fmecityjson/SConstruct to point at FME install folder and nlohmann's json project
+3. From within fmecityjson, run `scons`
+
+*With CMake*
+
 Do the usual CMake build setup in the source dir.
 ```
 mkdir build && cd build
@@ -35,8 +41,7 @@ cmake -DFME_DEV_HOME=/path/to/fme/installation/dir ..
 make && make install
 ```
 The option `-DFME_DEV_HOME` is required for both linking the FME libraries and installing the plugin. See the *Installation Instructions* below for the details, and the `CMakeLists.txt`.
-### Mac
-Same (probably) as Linux
+
 ### Windows
 Set an environment variable FME_DEV_HOME to be the path to the directory where FME is installed.  For example, C:\Program Files\FME
 In Visual Studio (2017 or later), open `fmecityjson.sln`.
@@ -55,7 +60,7 @@ are 0 errors.
 There are several steps necessary to extend FME to include this CityJSON Format support.
 
 * The Plugin:
-**Build the CityJSON plugin, using the instructions above.  This will produce a file `fmecityjson.so` file on Linux, `fmecityjson.so` file on Mac, or a `fmecityjson.dll` file on Windows.  Copy this file into the `plugins` subdirectory where FME is installed.
+**Build the CityJSON plugin, using the instructions above.  This will produce a file `fmecityjson.so` file on Linux and macOS, or a `fmecityjson.dll` file on Windows.  Copy this file into the `plugins` subdirectory where FME is installed.
 * The Format Information File :
 ** Copy the file `cityjson.db` into the `formatsinfo` subdirectory where FME is installed.
 (This file will supply the Reader and
