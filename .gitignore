@@ -1,8 +1,14 @@
+## Test files
+/fmecityjson2none*
+fmecityjson/test.cpp
 
 ## Build generated
+/cmake-build-debug
 
 ## Various settings
+.idea
 
 ## Other
 json.hpp
+.directory
 

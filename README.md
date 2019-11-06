@@ -24,10 +24,27 @@ We are working toward full CityJSON support.  We have tested ...
 
 ## How to build
 * Requires this [JSON parser](https://github.com/nlohmann/json)
+
+For CMake place the `json.hpp` file to `./includes/nlohmann/json.hpp` so it can find it.
+
 ### Linux and macOS
+
+**With SCons:**
+
 1. Install scons (package manager on Linux, python pip on macOS)
 2. Edit fmecityjson/SConstruct to point at FME install folder and nlohmann's json project
 3. From within fmecityjson, run `scons`
+
+**With CMake:**
+
+Do the usual CMake build setup in the source dir.
+```
+mkdir build && cd build
+cmake -DFME_DEV_HOME=/path/to/fme/installation/dir ..
+make && make install
+```
+The option `-DFME_DEV_HOME` is required for both linking the FME libraries and installing the plugin. See the *Installation Instructions* below for the details, and the `CMakeLists.txt`.
+
 ### Windows
 Set an environment variable FME_DEV_HOME to be the path to the directory where FME is installed.  For example, C:\Program Files\FME
 In Visual Studio (2017 or later), open `fmecityjson.sln`.

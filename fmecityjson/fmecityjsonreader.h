@@ -40,6 +40,18 @@
 #include <string>
 #include <map>
 
+#include <igeometry.h>
+#include <iline.h>
+#include <iface.h>
+#include <isurface.h>
+#include <isurfaceiterator.h>
+#include <imulticurve.h>
+#include <imultisurface.h>
+#include <icompositesurface.h>
+#include <ibrepsolid.h>
+#include <imultisolid.h>
+#include <icompositesolid.h>
+
 #include <nlohmann/json.hpp>
 // for convenience
 using json = nlohmann::json;
@@ -93,6 +105,7 @@ public:
 
    // -----------------------------------------------------------------------
    // read()
+   // adaptation of the CityJSON parser from https://github.com/tudelft3d/azul
    FME_Status read(IFMEFeature& feature, FME_Boolean& endOfFile) override;
 
    // -----------------------------------------------------------------------
@@ -157,6 +170,13 @@ private:
 
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
+   // parse a single Geometry of a CityObject
+   void parseCityJSONObjectGeometry(IFMEFeature& feature, json::value_type &currentGeometry);
+   // parse a single Surface of the boundary
+   IFMEFace* parseCityJSONPolygon(json::value_type& boundary);
+   // parse a single Ring to an IFMELine
+   void parseCityJSONRing(IFMELine* line, json::value_type& boundary);
+
    // Data members
 
    // The value specified for the READER_TYPE in the mapping file.
@@ -193,6 +213,7 @@ private:
    std::ifstream inputFile_;
    json inputJSON_;
    json::iterator nextObject_;
+   std::vector<std::tuple<double, double, double>> vertices_;
 
    bool schemaScanDone_;
    std::map<std::string, IFMEFeature*> schemaFeatures_;
