@@ -61,5 +61,12 @@ details about a format such as default parameters, settings,
 schemas and so on.)
 * Restart FME
 
+## How to debug
+### Linux and macOS
+1. Edit fmecityjson/SConscript: add `-g` and `-O0` to CCFLAGS (debug info and disable optimization)
+2. From within fmecityjson, run `scons`
+3. `export LD_LIBRARY_PATH=/opt/fme-desktop-2019/fmecore`
+4. Start debugger against `/opt/fme-desktop-2019/bin/fme` (not the shell script in the install root)
+
 ## Licenses
 * [JSON parser](https://github.com/nlohmann/json/blob/master/LICENSE)
