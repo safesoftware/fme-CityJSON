@@ -1,6 +1,6 @@
 ![CityJSON Format Plugin for FME](https://is3-ssl.mzstatic.com/image/thumb/Purple118/v4/31/9c/c7/319cc748-5ac6-2d91-8b1a-afdc7e3e164e/AppIcon-1x_U007emarketing-0-0-GLES2_U002c0-512MB-sRGB-0-0-0-85-220-0-0-0-6.png/246x0w.jpg)
 
-![CityJSON](https://www.cityjson.org/en/0.8/_static/cityjson_logo.svg)
+![CityJSON](https://www.cityjson.org/assets/images/cityjson_logo.svg)
 
 # CityJSON Format Plugin for FME
 
