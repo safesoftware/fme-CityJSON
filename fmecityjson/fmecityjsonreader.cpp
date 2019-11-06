@@ -376,8 +376,13 @@ void FMECityJSONReader::parseCityJSONPolygon(json::value_type& boundary, IFMEMul
   IFMELine* line = fmeGeometryTools_->createLine();
   FMECityJSONReader::parseCityJSONRing(line, boundary);
 
+  // TODO: Create the appearance for the face here. See: https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L271-L341
+
   IFMEArea* area = fmeGeometryTools_->createSimpleAreaByCurve(line);
   IFMEFace* face = fmeGeometryTools_->createFaceByArea(area, FME_CLOSE_3D_EXTEND_MODE);
+
+  // TODO: Set the appearance for the face here. See: https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L346-L350
+
   // Here we could scan the CityJSON and see what optional GeometryName we could set.
   // Actually, the line, area, face, and ms could all have a GeometryName, if it is relevant.
   // Any FME geometry can have one.
