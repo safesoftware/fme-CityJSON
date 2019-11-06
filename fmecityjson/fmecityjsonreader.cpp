@@ -258,7 +258,6 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
       const auto& attributeValue = it.value();
       // For now, I'm just guessing at the type of this attribute.
       // TODO: Something smarter really should be done here.
-      // TODO BD: how to determine the type of the value?
       feature.setAttribute(attributeName.c_str(), attributeValue.dump().c_str());
    }
 
@@ -310,8 +309,6 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
         gLogFile->logMessageString("Geometry type 'LineString' is not supported yet", FME_WARN);
       }
       else if (geometryType == "MultiSurface") {
-        gLogFile->logMessageString("parseCityJSONObjectGeometry MultiSurface",
-                                   FME_INFORM);
         IFMEMultiSurface* msurface = fmeGeometryTools_->createMultiSurface();
         for (auto& surface : currentGeometry.at("boundaries")) {
           IFMEFace* face = FMECityJSONReader::parseCityJSONPolygon(surface);
@@ -321,8 +318,6 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
         feature.setGeometry(msurface);
       }
       else if (geometryType == "CompositeSurface") {
-        gLogFile->logMessageString("parseCityJSONObjectGeometry CompositeSurface",
-                                   FME_INFORM);
         IFMECompositeSurface* csurface = fmeGeometryTools_->createCompositeSurface();
         for (auto& surface : currentGeometry.at("boundaries")) {
           IFMEFace* face = FMECityJSONReader::parseCityJSONPolygon(surface);
@@ -331,22 +326,48 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
         feature.setGeometry(csurface);
       }
       else if (geometryType == "Solid") {
-        gLogFile->logMessageString("parseCityJSONObjectGeometry Solid", FME_INFORM);
-        IFMESurface* outerSurface; // an array of IFMEFace returned by parseCityJSONPolygon or sth.
-        for (auto& shell : currentGeometry.at("boundaries"))
-          for (auto& surface : shell)
-            IFMEFace* face = FMECityJSONReader::parseCityJSONPolygon(surface);
-            // TODO: how collect these faces and make a Surface from them so I can create the BRepSolid?
-        IFMEBRepSolid* solid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
-
+        IFMECompositeSurface* outerSurface = fmeGeometryTools_->createCompositeSurface();
+        // TODO: this will be problematic with inner shells
+        for (auto& shell : currentGeometry.at("boundaries")) {
+            for (auto& surface : shell) {
+              IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(surface);
+              outerSurface->appendPart(face);
+          }
+        }
+        IFMEBRepSolid* BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
+        feature.setGeometry(BSolid);
       }
       else if (geometryType == "MultiSolid") {
-        gLogFile->logMessageString("parseCityJSONObjectGeometry MultiSolid", FME_INFORM);
         IFMEMultiSolid* msolid = fmeGeometryTools_->createMultiSolid();
+        for (auto& solid : currentGeometry.at("boundaries")) {
+          IFMECompositeSurface* outerSurface = fmeGeometryTools_->createCompositeSurface();
+          // TODO: this will be problematic with inner shells
+          for (auto& shell : solid) {
+            for (auto& surface : shell) {
+              IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(surface);
+              outerSurface->appendPart(face);
+            }
+          }
+          IFMEBRepSolid* BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
+          msolid->appendPart(BSolid);
+        }
+        feature.setGeometry(msolid);
       }
       else if (geometryType == "CompositeSolid") {
-        gLogFile->logMessageString("parseCityJSONObjectGeometry CompositeSolid", FME_INFORM);
         IFMECompositeSolid* csolid = fmeGeometryTools_->createCompositeSolid();
+        for (auto& solid : currentGeometry.at("boundaries")) {
+          IFMECompositeSurface* outerSurface = fmeGeometryTools_->createCompositeSurface();
+          // TODO: this will be problematic with inner shells
+          for (auto& shell : solid) {
+            for (auto& surface : shell) {
+              IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(surface);
+              outerSurface->appendPart(face);
+            }
+          }
+          IFMEBRepSolid* BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
+          csolid->appendPart(BSolid);
+        }
+        feature.setGeometry(csolid);
       }
       else if (geometryType == "GeometryInstance") {
         gLogFile->logMessageString("Geometry type 'GeometryInstance' is not supported yet", FME_WARN);

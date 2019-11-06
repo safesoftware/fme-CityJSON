@@ -49,6 +49,8 @@
 #include <imultisurface.h>
 #include <icompositesurface.h>
 #include <ibrepsolid.h>
+#include <imultisolid.h>
+#include <icompositesolid.h>
 
 #include <nlohmann/json.hpp>
 // for convenience
