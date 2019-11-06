@@ -42,8 +42,13 @@
 
 #include <igeometry.h>
 #include <iline.h>
+#include <iface.h>
+#include <isurface.h>
+#include <isurfaceiterator.h>
 #include <imulticurve.h>
 #include <imultisurface.h>
+#include <icompositesurface.h>
+#include <ibrepsolid.h>
 
 #include <nlohmann/json.hpp>
 // for convenience
@@ -165,10 +170,8 @@ private:
 
    // parse a single Geometry of a CityObject
    void parseCityJSONObjectGeometry(IFMEFeature& feature, json::value_type &currentGeometry);
-   // parse the boundaries of a single Geometry
-   void parseCityJSONBoundaryGeometry(json::value_type& jsonBoundaries, IFMEMultiSurface* msurface, int nesting);
-
-   void parseCityJSONPolygon(json::value_type& boundary, IFMEMultiSurface* msurface);
+   // parse a single Surface of the boundary
+   IFMEFace* parseCityJSONPolygon(json::value_type& boundary);
    // parse a single Ring to an IFMELine
    void parseCityJSONRing(IFMELine* line, json::value_type& boundary);
 

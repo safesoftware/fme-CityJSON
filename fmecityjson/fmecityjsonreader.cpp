@@ -306,25 +306,39 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
       if (geometryType == "MultiPoint") {
         gLogFile->logMessageString("Geometry type 'MultiPoint' is not supported yet", FME_WARN);
       }
+      else if (geometryType == "LineString") {
+        gLogFile->logMessageString("Geometry type 'LineString' is not supported yet", FME_WARN);
+      }
       else if (geometryType == "MultiSurface") {
         gLogFile->logMessageString("parseCityJSONObjectGeometry MultiSurface",
                                    FME_INFORM);
         IFMEMultiSurface* msurface = fmeGeometryTools_->createMultiSurface();
-        FMECityJSONReader::parseCityJSONBoundaryGeometry(currentGeometry.at("boundaries"), msurface, 2);
+        for (auto& surface : currentGeometry.at("boundaries")) {
+          IFMEFace* face = FMECityJSONReader::parseCityJSONPolygon(surface);
+          msurface->appendPart(face);
+        }
         // Append the geometry to the FME feature
         feature.setGeometry(msurface);
       }
       else if (geometryType == "CompositeSurface") {
         gLogFile->logMessageString("parseCityJSONObjectGeometry CompositeSurface",
                                    FME_INFORM);
-        IFMEMultiSurface* msurface = fmeGeometryTools_->createMultiSurface();
         IFMECompositeSurface* csurface = fmeGeometryTools_->createCompositeSurface();
+        for (auto& surface : currentGeometry.at("boundaries")) {
+          IFMEFace* face = FMECityJSONReader::parseCityJSONPolygon(surface);
+          csurface->appendPart(face);
+        }
+        feature.setGeometry(csurface);
       }
       else if (geometryType == "Solid") {
         gLogFile->logMessageString("parseCityJSONObjectGeometry Solid", FME_INFORM);
-        // TODO: I don't know how to create a Solid
         IFMESurface* outerSurface; // an array of IFMEFace returned by parseCityJSONPolygon or sth.
-        // IFMEBRepSolid* solid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface)
+        for (auto& shell : currentGeometry.at("boundaries"))
+          for (auto& surface : shell)
+            IFMEFace* face = FMECityJSONReader::parseCityJSONPolygon(surface);
+            // TODO: how collect these faces and make a Surface from them so I can create the BRepSolid?
+        IFMEBRepSolid* solid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
+
       }
       else if (geometryType == "MultiSolid") {
         gLogFile->logMessageString("parseCityJSONObjectGeometry MultiSolid", FME_INFORM);
@@ -348,50 +362,29 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
   }
 }
 
-void FMECityJSONReader::parseCityJSONBoundaryGeometry(json::value_type& jsonBoundaries, IFMEMultiSurface* msurface, int nesting) {
-
-  if (jsonBoundaries == NULL) return;
-
-  if (nesting > 1) {
-    json::iterator currentBoundary = jsonBoundaries.begin();
-    do {
-      gLogFile->logMessageString("parseCityJSONGeometry nesting > 1",
-                                 FME_INFORM);
-      FMECityJSONReader::parseCityJSONBoundaryGeometry(*currentBoundary, msurface, nesting-1);
-      ++currentBoundary;
-    } while (currentBoundary != jsonBoundaries.end());
-  }  else if (nesting == 1) {
-//    gLogFile->logMessageString("parseCityJSONGeometry nesting == 1",
-//                               FME_INFORM);
-//    for (json::iterator it = jsonBoundaries.begin(); it != jsonBoundaries.end(); it++) {
-//      std::string bdry = it.value().dump();
-//      gLogFile->logMessageString(bdry.c_str(),
-//                                 FME_INFORM);
-//    }
-    FMECityJSONReader::parseCityJSONPolygon(jsonBoundaries, msurface);
-  }
-}
-
-void FMECityJSONReader::parseCityJSONPolygon(json::value_type& boundary, IFMEMultiSurface* msurface) {
-  IFMELine* line = fmeGeometryTools_->createLine();
+IFMEFace *FMECityJSONReader::parseCityJSONPolygon(json::value_type &boundary) {
+  IFMELine *line = fmeGeometryTools_->createLine();
   FMECityJSONReader::parseCityJSONRing(line, boundary);
 
-  // TODO: Create the appearance for the face here. See: https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L271-L341
+  // TODO: Create the appearance for the face here. See:
+  // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L271-L341
 
-  IFMEArea* area = fmeGeometryTools_->createSimpleAreaByCurve(line);
-  IFMEFace* face = fmeGeometryTools_->createFaceByArea(area, FME_CLOSE_3D_EXTEND_MODE);
+  IFMEArea *area = fmeGeometryTools_->createSimpleAreaByCurve(line);
+  IFMEFace *face = fmeGeometryTools_->createFaceByArea(area, FME_CLOSE_3D_EXTEND_MODE);
 
-  // TODO: Set the appearance for the face here. See: https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L346-L350
+  // TODO: Set the appearance for the face here. See:
+  // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L346-L350
 
-  // Here we could scan the CityJSON and see what optional GeometryName we could set.
-  // Actually, the line, area, face, and ms could all have a GeometryName, if it is relevant.
-  // Any FME geometry can have one.
+  // Here we could scan the CityJSON and see what optional GeometryName we could
+  // set. Actually, the line, area, face, and ms could all have a GeometryName,
+  // if it is relevant. Any FME geometry can have one.
   // TODO: For now, I'll just hardcode one.
-  IFMEString* geometryName = gFMESession->createString();
+  IFMEString *geometryName = gFMESession->createString();
   *geometryName = "WallSurface";
   face->setName(*geometryName, nullptr);
   gFMESession->destroyString(geometryName);
-  msurface->appendPart(face);
+
+  return face;
 }
 
 void FMECityJSONReader::parseCityJSONRing(IFMELine *line,
