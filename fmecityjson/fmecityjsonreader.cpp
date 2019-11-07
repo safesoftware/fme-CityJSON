@@ -283,8 +283,6 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
   if (currentGeometry.is_object()) {
     std::vector<std::map<std::string, std::string>> semanticSurfaces;
     std::string geometryType, geometryLod;
-    std::size_t templateIndex = 0;
-    std::vector<double> transformationMatrix;
 
     geometryType = currentGeometry.at("type");
     if (currentGeometry.at("lod").is_number_integer()) geometryLod = std::to_string(int(currentGeometry.at("lod")));
@@ -314,6 +312,9 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
           IFMEFace* face = FMECityJSONReader::parseCityJSONPolygon(surface);
           msurface->appendPart(face);
         }
+        // Set the Level of Detail Trait on the geometry
+        FMECityJSONReader::setLoDTrait(msurface, geometryLod);
+
         // Append the geometry to the FME feature
         feature.setGeometry(msurface);
       }
@@ -323,6 +324,7 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
           IFMEFace* face = FMECityJSONReader::parseCityJSONPolygon(surface);
           csurface->appendPart(face);
         }
+        FMECityJSONReader::setLoDTrait(csurface, geometryLod);
         feature.setGeometry(csurface);
       }
       else if (geometryType == "Solid") {
@@ -335,6 +337,7 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
           }
         }
         IFMEBRepSolid* BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
+        FMECityJSONReader::setLoDTrait(BSolid, geometryLod);
         feature.setGeometry(BSolid);
       }
       else if (geometryType == "MultiSolid") {
@@ -351,6 +354,7 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
           IFMEBRepSolid* BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
           msolid->appendPart(BSolid);
         }
+        FMECityJSONReader::setLoDTrait(msolid, geometryLod);
         feature.setGeometry(msolid);
       }
       else if (geometryType == "CompositeSolid") {
@@ -367,6 +371,7 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
           IFMEBRepSolid* BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
           csolid->appendPart(BSolid);
         }
+        FMECityJSONReader::setLoDTrait(csolid, geometryLod);
         feature.setGeometry(csolid);
       }
       else if (geometryType == "GeometryInstance") {
@@ -405,6 +410,18 @@ IFMEFace *FMECityJSONReader::parseCityJSONPolygon(json::value_type &boundary) {
   face->setName(*geometryName, nullptr);
   gFMESession->destroyString(geometryName);
 
+  // Here we could scan the CityJSON and see what optional Geometry Traits we could set.
+  // (A Geometry Trait is just an attribute stored at the geometry level, not at the top feature level.)
+  // Actually, the line, area, face, and ms could all have Traits, if they are relevant.
+  // Any FME geometry can have them.
+  // TODO: Set semantic surface attributes as Geometry Traits
+  IFMEString* geometryTrait = gFMESession->createString();
+  *geometryTrait = "Custom Float Value";
+  face->setTraitReal64(*geometryTrait, 42.0);
+  *geometryTrait = "Custom Unsigned Integer Value";
+  face->setTraitUInt32(*geometryTrait, 1234);
+  gFMESession->destroyString(geometryTrait);
+
   return face;
 }
 
@@ -418,6 +435,21 @@ void FMECityJSONReader::parseCityJSONRing(IFMELine *line,
     }
   }
 }
+
+void FMECityJSONReader::setLoDTrait(IFMEGeometry* geometry, std::string geometryLoD) {
+  // TODO: is there a better/shorter way to cast an std::string to IFMEString?
+  // TODO: in FME, this Trait appears as 'undefined type'. How can we make it a string, or any other type?
+  IFMEString* geometryTrait = gFMESession->createString();
+  *geometryTrait = "Level of Detail";
+  unsigned int l = geometryLoD.length() + 1;
+  char lod_char[l];
+  strcpy(lod_char, geometryLoD.c_str());
+  IFMEString* lod = gFMESession->createString();
+  *lod = lod_char;
+  geometry->setTraitString(*geometryTrait, *lod);
+  gFMESession->destroyString(geometryTrait);
+}
+
 
 //===========================================================================
 // readSchema

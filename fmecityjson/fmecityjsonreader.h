@@ -170,12 +170,14 @@ private:
 
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
-   // parse a single Geometry of a CityObject
+   // Parse a single Geometry of a CityObject
    void parseCityJSONObjectGeometry(IFMEFeature& feature, json::value_type &currentGeometry);
-   // parse a single Surface of the boundary
+   // Parse a single Surface of the boundary
    IFMEFace* parseCityJSONPolygon(json::value_type& boundary);
-   // parse a single Ring to an IFMELine
+   // Parse a single Ring to an IFMELine
    void parseCityJSONRing(IFMELine* line, json::value_type& boundary);
+   // Set the Level of Detail Trait on the geometry
+   void setLoDTrait(IFMEGeometry* geometry, std::string geometryLoD);
 
    // Data members
 
