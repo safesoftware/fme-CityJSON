@@ -40,6 +40,7 @@
 #include <string>
 #include <map>
 
+#include <fmefeat.h>
 #include <igeometry.h>
 #include <iline.h>
 #include <iface.h>
@@ -177,7 +178,9 @@ private:
    // Parse a single Ring to an IFMELine
    void parseCityJSONRing(IFMELine* line, json::value_type& boundary);
    // Set the Level of Detail Trait on the geometry
-   void setLoDTrait(IFMEGeometry* geometry, std::string geometryLoD);
+   static void setTraitString(IFMEGeometry *geometry,
+                              const std::string &traitName,
+                              const std::string &traitValue);
 
    // Data members
 
