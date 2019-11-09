@@ -177,20 +177,14 @@ private:
                                     json::value_type &currentGeometry);
    // Parse a Multi- or CompositeSolid
    template <typename MCSolid>
-   void parseMultiCompositeSolid(MCSolid multiCompositeSolid,
-                                 json::array_t& boundaries,
-                                 json::array_t& semanticValues,
-                                 json::array_t& semanticSurfaces);
+   void parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::array_t &boundaries,
+                                 json::value_type &semantics);
    // Parse a Solid
-   IFMEBRepSolid* parseSolid(json::array_t& boundaries,
-                             json::array_t& semanticValues,
-                             json::array_t& semanticSurfaces);
+   IFMEBRepSolid *parseSolid(json::array_t &boundaries, json::value_type &semantics);
    // Parse a Multi- or CompositeSurface
    template <typename MCSurface>
-   void parseMultiCompositeSurface(MCSurface multiCompositeSurface,
-                                   json::array_t& boundaries,
-                                   json::array_t& semanticValues,
-                                   json::array_t& semanticSurfaces);
+   void parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::array_t &boundaries,
+                                   json::value_type &semantics);
    // Parse a single Surface of the boundary
    IFMEFace *parseCityJSONPolygon(json::value_type surface,
                                   json::value_type semanticSurface);

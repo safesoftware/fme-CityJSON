@@ -287,8 +287,8 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(
     std::string geometryType, geometryLodValue;
     std::string geometryLodName = "Level of Detail"; // geometry Trait name
     json::array_t boundaries = currentGeometry.at("boundaries");
-    json::array_t semanticSurfaces = currentGeometry.at("semantics").at("surfaces");
-    json::array_t semanticValues = currentGeometry.at("semantics").at("values");
+    json::value_type semantics = currentGeometry["semantics"];
+
 
     // geometry type and level of detail
     geometryType = currentGeometry.at("type");
@@ -322,7 +322,7 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(
       }
       else if (geometryType == "MultiSurface") {
         IFMEMultiSurface *msurface = fmeGeometryTools_->createMultiSurface();
-        FMECityJSONReader::parseMultiCompositeSurface(msurface, boundaries, semanticValues, semanticSurfaces);
+        FMECityJSONReader::parseMultiCompositeSurface(msurface, boundaries, semantics);
         // Set the Level of Detail Trait on the geometry
         FMECityJSONReader::setTraitString(msurface, geometryLodName, geometryLodValue);
         // Append the geometry to the FME feature
@@ -330,24 +330,24 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(
       }
       else if (geometryType == "CompositeSurface") {
         IFMECompositeSurface *csurface = fmeGeometryTools_->createCompositeSurface();
-        FMECityJSONReader::parseMultiCompositeSurface(csurface, boundaries, semanticValues, semanticSurfaces);
+        FMECityJSONReader::parseMultiCompositeSurface(csurface, boundaries, semantics);
         FMECityJSONReader::setTraitString(csurface, geometryLodName, geometryLodValue);
         feature.setGeometry(csurface);
       }
       else if (geometryType == "Solid") {
-        IFMEBRepSolid* BSolid = FMECityJSONReader::parseSolid(boundaries, semanticValues, semanticSurfaces);
+        IFMEBRepSolid* BSolid = FMECityJSONReader::parseSolid(boundaries, semantics);
         FMECityJSONReader::setTraitString(BSolid, geometryLodName, geometryLodValue);
         feature.setGeometry(BSolid);
       }
       else if (geometryType == "MultiSolid") {
         IFMEMultiSolid *msolid = fmeGeometryTools_->createMultiSolid();
-        FMECityJSONReader::parseMultiCompositeSolid(msolid, boundaries, semanticValues, semanticSurfaces);
+        FMECityJSONReader::parseMultiCompositeSolid(msolid, boundaries, semantics);
         FMECityJSONReader::setTraitString(msolid, geometryLodName, geometryLodValue);
         feature.setGeometry(msolid);
       }
       else if (geometryType == "CompositeSolid") {
         IFMECompositeSolid *csolid = fmeGeometryTools_->createCompositeSolid();
-        FMECityJSONReader::parseMultiCompositeSolid(csolid, boundaries, semanticValues, semanticSurfaces);
+        FMECityJSONReader::parseMultiCompositeSolid(csolid, boundaries, semantics);
         FMECityJSONReader::setTraitString(csolid, geometryLodName, geometryLodValue);
         feature.setGeometry(csolid);
       }
@@ -369,8 +369,8 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(
 
 
 template <typename MCSolid>
-void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::array_t& boundaries,
-                                                 json::array_t& semanticValues, json::array_t& semanticSurfaces)
+void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::array_t &boundaries,
+                                                 json::value_type &semantics)
 {
   int nrSolids = distance(begin(boundaries), end(boundaries));
   for (int i=0; i < nrSolids; i++) {
@@ -381,10 +381,12 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, js
       int nrSurfaces = distance(begin(boundaries[i][j]), end(boundaries[i][j]));
       for (int k = 0; k < nrSurfaces; k++) {
         json::value_type semanticSrf;
-        if (not semanticValues[i][j][k].is_null())
-        {
-          int semanticIdx = semanticValues[i][j][k];
-          semanticSrf = semanticSurfaces[semanticIdx];
+        if (not semantics.is_null()) {
+          if (not semantics["values"][i][j][k].is_null())
+          {
+            int semanticIdx = semantics["values"][i][j][k];
+            semanticSrf = semantics["surfaces"][semanticIdx];
+          }
         }
         IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(boundaries[i][j][k], semanticSrf);
         outerSurface->appendPart(face);
@@ -395,8 +397,7 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, js
   }
 }
 
-IFMEBRepSolid* FMECityJSONReader::parseSolid(json::array_t& boundaries, json::array_t& semanticValues,
-                                             json::array_t& semanticSurfaces)
+IFMEBRepSolid * FMECityJSONReader::parseSolid(json::array_t &boundaries, json::value_type &semantics)
 {
   // TODO: this will be problematic with inner shells
   IFMECompositeSurface *outerSurface = fmeGeometryTools_->createCompositeSurface();
@@ -405,9 +406,11 @@ IFMEBRepSolid* FMECityJSONReader::parseSolid(json::array_t& boundaries, json::ar
     int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
     for (int j=0; j < nrSurfaces; j++) {
       json::value_type semanticSrf;
-      if (not semanticValues[i][j].is_null()) {
-        int semanticIdx = semanticValues[i][j];
-        semanticSrf = semanticSurfaces[semanticIdx];
+      if (not semantics.is_null()) {
+        if (not semantics["values"][i][j].is_null()) {
+          int semanticIdx = semantics["values"][i][j];
+          semanticSrf = semantics["surfaces"][semanticIdx];
+        }
       }
       IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(boundaries[i][j], semanticSrf);
       outerSurface->appendPart(face);
@@ -418,15 +421,17 @@ IFMEBRepSolid* FMECityJSONReader::parseSolid(json::array_t& boundaries, json::ar
 }
 
 template <typename MCSurface>
-void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::array_t& boundaries,
-                                                   json::array_t& semanticValues, json::array_t& semanticSurfaces)
+void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::array_t &boundaries,
+                                                   json::value_type &semantics)
 {
   int nrSurfaces = distance(begin(boundaries), end(boundaries));
   for (int i=0; i < nrSurfaces; i++) {
     json::value_type semanticSrf;
-    if (not semanticValues[i].is_null()) {
-      int semanticIdx = semanticValues[i];
-      semanticSrf = semanticSurfaces[semanticIdx];
+    if (not semantics.is_null()) {
+      if (not semantics["values"][i].is_null()) {
+        int semanticIdx = semantics["values"][i];
+        semanticSrf = semantics["surfaces"][semanticIdx];
+      }
     }
     IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(boundaries[i], semanticSrf);
     multiCompositeSurface->appendPart(face);
