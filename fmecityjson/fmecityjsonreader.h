@@ -42,6 +42,7 @@
 
 #include <fmefeat.h>
 #include <igeometry.h>
+#include <iaggregate.h>
 #include <iline.h>
 #include <iface.h>
 #include <isurface.h>
@@ -172,11 +173,30 @@ private:
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
    // Parse a single Geometry of a CityObject
-   void parseCityJSONObjectGeometry(IFMEFeature& feature, json::value_type &currentGeometry);
+   void parseCityJSONObjectGeometry(IFMEFeature& feature,
+                                    json::value_type &currentGeometry);
+   // Parse a Multi- or CompositeSolid
+   template <typename MCSolid>
+   void parseMultiCompositeSolid(MCSolid multiCompositeSolid,
+                                 json::array_t& boundaries,
+                                 json::array_t& semanticValues,
+                                 json::array_t& semanticSurfaces);
+   // Parse a Solid
+   IFMEBRepSolid* parseSolid(json::array_t& boundaries,
+                             json::array_t& semanticValues,
+                             json::array_t& semanticSurfaces);
+   // Parse a Multi- or CompositeSurface
+   template <typename MCSurface>
+   void parseMultiCompositeSurface(MCSurface multiCompositeSurface,
+                                   json::array_t& boundaries,
+                                   json::array_t& semanticValues,
+                                   json::array_t& semanticSurfaces);
    // Parse a single Surface of the boundary
-   IFMEFace* parseCityJSONPolygon(json::value_type& boundary);
+   IFMEFace *parseCityJSONPolygon(json::value_type surface,
+                                  json::value_type semanticSurface);
    // Parse a single Ring to an IFMELine
-   void parseCityJSONRing(IFMELine* line, json::value_type& boundary);
+   void parseCityJSONRing(IFMELine* line,
+                          json::value_type& boundary);
    // Set the Level of Detail Trait on the geometry
    static void setTraitString(IFMEGeometry *geometry,
                               const std::string &traitName,

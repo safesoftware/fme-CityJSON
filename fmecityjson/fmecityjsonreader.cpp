@@ -233,7 +233,6 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    // -----------------------------------------------------------------------
    // Perform read actions here
    // -----------------------------------------------------------------------
-    gLogFile->logMessageString("read() START ============",FME_INFORM);
 
    // TODO: I'm not sure how you want to set this up, but one way is to
    // have a class iterator that is progressively going through the CityJSON
@@ -274,123 +273,87 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    ++nextObject_;
 
    endOfFile = FME_FALSE;
-   gLogFile->logMessageString("read() DONE ============",FME_INFORM);
    return FME_SUCCESS;
 }
 
-void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::value_type& currentGeometry) {
+void FMECityJSONReader::parseCityJSONObjectGeometry(
+    IFMEFeature &feature, json::value_type &currentGeometry) {
 
   if (currentGeometry.is_object()) {
-    std::vector<std::map<std::string, std::string>> semanticSurfaces;
     std::string geometryType, geometryLodValue;
-    // geometry Trait name
-    std::string geometryLodName = "Level of Detail";
+    std::string geometryLodName = "Level of Detail"; // geometry Trait name
+    json::array_t boundaries = currentGeometry.at("boundaries");
+    json::array_t semanticSurfaces = currentGeometry.at("semantics").at("surfaces");
+    json::array_t semanticValues = currentGeometry.at("semantics").at("values");
 
+    // geometry type and level of detail
     geometryType = currentGeometry.at("type");
     if (currentGeometry.at("lod").is_number_integer())
       geometryLodValue = std::to_string(int(currentGeometry.at("lod")));
     else if (currentGeometry.at("lod").is_number_float()) {
-      // We want the LoD as string, even though CityJSON specs currently prescribe a number
+      // We want the LoD as string, even though CityJSON specs currently
+      // prescribe a number
       std::stringstream stream;
-      stream << std::fixed << std::setprecision(1) << float(currentGeometry.at("lod"));
+      stream << std::fixed << std::setprecision(1)
+             << float(currentGeometry.at("lod"));
       geometryLodValue = stream.str();
-    }
-    else
+    } else {
       geometryLodValue = currentGeometry.at("lod");
-      gLogFile->logMessageString(("parseCityJSONObjectGeometry; geometryType: " + geometryType + "; geometryLodValue: " + geometryLodValue).c_str(),
-                               FME_INFORM);
+      gLogFile->logMessageString(
+          ("parseCityJSONObjectGeometry; geometryType: " + geometryType + "; geometryLodValue: " + geometryLodValue).c_str(),
+          FME_INFORM);
+    }
 
-    // TODO: need to set type and lod for the geometry
     // TODO: get "template"
     // TODO: get "transformationMatrix"
 
-
     if (!geometryType.empty()) {
       if (geometryType == "MultiPoint") {
-        gLogFile->logMessageString("Geometry type 'MultiPoint' is not supported yet", FME_WARN);
+        gLogFile->logMessageString(
+            "Geometry type 'MultiPoint' is not supported yet", FME_WARN);
       }
       else if (geometryType == "LineString") {
-        gLogFile->logMessageString("Geometry type 'LineString' is not supported yet", FME_WARN);
+        gLogFile->logMessageString(
+            "Geometry type 'LineString' is not supported yet", FME_WARN);
       }
       else if (geometryType == "MultiSurface") {
-        IFMEMultiSurface* msurface = fmeGeometryTools_->createMultiSurface();
-        for (auto& surface : currentGeometry.at("boundaries")) {
-          IFMEFace* face = FMECityJSONReader::parseCityJSONPolygon(surface);
-          msurface->appendPart(face);
-        }
+        IFMEMultiSurface *msurface = fmeGeometryTools_->createMultiSurface();
+        FMECityJSONReader::parseMultiCompositeSurface(msurface, boundaries, semanticValues, semanticSurfaces);
         // Set the Level of Detail Trait on the geometry
-        FMECityJSONReader::setTraitString(msurface, geometryLodName,
-                                          geometryLodValue);
-
+        FMECityJSONReader::setTraitString(msurface, geometryLodName, geometryLodValue);
         // Append the geometry to the FME feature
         feature.setGeometry(msurface);
       }
       else if (geometryType == "CompositeSurface") {
-        IFMECompositeSurface* csurface = fmeGeometryTools_->createCompositeSurface();
-        for (auto& surface : currentGeometry.at("boundaries")) {
-          IFMEFace* face = FMECityJSONReader::parseCityJSONPolygon(surface);
-          csurface->appendPart(face);
-        }
-        FMECityJSONReader::setTraitString(csurface, geometryLodName,
-                                          geometryLodValue);
+        IFMECompositeSurface *csurface = fmeGeometryTools_->createCompositeSurface();
+        FMECityJSONReader::parseMultiCompositeSurface(csurface, boundaries, semanticValues, semanticSurfaces);
+        FMECityJSONReader::setTraitString(csurface, geometryLodName, geometryLodValue);
         feature.setGeometry(csurface);
       }
       else if (geometryType == "Solid") {
-        IFMECompositeSurface* outerSurface = fmeGeometryTools_->createCompositeSurface();
-        // TODO: this will be problematic with inner shells
-        for (auto& shell : currentGeometry.at("boundaries")) {
-            for (auto& surface : shell) {
-              IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(surface);
-              outerSurface->appendPart(face);
-          }
-        }
-        IFMEBRepSolid* BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
-        FMECityJSONReader::setTraitString(BSolid, geometryLodName,
-                                          geometryLodValue);
+        IFMEBRepSolid* BSolid = FMECityJSONReader::parseSolid(boundaries, semanticValues, semanticSurfaces);
+        FMECityJSONReader::setTraitString(BSolid, geometryLodName, geometryLodValue);
         feature.setGeometry(BSolid);
       }
       else if (geometryType == "MultiSolid") {
-        IFMEMultiSolid* msolid = fmeGeometryTools_->createMultiSolid();
-        for (auto& solid : currentGeometry.at("boundaries")) {
-          IFMECompositeSurface* outerSurface = fmeGeometryTools_->createCompositeSurface();
-          // TODO: this will be problematic with inner shells
-          for (auto& shell : solid) {
-            for (auto& surface : shell) {
-              IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(surface);
-              outerSurface->appendPart(face);
-            }
-          }
-          IFMEBRepSolid* BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
-          msolid->appendPart(BSolid);
-        }
-        FMECityJSONReader::setTraitString(msolid, geometryLodName,
-                                          geometryLodValue);
+        IFMEMultiSolid *msolid = fmeGeometryTools_->createMultiSolid();
+        FMECityJSONReader::parseMultiCompositeSolid(msolid, boundaries, semanticValues, semanticSurfaces);
+        FMECityJSONReader::setTraitString(msolid, geometryLodName, geometryLodValue);
         feature.setGeometry(msolid);
-        gLogFile->logFeature(feature);
       }
       else if (geometryType == "CompositeSolid") {
-        IFMECompositeSolid* csolid = fmeGeometryTools_->createCompositeSolid();
-        for (auto& solid : currentGeometry.at("boundaries")) {
-          IFMECompositeSurface* outerSurface = fmeGeometryTools_->createCompositeSurface();
-          // TODO: this will be problematic with inner shells
-          for (auto& shell : solid) {
-            for (auto& surface : shell) {
-              IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(surface);
-              outerSurface->appendPart(face);
-            }
-          }
-          IFMEBRepSolid* BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
-          csolid->appendPart(BSolid);
-        }
-        FMECityJSONReader::setTraitString(csolid, geometryLodName,
-                                          geometryLodValue);
+        IFMECompositeSolid *csolid = fmeGeometryTools_->createCompositeSolid();
+        FMECityJSONReader::parseMultiCompositeSolid(csolid, boundaries, semanticValues, semanticSurfaces);
+        FMECityJSONReader::setTraitString(csolid, geometryLodName, geometryLodValue);
         feature.setGeometry(csolid);
       }
       else if (geometryType == "GeometryInstance") {
-        gLogFile->logMessageString("Geometry type 'GeometryInstance' is not supported yet", FME_WARN);
+        gLogFile->logMessageString(
+            "Geometry type 'GeometryInstance' is not supported yet", FME_WARN);
       }
       else {
-        gLogFile->logMessageString(("Unknown geometry type " + geometryType).c_str(), FME_WARN);
+        gLogFile->logMessageString(
+            ("Unknown geometry type " + geometryType).c_str(), FME_WARN);
       }
     }
     else {
@@ -400,9 +363,76 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(IFMEFeature& feature, json::
   }
 }
 
-IFMEFace *FMECityJSONReader::parseCityJSONPolygon(json::value_type &boundary) {
+
+template <typename MCSolid>
+void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::array_t& boundaries,
+                                                 json::array_t& semanticValues, json::array_t& semanticSurfaces)
+{
+  int nrSolids = distance(begin(boundaries), end(boundaries));
+  for (int i=0; i < nrSolids; i++) {
+    IFMECompositeSurface *outerSurface = fmeGeometryTools_->createCompositeSurface();
+    // TODO: this will be problematic with inner shells
+    int nrShells = distance(begin(boundaries[i]), end(boundaries[i]));
+    for (int j = 0; j < nrShells; j++) {
+      int nrSurfaces = distance(begin(boundaries[i][j]), end(boundaries[i][j]));
+      for (int k = 0; k < nrSurfaces; k++) {
+        json::value_type semanticSrf;
+        if (not semanticValues[i][j][k].is_null())
+        {
+          int semanticIdx = semanticValues[i][j][k];
+          semanticSrf = semanticSurfaces[semanticIdx];
+        }
+        IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(boundaries[i][j][k], semanticSrf);
+        outerSurface->appendPart(face);
+      }
+    }
+    IFMEBRepSolid *BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
+    multiCompositeSolid->appendPart(BSolid);
+  }
+}
+
+IFMEBRepSolid* FMECityJSONReader::parseSolid(json::array_t& boundaries, json::array_t& semanticValues,
+                                             json::array_t& semanticSurfaces)
+{
+  // TODO: this will be problematic with inner shells
+  IFMECompositeSurface *outerSurface = fmeGeometryTools_->createCompositeSurface();
+  int nrShells = distance(begin(boundaries), end(boundaries));
+  for (int i=0; i < nrShells; i++) {
+    int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
+    for (int j=0; j < nrSurfaces; j++) {
+      json::value_type semanticSrf;
+      if (not semanticValues[i][j].is_null()) {
+        int semanticIdx = semanticValues[i][j];
+        semanticSrf = semanticSurfaces[semanticIdx];
+      }
+      IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(boundaries[i][j], semanticSrf);
+      outerSurface->appendPart(face);
+    }
+  }
+  IFMEBRepSolid *BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
+  return BSolid;
+}
+
+template <typename MCSurface>
+void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::array_t& boundaries,
+                                                   json::array_t& semanticValues, json::array_t& semanticSurfaces)
+{
+  int nrSurfaces = distance(begin(boundaries), end(boundaries));
+  for (int i=0; i < nrSurfaces; i++) {
+    json::value_type semanticSrf;
+    if (not semanticValues[i].is_null()) {
+      int semanticIdx = semanticValues[i];
+      semanticSrf = semanticSurfaces[semanticIdx];
+    }
+    IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(boundaries[i], semanticSrf);
+    multiCompositeSurface->appendPart(face);
+  }
+}
+
+IFMEFace* FMECityJSONReader::parseCityJSONPolygon(json::value_type surface, json::value_type semanticSurface)
+{
   IFMELine *line = fmeGeometryTools_->createLine();
-  FMECityJSONReader::parseCityJSONRing(line, boundary);
+  FMECityJSONReader::parseCityJSONRing(line, surface);
 
   // TODO: Create the appearance for the face here. See:
   // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L271-L341
@@ -413,26 +443,46 @@ IFMEFace *FMECityJSONReader::parseCityJSONPolygon(json::value_type &boundary) {
   // TODO: Set the appearance for the face here. See:
   // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L346-L350
 
-  // Here we could scan the CityJSON and see what optional GeometryName we could
-  // set. Actually, the line, area, face, and ms could all have a GeometryName,
-  // if it is relevant. Any FME geometry can have one.
-  // TODO: For now, I'll just hardcode one.
-  IFMEString *geometryName = gFMESession->createString();
-  *geometryName = "WallSurface";
-  face->setName(*geometryName, nullptr);
-  gFMESession->destroyString(geometryName);
+  // TODO: How to handle childrent and parent semantics?
+  // Setting semantics
+  if (not semanticSurface.is_null()) {
+    IFMEString *geometryName = gFMESession->createString();
+    geometryName->set(semanticSurface.at("type").dump().c_str(), semanticSurface.at("type").dump().length());
+    face->setName(*geometryName, nullptr);
+    gFMESession->destroyString(geometryName);
 
-  // Here we could scan the CityJSON and see what optional Geometry Traits we could set.
-  // (A Geometry Trait is just an attribute stored at the geometry level, not at the top feature level.)
-  // Actually, the line, area, face, and ms could all have Traits, if they are relevant.
-  // Any FME geometry can have them.
-  // TODO: Set semantic surface attributes as Geometry Traits
-  IFMEString* geometryTrait = gFMESession->createString();
-  *geometryTrait = "Custom Float Value";
-  face->setTraitReal64(*geometryTrait, 42.0);
-  *geometryTrait = "Custom Unsigned Integer Value";
-  face->setTraitUInt32(*geometryTrait, 1234);
-  gFMESession->destroyString(geometryTrait);
+    for (json::iterator it = semanticSurface.begin(); it != semanticSurface.end(); it++) {
+      if (it.key() != "type" && it.key() != "children" && it.key() != "parent") {
+        if (it.value().is_string()) {
+          FMECityJSONReader::setTraitString(face, it.key(), it.value());
+        }
+        else if (it.value().is_number_float()) {
+          IFMEString* geometryTrait = gFMESession->createString();
+          geometryTrait->set(it.key().c_str(), it.key().length());
+          face->setTraitReal64(*geometryTrait, it.value());
+          gFMESession->destroyString(geometryTrait);
+        }
+        else if (it.value().is_number_integer()) {
+          IFMEString* geometryTrait = gFMESession->createString();
+          geometryTrait->set(it.key().c_str(), it.key().length());
+          face->setTraitInt64(*geometryTrait, it.value());
+          gFMESession->destroyString(geometryTrait);
+        }
+        else if (it.value().is_boolean()) {
+          IFMEString* geometryTrait = gFMESession->createString();
+          geometryTrait->set(it.key().c_str(), it.key().length());
+          if (it.value()) face->setTraitBoolean(*geometryTrait, FME_TRUE);
+          else face->setTraitBoolean(*geometryTrait, FME_FALSE);
+          gFMESession->destroyString(geometryTrait);
+        }
+        else {
+          std::string val = it.value().type_name();
+          gLogFile->logMessageString(("Semantic Surface attribute type '" + val + "' is not allowed.").c_str(),
+                                     FME_WARN);
+        }
+      }
+    }
+  }
 
   return face;
 }
@@ -451,7 +501,6 @@ void FMECityJSONReader::parseCityJSONRing(IFMELine *line,
 void FMECityJSONReader::setTraitString(IFMEGeometry *geometry,
                                        const std::string &traitName,
                                        const std::string &traitValue) {
-  // TODO: in FME, this Trait appears as 'undefined type'. How can we make it a string, or any other type?
   IFMEString* geometryTrait = gFMESession->createString();
   geometryTrait->set(traitName.c_str(), traitName.length());
 
