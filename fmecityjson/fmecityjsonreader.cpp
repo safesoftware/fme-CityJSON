@@ -136,13 +136,17 @@ FME_Status FMECityJSONReader::open(const char* datasetName, const IFMEStringArra
    }
 
    // Scrape the coordinate system
-   // TODO: try/catch?
-   std::string inputCoordSys = inputJSON_.at("metadata").at("referenceSystem");
-   // TODO: Should log a message
-
-   // Looking to make the form EPSG:XXXX
-   inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
-   coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
+   try {
+     std::string inputCoordSys = inputJSON_.at("metadata").at("referenceSystem");
+     // Looking to make the form EPSG:XXXX
+     inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
+     coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
+     gLogFile->logMessageString(("Coordinate Reference System is set to EPSG:" + coordSys_).c_str(),FME_INFORM);
+   }
+   catch (json::out_of_range& e) {
+     // TODO: Is it possible to detect if the CRS is missing when the reader is created?
+     gLogFile->logMessageString("Coordinate Reference System is not set in the file",FME_WARN);
+   }
 
   // Transform object
   std::vector<double> scale{1.0, 1.0, 1.0};
