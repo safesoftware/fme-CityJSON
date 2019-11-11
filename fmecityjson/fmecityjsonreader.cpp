@@ -251,14 +251,48 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    std::string featureType = nextObject_.value().at("type");
    feature.setFeatureType(featureType.c_str());
 
-   // iterate through every attribute on this object.
-   for (json::iterator it = nextObject_.value().at("attributes").begin(); it != nextObject_.value().at("attributes").end(); ++it)
+   // Set feature attributes
+   if (not nextObject_.value()["attributes"].is_null())
    {
-      const std::string& attributeName = it.key();
-      const auto& attributeValue = it.value();
-      // For now, I'm just guessing at the type of this attribute.
-      // TODO: Something smarter really should be done here.
-      feature.setAttribute(attributeName.c_str(), attributeValue.dump().c_str());
+     for (json::iterator it = nextObject_.value().at("attributes").begin();
+          it != nextObject_.value().at("attributes").end(); ++it)
+     {
+       const std::string &attributeName = it.key();
+       if (it.value().is_string())
+       {
+         const std::string &attributeValue = it.value();
+         feature.setAttribute(attributeName.c_str(), attributeValue.c_str());
+       }
+       else if (it.value().is_number_float())
+       {
+         const double &attributeValue = it.value();
+         feature.setAttribute(attributeName.c_str(), attributeValue);
+       }
+       else if (it.value().is_number_integer())
+       {
+         const int &attributeValue = it.value();
+         feature.setAttribute(attributeName.c_str(), attributeValue);
+       }
+       else if (it.value().is_boolean())
+       {
+         if (it.value()) feature.setAttribute(attributeName.c_str(), FME_TRUE);
+         else feature.setAttribute(attributeName.c_str(), FME_FALSE);
+       }
+       else
+       {
+         // TODO: I'm considering to allow the 'array' and 'object' JSON types as attributes, but
+         //  array:
+         //     We can only store the array as IFMEStringArray, so need to cast the elements to strings. Do we want this?
+         //  object:
+         //     This would be unpacked to the root of the feature attributes
+         std::string msg = "Attribute value type '";
+         msg.append(it.value().type_name());
+         msg.append("' is not allowed, in '");
+         msg.append(attributeName);
+         msg.append("'.");
+         gLogFile->logMessageString(msg.c_str(), FME_WARN);
+       }
+     }
    }
 
    // Set the geometry
