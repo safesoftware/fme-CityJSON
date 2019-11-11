@@ -252,6 +252,10 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    feature.setFeatureType(featureType.c_str());
 
    // Set feature attributes
+   // TODO: I'm setting the feature ID as an attribute here. Or is there a dedicated 'slot' in FME for this?
+   // TODO: For some reason when I add the 'fid' attribute here, the attribute is not enabled in the Table View
+   //  of Data Inspector. But all the attributes that are enabled in the Table View that are set in the for loop below.
+   feature.setAttribute("fid", objectId.c_str());
    if (not nextObject_.value()["attributes"].is_null())
    {
      for (json::iterator it = nextObject_.value().at("attributes").begin();
