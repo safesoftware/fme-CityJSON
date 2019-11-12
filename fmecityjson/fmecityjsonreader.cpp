@@ -85,109 +85,124 @@ FMECityJSONReader::~FMECityJSONReader()
 
 //===========================================================================
 // Open
-FME_Status FMECityJSONReader::open(const char* datasetName, const IFMEStringArray& parameters)
+FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArray &parameters)
 {
-   // Get geometry tools
-   fmeGeometryTools_ = gFMESession->getGeometryTools();
-   dataset_ = datasetName;
+    // Get geometry tools
+    fmeGeometryTools_ = gFMESession->getGeometryTools();
+    dataset_ = datasetName;
 
-   textureCoordUName_ = gFMESession->createString();
-   *textureCoordUName_ = kFME_texture_coordinate_u;
-   textureCoordVName_ = gFMESession->createString();
-   *textureCoordVName_ = kFME_texture_coordinate_v;
+    textureCoordUName_ = gFMESession->createString();
+    *textureCoordUName_ = kFME_texture_coordinate_u;
+    textureCoordVName_ = gFMESession->createString();
+    *textureCoordVName_ = kFME_texture_coordinate_v;
 
-   // -----------------------------------------------------------------------
-   // Add additional setup here
-   // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // Add additional setup here
+    // -----------------------------------------------------------------------
 
-   // Log an opening reader message
-   gLogFile->logMessageString((kMsgOpeningReader + dataset_).c_str());
+    // Log an opening reader message
+    gLogFile->logMessageString((kMsgOpeningReader + dataset_).c_str());
 
-   // -----------------------------------------------------------------------
-   // Open the dataset here, e.g. inputFile.open(dataSetName, ios::in);
-   // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // Open the dataset here, e.g. inputFile.open(dataSetName, ios::in);
+    // -----------------------------------------------------------------------
 
-   // Open up the data file.
-   inputFile_.open(dataset_, std::ios::in);
+    // Open up the data file.
+    inputFile_.open(dataset_, std::ios::in);
 
-   // Check that the file exists.
-   if (!inputFile_.good())
-   {
-      // TODO: Should log a message
-      return FME_FAILURE;
-   }
-
-   // Reset the file stream and start reading.
-   inputFile_.seekg(0, std::ios::beg);
-   inputFile_.clear();
-
-   inputJSON_ = json::parse(inputFile_);
-
-   // Let's make sure we're parsing this correctly.
-   if (inputJSON_.at("type") != "CityJSON")
-   {
-       gLogFile->logMessageString("Not a CityJSON file", FME_ERROR);
-      return FME_FAILURE;
-   }
-   if (inputJSON_.at("version") < "1.0")
-   {
-      gLogFile->logMessageString("Unsupported CityJSON version", FME_ERROR);
-      return FME_FAILURE;
-   }
-
-   // Scrape the coordinate system
-   try {
-     std::string inputCoordSys = inputJSON_.at("metadata").at("referenceSystem");
-     // Looking to make the form EPSG:XXXX
-     inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
-     coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
-     gLogFile->logMessageString(("Coordinate Reference System is set to EPSG:" + coordSys_).c_str(),FME_INFORM);
-   }
-   catch (json::out_of_range& e) {
-     // TODO: Is it possible to detect if the CRS is missing when the reader is created?
-     gLogFile->logMessageString("Coordinate Reference System is not set in the file",FME_WARN);
-   }
-
-  // Transform object
-  std::vector<double> scale{1.0, 1.0, 1.0};
-  std::vector<double> translation{0.0, 0.0, 0.0};
-  try {
-    json transformObject = inputJSON_.at("transform");
-    scale.clear();
-    for (double const s: transformObject.at("scale")) {
-      scale.push_back(s);
+    // Check that the file exists.
+    if (!inputFile_.good())
+    {
+        // TODO: Should log a message
+        return FME_FAILURE;
     }
-    translation.clear();
-    for (double const t: transformObject.at("translate")) {
-      translation.push_back(t);
+
+    // Reset the file stream and start reading.
+    inputFile_.seekg(0, std::ios::beg);
+    inputFile_.clear();
+
+    inputJSON_ = json::parse(inputFile_);
+
+    // Let's make sure we're parsing this correctly.
+    if (inputJSON_.at("type") != "CityJSON")
+    {
+        gLogFile->logMessageString("Not a CityJSON file", FME_ERROR);
+        return FME_FAILURE;
     }
-  }
-  catch (json::out_of_range& e) {
-    gLogFile->logMessageString("CityJSON file is not transformed",FME_INFORM);
-  }
+    std::string supportedVersion = "1.0";
+    if (inputJSON_.at("version") < supportedVersion)
+    {
+        std::stringstream versionStream;
+        versionStream << "Unsupported CityJSON version: "
+                      << inputJSON_.at("version").dump()
+                      << ". Only the version "
+                      << supportedVersion
+                      << " or higher are supported.";
+        gLogFile->logMessageString(versionStream.str().c_str(), FME_ERROR);
+        return FME_FAILURE;
+    }
 
-  // Vertices
-  for (auto vtx: inputJSON_.at("vertices")) {
-    double x = vtx[0];
-    double y = vtx[1];
-    double z = vtx[2];
-    x = scale[0] * x + translation[0];
-    y = scale[1] * y + translation[1];
-    z = scale[2] * z +translation[2];
-    vertices_.emplace_back(x, y, z);
-  }
+    // Scrape the coordinate system
+    try
+    {
+        std::string inputCoordSys = inputJSON_.at("metadata").at("referenceSystem");
+        // Looking to make the form EPSG:XXXX
+        // TODO: sometimes the EPSG is declared with a double colon, as EPSG::2056
+        inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
+        coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
+        gLogFile->logMessageString(("Coordinate Reference System is set to EPSG:" + coordSys_).c_str(), FME_INFORM);
+    }
+    catch (json::out_of_range &e)
+    {
+        // TODO: Is it possible to detect if the CRS is missing when the reader is created?
+        gLogFile->logMessageString("Coordinate Reference System is not set in the file", FME_WARN);
+    }
 
-   // start by pointing to the first object to read
-   nextObject_ = inputJSON_.at("CityObjects").begin();
+    // Transform object
+    std::vector<double> scale{1.0, 1.0, 1.0};
+    std::vector<double> translation{0.0, 0.0, 0.0};
+    try
+    {
+        json transformObject = inputJSON_.at("transform");
+        scale.clear();
+        for (double const s: transformObject.at("scale"))
+        {
+            scale.push_back(s);
+        }
+        translation.clear();
+        for (double const t: transformObject.at("translate"))
+        {
+            translation.push_back(t);
+        }
+    }
+    catch (json::out_of_range &e)
+    {
+        gLogFile->logMessageString("CityJSON vertices are not transformed", FME_INFORM);
+    }
 
-   // Read the mapping file parameters if there is one specified.
-   if (parameters.entries() < 1)
-   {
-      // We are in "open to read data features" mode.
-      readParametersDialog();
-   }
+    // Vertices
+    for (auto vtx: inputJSON_.at("vertices"))
+    {
+        double x = vtx[0];
+        double y = vtx[1];
+        double z = vtx[2];
+        x = scale[0] * x + translation[0];
+        y = scale[1] * y + translation[1];
+        z = scale[2] * z + translation[2];
+        vertices_.emplace_back(x, y, z);
+    }
 
-   return FME_SUCCESS;
+    // start by pointing to the first object to read
+    nextObject_ = inputJSON_.at("CityObjects").begin();
+
+    // Read the mapping file parameters if there is one specified.
+    if (parameters.entries() < 1)
+    {
+        // We are in "open to read data features" mode.
+        readParametersDialog();
+    }
+
+    return FME_SUCCESS;
 }
 
 //===========================================================================
@@ -248,7 +263,6 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    }
 
    std::string objectId = nextObject_.key();
-   gLogFile->logMessageString(("Parsing CityObject: " + objectId).c_str(),FME_INFORM);
 
    // Set the feature type
    std::string featureType = nextObject_.value().at("type");
@@ -341,9 +355,6 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(
       geometryLodValue = stream.str();
     } else {
       geometryLodValue = currentGeometry.at("lod");
-      gLogFile->logMessageString(
-          ("parseCityJSONObjectGeometry; geometryType: " + geometryType + "; geometryLodValue: " + geometryLodValue).c_str(),
-          FME_INFORM);
     }
 
     // TODO: get "template"
@@ -563,180 +574,177 @@ void FMECityJSONReader::setTraitString(IFMEGeometry *geometry,
 
 //===========================================================================
 // readSchema
-FME_Status FMECityJSONReader::readSchema(IFMEFeature& feature, FME_Boolean& endOfSchema)
+FME_Status FMECityJSONReader::readSchema(IFMEFeature &feature, FME_Boolean &endOfSchema)
 {
-   // In the variable schema reader case, this is where the feature schemas are read
+    // In the variable schema reader case, this is where the feature schemas are read
 
-   // The purpose of this method is to read 'schema features', which are descriptions
-   // of what types of 'data features' this will produce for the given dataset.
+    // The purpose of this method is to read 'schema features', which are descriptions
+    // of what types of 'data features' this will produce for the given dataset.
 
-   // For some formats, these schema features are easy to produce, such as looking
-   // at database column types, or metadata in file headers.
+    // For some formats, these schema features are easy to produce, such as looking
+    // at database column types, or metadata in file headers.
 
-   // I think in CityJSON's case, we need to do a full parse/scan of the file to
-   // determine all the schema features.  If this is true, the easiest thing to do is
-   // scan it once, store up the schema features, and return them one at a time
-   // when asked.
+    // I think in CityJSON's case, we need to do a full parse/scan of the file to
+    // determine all the schema features.  If this is true, the easiest thing to do is
+    // scan it once, store up the schema features, and return them one at a time
+    // when asked.
 
-   if (!schemaScanDone_)
-   {
-      // iterate through every object in the file.
-      for (auto& cityObject: inputJSON_.at("CityObjects"))
-      {
-         // I'm not sure exactly what types of features this reader will
-         // produce, so this is just a wild guess as an example.
-         std::string object = cityObject.dump();
+    if (!schemaScanDone_)
+    {
+        // iterate through every object in the file.
+        for (auto &cityObject: inputJSON_.at("CityObjects"))
+        {
+            // I'm not sure exactly what types of features this reader will
+            // produce, so this is just a wild guess as an example.
 
-         // Let's find out what we will be using as the "feature_type", and
-         // group the schema features by that.  I'll pick the field "type".
+            // Let's find out what we will be using as the "feature_type", and
+            // group the schema features by that.  I'll pick the field "type".
 
-         std::string featureType = cityObject.at("type");
+            std::string featureType = cityObject.at("type");
 
-         // Let's see if we already have seen a feature of this 'type'.
-         // If not, create a new schema feature.  If we have, just add to it I guess.
-         auto schemaFeature = schemaFeatures_.find(featureType);
-         IFMEFeature* sf(nullptr);
-         if (schemaFeature == schemaFeatures_.end())
-         {
-            sf = gFMESession->createFeature();
-            sf->setFeatureType(featureType.c_str());
-            gLogFile->logMessageString(featureType.c_str(), FME_INFORM);
-            schemaFeatures_[featureType] = sf; // gives up ownership
-         }
-         else
-         {
-            sf = schemaFeature->second;
-         }
+            // Let's see if we already have seen a feature of this 'type'.
+            // If not, create a new schema feature.  If we have, just add to it I guess.
+            auto schemaFeature = schemaFeatures_.find(featureType);
+            IFMEFeature *sf(nullptr);
+            if (schemaFeature == schemaFeatures_.end())
+            {
+                sf = gFMESession->createFeature();
+                sf->setFeatureType(featureType.c_str());
+                schemaFeatures_[featureType] = sf; // gives up ownership
+            }
+            else
+            {
+                sf = schemaFeature->second;
+            }
 
-         // iterate through every attribute on this object.
-         if (not cityObject["attributes"].is_null())
-         {
-             // Set the feature ID attribute
-             // Schema feature attributes need to be set with setSequencedAttribute()
-             // to preserve the order of attributes.
-             {
-                 const std::string attributeName = "fid";
-                 std::string attributeType = "string";
-                 sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
-             }
+            // Set the feature ID attribute
+            // Schema feature attributes need to be set with setSequencedAttribute()
+            // to preserve the order of attributes.
+            {
+                const std::string attributeName = "fid";
+                std::string attributeType = "string";
+                sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
+            }
 
-             for (json::iterator it = cityObject.at("attributes").begin();
-                  it != cityObject.at("attributes").end(); ++it)
-             {
-                 const std::string &attributeName = it.key();
-                 // The value here must be something found in the left hand
-                 // column of the ATTR_TYPE_MAP line in the metafile 'fmecityjson.fmf'
-                 // could be string, real64, uint32, logical, char, date, time, etc.
+            // iterate through every attribute on this object.
+            if (not cityObject["attributes"].is_null())
+            {
+                for (json::iterator it = cityObject.at("attributes").begin();
+                     it != cityObject.at("attributes").end(); ++it)
+                {
+                    const std::string &attributeName = it.key();
+                    // The value here must be something found in the left hand
+                    // column of the ATTR_TYPE_MAP line in the metafile 'fmecityjson.fmf'
+                    // could be string, real64, uint32, logical, char, date, time, etc.
 
-                 if (it.value().is_string())
-                 {
-                     std::string attributeType = "string";
-                     // Schema feature attributes need to be set with setSequencedAttribute()
-                     // to preserve the order of attributes.
-                     sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
-                 }
-                 else if (it.value().is_number_float())
-                 {
-                     std::string attributeType = "real64";
-                     sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
-                 }
-                 else if (it.value().is_number_integer())
-                 {
-                     std::string attributeType = "int32";
-                     sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
-                 }
-                 else if (it.value().is_boolean())
-                 {
-                     std::string attributeType = "logical";
-                     sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
-                 }
-                 else
-                 {
-                     // TODO: I'm considering to allow the 'array' and 'object' JSON types as attributes, but
-                     //  array:
-                     //     We can only store the array as IFMEStringArray, so need to cast the elements to strings. Do we want this?
-                     //  object:
-                     //     This would be unpacked to the root of the feature attributes
-                     std::string msg = "Attribute value type '";
-                     msg.append(it.value().type_name());
-                     msg.append("' is not allowed, in '");
-                     msg.append(attributeName);
-                     msg.append("'.");
-                     gLogFile->logMessageString(msg.c_str(), FME_WARN);
-                 }
-             }
-         }
+                    if (it.value().is_string())
+                    {
+                        std::string attributeType = "string";
+                        // Schema feature attributes need to be set with setSequencedAttribute()
+                        // to preserve the order of attributes.
+                        sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
+                    }
+                    else if (it.value().is_number_float())
+                    {
+                        std::string attributeType = "real64";
+                        sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
+                    }
+                    else if (it.value().is_number_integer())
+                    {
+                        std::string attributeType = "int32";
+                        sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
+                    }
+                    else if (it.value().is_boolean())
+                    {
+                        std::string attributeType = "logical";
+                        sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
+                    }
+                    else
+                    {
+                        // TODO: I'm considering to allow the 'array' and 'object' JSON types as attributes, but
+                        //  array:
+                        //     We can only store the array as IFMEStringArray, so need to cast the elements to strings. Do we want this?
+                        //  object:
+                        //     This would be unpacked to the root of the feature attributes
+                        std::string msg = "Attribute value type '";
+                        msg.append(it.value().type_name());
+                        msg.append("' is not allowed, in '");
+                        msg.append(attributeName);
+                        msg.append("'.");
+                        gLogFile->logMessageString(msg.c_str(), FME_WARN);
+                    }
+                }
+            }
 
-         // Here we add to the schema feature all the possible geometries of the
-         // feature type.  Arc and ellipse geometries require that you also set
-         // fme_geomattr on them.  Setting the fme_geomattr is required for
-         // backwards compatible with writers that only support classic geometry.
+            // Here we add to the schema feature all the possible geometries of the
+            // feature type.  Arc and ellipse geometries require that you also set
+            // fme_geomattr on them.  Setting the fme_geomattr is required for
+            // backwards compatible with writers that only support classic geometry.
 
-         // TODO: I will leave it for future work to iterate over all the
-         // geometries, map the JSON types to the types needed here, and properly
-         // accumulate all possible geometry types per schema feature, avoiding duplicates.
+            // The value here must be something found in the left hand
+            // column of the GEOM_MAP line in the metafile 'fmecityjson.fmf'
+            int nrGeometries = distance(begin(cityObject.at("geometry")), end(cityObject.at("geometry")));
+            for (int i = 0; i < nrGeometries; i++)
+            {
 
-         // The value here must be something found in the left hand
-         // column of the GEOM_MAP line in the metafile 'fmecityjson.fmf'
+                std::string attributeName = "fme_geometry{" + std::to_string(i) + "}";
+                std::string type = cityObject.at("geometry")[i].at("type");
 
-         // But the type you'd scan for is this, I think:
-         std::string geometryType = cityObject.at("geometry")[0].at("type").dump();
-         gLogFile->logMessageString(geometryType.c_str(), FME_INFORM);
+                if (type == "MultiPoint")
+                {
+                    sf->setAttribute(attributeName.c_str(), "cityjson_multipoint");
+                }
+                else if (type == "MultiLineString")
+                {
+                    sf->setAttribute(attributeName.c_str(), "cityjson_multilinestring");
+                }
+                else if (type == "MultiSurface")
+                {
+                    sf->setAttribute(attributeName.c_str(), "cityjson_multisurface");
+                }
+                else if (type == "CompositeSurface")
+                {
+                    sf->setAttribute(attributeName.c_str(), "cityjson_compositesurface");
+                }
+                else if (type == "Solid")
+                {
+                    sf->setAttribute(attributeName.c_str(), "cityjson_solid");
+                }
+                else if (type == "MultiSolid")
+                {
+                    sf->setAttribute(attributeName.c_str(), "cityjson_multisolid");
+                }
+                else if (type == "CompositeSolid")
+                {
+                    sf->setAttribute(attributeName.c_str(), "cityjson_compositesolid");
+                }
+                else
+                {
+//                    std::string msg = attributeName + " " + type;
+//                    gLogFile->logMessageString(msg.c_str(), FME_WARN);
+                    sf->setAttribute(attributeName.c_str(), "cityjson_null");
+                }
+            }
+        }
 
-         // For now, I'll just hard code that each schema feature type 
-         // may have many possible geometry types.
-         sf->setAttribute("fme_geometry{0}", "cityjson_point");
+        schemaScanDone_ = true;
+    }
 
-         sf->setAttribute("fme_geometry{1}", "cityjson_linestring");
+    if (schemaFeatures_.empty())
+    {
+        endOfSchema = FME_TRUE;
+        return FME_SUCCESS;
+    }
 
-         sf->setAttribute("fme_geometry{2}", "cityjson_multilinestring");
+    // Let's take one schema feature off our waiting list
+    IFMEFeature *schemaFeature = schemaFeatures_.begin()->second;
+    schemaFeatures_.erase(schemaFeatures_.begin());
+    // Too bad the API forces us to make a copy.
+    schemaFeature->clone(feature);
+    gFMESession->destroyFeature(schemaFeature);
 
-         sf->setAttribute("fme_geometry{3}", "cityjson_polygon");
-
-         sf->setAttribute("fme_geometry{4}", "cityjson_text");
-         sf->setAttribute("fme_geometry{4}.fme_text_string", "string");
-         sf->setAttribute("fme_geometry{4}.fme_text_size", "number(31,15)");
-
-         sf->setAttribute("fme_geometry{5}", "cityjson_multi_text");
-         sf->setAttribute("fme_geometry{5}.fme_text_string", "string");
-         sf->setAttribute("fme_geometry{5}.fme_text_size", "number(31,15)");
-
-         sf->setAttribute("fme_geometry{6}", "cityjson_collection");
-
-         sf->setAttribute("fme_geometry{7}", "cityjson_null");
-
-         sf->setAttribute("fme_geometry{8}", "cityjson_surface");
-
-         sf->setAttribute("fme_geometry{9}", "cityjson_multisurface");
-
-         sf->setAttribute("fme_geometry{10}", "cityjson_compositesurface");
-
-         sf->setAttribute("fme_geometry{11}", "cityjson_solid");
-
-         sf->setAttribute("fme_geometry{12}", "cityjson_multisolid");
-
-         sf->setAttribute("fme_geometry{13}", "cityjson_compositesolid");
-      }
-
-      schemaScanDone_ = true;
-   }
-
-   if (schemaFeatures_.empty())
-   {
-       gLogFile->logMessageString("schemaFeatures_.empty()", FME_INFORM);
-      endOfSchema = FME_TRUE;
-      return FME_SUCCESS;
-   }
-
-   // Let's take one schema feature off our waiting list
-   IFMEFeature* schemaFeature = schemaFeatures_.begin()->second;
-   schemaFeatures_.erase(schemaFeatures_.begin());
-   // Too bad the API forces us to make a copy.
-   schemaFeature->clone(feature);
-   gFMESession->destroyFeature(schemaFeature);
-
-   endOfSchema = FME_FALSE;
-   return FME_SUCCESS;
+    endOfSchema = FME_FALSE;
+    return FME_SUCCESS;
 }
 
 //===========================================================================
