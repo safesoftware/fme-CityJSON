@@ -599,7 +599,6 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature &feature, FME_Boolean &endO
 
             // Let's find out what we will be using as the "feature_type", and
             // group the schema features by that.  I'll pick the field "type".
-
             std::string featureType = cityObject.at("type");
 
             // Let's see if we already have seen a feature of this 'type'.
@@ -684,45 +683,49 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature &feature, FME_Boolean &endO
             // The value here must be something found in the left hand
             // column of the GEOM_MAP line in the metafile 'fmecityjson.fmf'
             int nrGeometries = distance(begin(cityObject.at("geometry")), end(cityObject.at("geometry")));
-            for (int i = 0; i < nrGeometries; i++)
-            {
+            if (nrGeometries == 0) {
+                std::string attributeName = "fme_geometry{0}";
+                sf->setAttribute(attributeName.c_str(), "cityjson_null");
+            }
+            else {
+                for (int i = 0; i < nrGeometries; i++)
+                {
 
-                std::string attributeName = "fme_geometry{" + std::to_string(i) + "}";
-                std::string type = cityObject.at("geometry")[i].at("type");
+                    std::string attributeName = "fme_geometry{" + std::to_string(i) + "}";
+                    std::string type = cityObject.at("geometry")[i].at("type");
 
-                if (type == "MultiPoint")
-                {
-                    sf->setAttribute(attributeName.c_str(), "cityjson_multipoint");
-                }
-                else if (type == "MultiLineString")
-                {
-                    sf->setAttribute(attributeName.c_str(), "cityjson_multilinestring");
-                }
-                else if (type == "MultiSurface")
-                {
-                    sf->setAttribute(attributeName.c_str(), "cityjson_multisurface");
-                }
-                else if (type == "CompositeSurface")
-                {
-                    sf->setAttribute(attributeName.c_str(), "cityjson_compositesurface");
-                }
-                else if (type == "Solid")
-                {
-                    sf->setAttribute(attributeName.c_str(), "cityjson_solid");
-                }
-                else if (type == "MultiSolid")
-                {
-                    sf->setAttribute(attributeName.c_str(), "cityjson_multisolid");
-                }
-                else if (type == "CompositeSolid")
-                {
-                    sf->setAttribute(attributeName.c_str(), "cityjson_compositesolid");
-                }
-                else
-                {
-//                    std::string msg = attributeName + " " + type;
-//                    gLogFile->logMessageString(msg.c_str(), FME_WARN);
-                    sf->setAttribute(attributeName.c_str(), "cityjson_null");
+                    if (type == "MultiPoint")
+                    {
+                        sf->setAttribute(attributeName.c_str(), "cityjson_multipoint");
+                    }
+                    else if (type == "MultiLineString")
+                    {
+                        sf->setAttribute(attributeName.c_str(), "cityjson_multilinestring");
+                    }
+                    else if (type == "MultiSurface")
+                    {
+                        sf->setAttribute(attributeName.c_str(), "cityjson_multisurface");
+                    }
+                    else if (type == "CompositeSurface")
+                    {
+                        sf->setAttribute(attributeName.c_str(), "cityjson_compositesurface");
+                    }
+                    else if (type == "Solid")
+                    {
+                        sf->setAttribute(attributeName.c_str(), "cityjson_solid");
+                    }
+                    else if (type == "MultiSolid")
+                    {
+                        sf->setAttribute(attributeName.c_str(), "cityjson_multisolid");
+                    }
+                    else if (type == "CompositeSolid")
+                    {
+                        sf->setAttribute(attributeName.c_str(), "cityjson_compositesolid");
+                    }
+                    else
+                    {
+                        sf->setAttribute(attributeName.c_str(), "cityjson_null");
+                    }
                 }
             }
         }
