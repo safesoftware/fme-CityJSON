@@ -45,6 +45,7 @@
 #include <iaggregate.h>
 #include <imultipoint.h>
 #include <iline.h>
+#include <imulticurve.h>
 #include <iface.h>
 #include <isurface.h>
 #include <isurfaceiterator.h>
@@ -189,7 +190,11 @@ private:
    // Parse a single Surface of the boundary
    IFMEFace *parseCityJSONPolygon(json::value_type surface,
                                   json::value_type semanticSurface);
-   // Parse a single Ring to an IFMELine
+
+   // Parse a MultiLineString
+   void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries);
+
+  // Parse a single Ring to an IFMELine
    void parseCityJSONRing(IFMELine* line,
                           json::value_type &boundary);
 

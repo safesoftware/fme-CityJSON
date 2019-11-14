@@ -364,9 +364,10 @@ void FMECityJSONReader::parseCityJSONObjectGeometry(
         FMECityJSONReader::parseMultiPoint(mpoint, boundaries);
         feature.setGeometry(mpoint);
       }
-      else if (geometryType == "LineString") {
-        gLogFile->logMessageString(
-            "Geometry type 'LineString' is not supported yet", FME_WARN);
+      else if (geometryType == "MultiLineString") {
+          IFMEMultiCurve* mlinestring = fmeGeometryTools_->createMultiCurve();
+          FMECityJSONReader::parseMultiLineString(mlinestring, boundaries);
+          feature.setGeometry(mlinestring);
       }
       else if (geometryType == "MultiSurface") {
         IFMEMultiSurface *msurface = fmeGeometryTools_->createMultiSurface();
@@ -544,11 +545,19 @@ IFMEFace* FMECityJSONReader::parseCityJSONPolygon(json::value_type surface, json
   return face;
 }
 
+void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries)
+{
+    for (auto& linestring : boundaries) {
+        IFMELine *line = fmeGeometryTools_->createLine();
+        FMECityJSONReader::parseCityJSONRing(line, linestring);
+        mlinestring->appendPart(line);
+    }
+}
+
 void FMECityJSONReader::parseCityJSONRing(IFMELine *line,
                                           json::value_type &boundary)
 {
-    // TODO: why are we incrementing the iterator first?
-    for (json::iterator it = boundary.begin(); it != boundary.end(); ++it)
+    for (json::iterator it = boundary.begin(); it != boundary.end(); it++)
     {
         for (int vertex : it.value())
         {
