@@ -421,52 +421,94 @@ template <typename MCSolid>
 void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::value_type &boundaries,
                                                  json::value_type &semantics)
 {
-  int nrSolids = distance(begin(boundaries), end(boundaries));
-  for (int i=0; i < nrSolids; i++) {
-    IFMECompositeSurface *outerSurface = fmeGeometryTools_->createCompositeSurface();
-    // TODO: this will be problematic with inner shells
-    int nrShells = distance(begin(boundaries[i]), end(boundaries[i]));
-    for (int j = 0; j < nrShells; j++) {
-      int nrSurfaces = distance(begin(boundaries[i][j]), end(boundaries[i][j]));
-      for (int k = 0; k < nrSurfaces; k++) {
-        json::value_type semanticSrf;
-        if (not semantics.is_null()) {
-          if (not semantics["values"][i][j][k].is_null())
-          {
-            int semanticIdx = semantics["values"][i][j][k];
-            semanticSrf = semantics["surfaces"][semanticIdx];
-          }
+    int nrSolids = distance(begin(boundaries), end(boundaries));
+    for (int i = 0; i < nrSolids; i++)
+    {
+        IFMECompositeSurface *outerSurface = fmeGeometryTools_->createCompositeSurface();
+        std::vector<IFMECompositeSurface *> innerSurfaces;
+        int nrShells = distance(begin(boundaries[i]), end(boundaries[i]));
+        for (int j = 0; j < nrShells; j++)
+        {
+            if (j==0) {
+                int nrSurfaces = distance(begin(boundaries[i][j]), end(boundaries[i][j]));
+                for (int k = 0; k < nrSurfaces; k++)
+                {
+                    json::value_type semanticSrf;
+                    if (not semantics.is_null())
+                    {
+                        if (not semantics["values"][i][j][k].is_null())
+                        {
+                            int semanticIdx = semantics["values"][i][j][k];
+                            semanticSrf = semantics["surfaces"][semanticIdx];
+                        }
+                    }
+                    IFMEFace *face = FMECityJSONReader::parseCityJSONSurface(boundaries[i][j][k], semanticSrf);
+                    outerSurface->appendPart(face);
+                }
+            }
+            else {
+                IFMECompositeSurface *innerSurface = fmeGeometryTools_->createCompositeSurface();
+                int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
+                for (int k = 0; k < nrSurfaces; k++)
+                {
+                    json::value_type semanticSrf;
+                    // Inner shells/surfaces do not have semantics
+                    IFMEFace *face = FMECityJSONReader::parseCityJSONSurface(boundaries[i][j][k], semanticSrf);
+                    innerSurface->appendPart(face);
+                }
+                innerSurfaces.push_back(innerSurface);
+            }
         }
-        IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(boundaries[i][j][k], semanticSrf);
-        outerSurface->appendPart(face);
-      }
+        IFMEBRepSolid *BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
+        for(auto innerSurface : innerSurfaces) {
+            BSolid->addInnerSurface(innerSurface);
+        }
+        multiCompositeSolid->appendPart(BSolid);
     }
-    IFMEBRepSolid *BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
-    multiCompositeSolid->appendPart(BSolid);
-  }
 }
 
-IFMEBRepSolid * FMECityJSONReader::parseSolid(json::value_type &boundaries, json::value_type &semantics)
+IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json::value_type &semantics)
 {
-  // TODO: this will be problematic with inner shells
-  IFMECompositeSurface *outerSurface = fmeGeometryTools_->createCompositeSurface();
-  int nrShells = distance(begin(boundaries), end(boundaries));
-  for (int i=0; i < nrShells; i++) {
-    int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
-    for (int j=0; j < nrSurfaces; j++) {
-      json::value_type semanticSrf;
-      if (not semantics.is_null()) {
-        if (not semantics["values"][i][j].is_null()) {
-          int semanticIdx = semantics["values"][i][j];
-          semanticSrf = semantics["surfaces"][semanticIdx];
+    IFMECompositeSurface *outerSurface = fmeGeometryTools_->createCompositeSurface();
+    std::vector<IFMECompositeSurface *> innerSurfaces;
+    int nrShells = distance(begin(boundaries), end(boundaries));
+    for (int i = 0; i < nrShells; i++)
+    {
+        if (i==0) {
+            int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
+            for (int j = 0; j < nrSurfaces; j++)
+            {
+                json::value_type semanticSrf;
+                if (not semantics.is_null())
+                {
+                    if (not semantics["values"][i][j].is_null())
+                    {
+                        int semanticIdx = semantics["values"][i][j];
+                        semanticSrf = semantics["surfaces"][semanticIdx];
+                    }
+                }
+                IFMEFace *face = FMECityJSONReader::parseCityJSONSurface(boundaries[i][j], semanticSrf);
+                outerSurface->appendPart(face);
+            }
         }
-      }
-      IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(boundaries[i][j], semanticSrf);
-      outerSurface->appendPart(face);
+        else {
+            IFMECompositeSurface *innerSurface = fmeGeometryTools_->createCompositeSurface();
+            int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
+            for (int j = 0; j < nrSurfaces; j++)
+            {
+                json::value_type semanticSrf;
+                // Inner shells/surfaces do not have semantics
+                IFMEFace *face = FMECityJSONReader::parseCityJSONSurface(boundaries[i][j], semanticSrf);
+                innerSurface->appendPart(face);
+            }
+            innerSurfaces.push_back(innerSurface);
+        }
     }
-  }
-  IFMEBRepSolid *BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
-  return BSolid;
+    IFMEBRepSolid *BSolid = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
+    for(auto innerSurface : innerSurfaces) {
+        BSolid->addInnerSurface(innerSurface);
+    }
+    return BSolid;
 }
 
 template <typename MCSurface>
@@ -482,21 +524,28 @@ void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurfa
         semanticSrf = semantics["surfaces"][semanticIdx];
       }
     }
-    IFMEFace *face = FMECityJSONReader::parseCityJSONPolygon(boundaries[i], semanticSrf);
+    IFMEFace *face = FMECityJSONReader::parseCityJSONSurface(boundaries[i], semanticSrf);
+
     multiCompositeSurface->appendPart(face);
   }
 }
 
-IFMEFace* FMECityJSONReader::parseCityJSONPolygon(json::value_type surface, json::value_type semanticSurface)
+IFMEFace* FMECityJSONReader::parseCityJSONSurface(json::value_type surface, json::value_type semanticSurface)
 {
-  IFMELine *line = fmeGeometryTools_->createLine();
-  FMECityJSONReader::parseCityJSONRing(line, surface);
+  std::vector<IFMELine *> rings;
+  FMECityJSONReader::parseCityJSONRings(&rings, surface);
+  IFMELine *outerRing = rings[0];
 
   // TODO: Create the appearance for the face here. See:
   // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L271-L341
 
-  IFMEArea *area = fmeGeometryTools_->createSimpleAreaByCurve(line);
+  IFMEArea *area = fmeGeometryTools_->createSimpleAreaByCurve(outerRing);
   IFMEFace *face = fmeGeometryTools_->createFaceByArea(area, FME_CLOSE_3D_EXTEND_MODE);
+  if (rings.size() > 1) {
+      for (auto it = rings.cbegin() + 1; it != rings.cend(); ++it) {
+        face->addInnerBoundaryCurve(*it, FME_CLOSE_3D_EXTEND_MODE);
+      }
+  }
 
   // TODO: Set the appearance for the face here. See:
   // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L346-L350
@@ -541,7 +590,6 @@ IFMEFace* FMECityJSONReader::parseCityJSONPolygon(json::value_type surface, json
       }
     }
   }
-
   return face;
 }
 
@@ -549,13 +597,25 @@ void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve *mlinestring, json::
 {
     for (auto& linestring : boundaries) {
         IFMELine *line = fmeGeometryTools_->createLine();
-        FMECityJSONReader::parseCityJSONRing(line, linestring);
+        FMECityJSONReader::parseLineString(line, linestring);
         mlinestring->appendPart(line);
     }
 }
 
-void FMECityJSONReader::parseCityJSONRing(IFMELine *line,
-                                          json::value_type &boundary)
+void FMECityJSONReader::parseCityJSONRings(std::vector<IFMELine *> *rings,
+                                           json::value_type &boundary)
+{
+    int nrRings = distance(begin(boundary), end(boundary));
+    for (int i=0; i < nrRings; i++)
+    {
+        IFMELine *line = fmeGeometryTools_->createLine();
+        FMECityJSONReader::parseLineString(line, boundary[i]);
+        rings->push_back(line);
+    }
+}
+
+void FMECityJSONReader::parseLineString(IFMELine *line,
+                                        json::value_type &boundary)
 {
     for (json::iterator it = boundary.begin(); it != boundary.end(); it++)
     {

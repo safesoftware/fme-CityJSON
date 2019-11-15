@@ -188,15 +188,18 @@ private:
    void parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries,
                                    json::value_type &semantics);
    // Parse a single Surface of the boundary
-   IFMEFace *parseCityJSONPolygon(json::value_type surface,
+   IFMEFace *parseCityJSONSurface(json::value_type surface,
                                   json::value_type semanticSurface);
 
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries);
 
-  // Parse a single Ring to an IFMELine
-   void parseCityJSONRing(IFMELine* line,
-                          json::value_type &boundary);
+   // Parse a single Ring to an IFMELine
+   void parseCityJSONRings(std::vector<IFMELine *> *rings,
+                           json::value_type &boundary);
+
+   // Parse a single LineString
+   void parseLineString(IFMELine *line, json::value_type &boundary);
 
    // Parse MultiPoint geometry
    void parseMultiPoint(IFMEMultiPoint *mpoint,
