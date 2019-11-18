@@ -322,6 +322,30 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
        }
      }
    }
+   // Set child and parent CityObjects as attributes. In FME we don't have/set an explicit object hierarchy, but each
+   // feature is on the same level. Therefore we store the child-parent relationships in
+   // attributes, for those who are interested in the hierarchies. Just like in cityjson.
+   // I'm not adding the children and parents attributes to the schema, because its better if they are hidden from the
+   // table view, since there can be many-many children for each feature.
+    if (not nextObject_.value()["children"].is_null() && not nextObject_.value()["children"].empty())
+    {
+        IFMEStringArray* children = gFMESession->createStringArray();
+        for (std::string child : nextObject_.value()["children"]) {
+            children->append(child.c_str());
+        }
+        feature.setListAttributeNonSequenced("children", *children);
+        gFMESession->destroyStringArray(children);
+    }
+
+    if (not nextObject_.value()["parents"].is_null() && not nextObject_.value()["parents"].empty())
+    {
+        IFMEStringArray* parents = gFMESession->createStringArray();
+        for (std::string parent : nextObject_.value()["parents"]) {
+            parents->append(parent.c_str());
+        }
+        feature.setListAttributeNonSequenced("parents", *parents);
+        gFMESession->destroyStringArray(parents);
+    }
 
    // Set the geometry
    for (auto &geometry: nextObject_.value()["geometry"])
