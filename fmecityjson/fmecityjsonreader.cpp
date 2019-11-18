@@ -201,6 +201,9 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
         vertices_.emplace_back(x, y, z);
     }
 
+    // Because we don't have a way to handle Semantic Surface hierarchies
+    gLogFile->logMessageString("Semantic Surface hierarchy (children, parent) is discarded", FME_WARN);
+
     // start by pointing to the first object to read
     nextObject_ = inputJSON_.at("CityObjects").begin();
 
@@ -583,7 +586,7 @@ IFMEFace* FMECityJSONReader::parseCityJSONSurface(json::value_type surface, json
   // TODO: Set the appearance for the face here. See:
   // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L346-L350
 
-  // TODO: How to handle childrent and parent semantics?
+  // We ignore Semantic Surface hierachies and the 'children' and 'parent' tag is discarded
   // Setting semantics
   if (not semanticSurface.is_null()) {
     IFMEString *geometryName = gFMESession->createString();
