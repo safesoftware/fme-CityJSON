@@ -147,9 +147,18 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     {
         std::string inputCoordSys = inputJSON_.at("metadata").at("referenceSystem");
         // Looking to make the form EPSG:XXXX
-        // TODO: sometimes the EPSG is declared with a double colon, as EPSG::2056
         inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
-        coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
+        if (inputCoordSys.find("::") != std::string::npos) {
+            // In case of OGC URN 'urn:ogc:def:crs:EPSG::7415
+            coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
+        }
+        else if (inputCoordSys.find(":") != std::string::npos) {
+            // In case of legacy EPSG:7415
+            coordSys_ = inputCoordSys;
+        } else {
+            gLogFile->logMessageString("Cannot parse EPSG code. Please provide the EPSG code as OGC URN, for example "
+                                       "'urn:ogc:def:crs:EPSG::7415'.", FME_WARN);
+        }
         gLogFile->logMessageString(("Coordinate Reference System is set to " + coordSys_).c_str(), FME_INFORM);
     }
     catch (json::out_of_range &e)
