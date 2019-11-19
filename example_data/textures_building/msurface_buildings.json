@@ -189,7 +189,13 @@
 						],
 						"surfaces": [
 							{
-								"type": "RoofSurface"
+								"type": "RoofSurface",
+								"not_allowed_object" : {"key1" : 1},
+								"not_allowed_array" : [1,2,3],
+								"attr_string" : "some string",
+								"attr_bool": true,
+								"attr_number": 1.234,
+								"attr_int": 1
 							},
 							{
 								"type": "GroundSurface"
