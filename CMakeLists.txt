@@ -27,3 +27,5 @@ install(TARGETS fmecityjson DESTINATION ${FME_DEV_HOME}/plugins
                     WORLD_READ WORLD_EXECUTE)
 install(FILES fmecityjson.db DESTINATION ${FME_DEV_HOME}/formatsinfo)
 install(FILES fmecityjson.fmf DESTINATION ${FME_DEV_HOME}/metafile)
+
+#add_executable(test fmecityjson/test.cpp)

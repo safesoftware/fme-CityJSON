@@ -11,7 +11,7 @@ pluginbuilder_env.Replace(LIBDIR = fme_home.Dir('fmecore'),
 pluginbuilder_env.Append(CXXFLAGS = ['--std=c++11'],
                          CCFLAGS = ['-Wall', '-Werror', '-Wno-deprecated',
                                     '-Wno-unused-variable', # remove after code is clean
-                                    '-O3', '-fvisibility=hidden'],
+                                    '-fvisibility=hidden','-O0', '-g'],
                          LIBPATH = ['$LIBDIR'],
                          LIBS = ['fmeobj'])
 

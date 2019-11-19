@@ -20,8 +20,8 @@
         {
             "values":
             [
-            [[0,0,1,2,2,2,2,2,2,2,2,2,2,2,2]], 
-            [[0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,2]]
+            [[0,0,null,2,2,2,2,2,2,2,2,2,2,2,2]], 
+            [null]
             ],
             "surfaces":[{"type":"RoofSurface"},{"type":"GroundSurface"},{"type":"WallSurface"}]
         },
