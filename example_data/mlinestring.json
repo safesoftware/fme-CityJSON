@@ -1,0 +1,25 @@
+{
+  "type": "CityJSON",
+  "version": "1.0",
+  "metadata": {"referenceSystem": "urn:ogc:def:crs:EPSG::28992"},
+  "CityObjects": {
+    "julianalaan": {
+        "type": "Road", 
+        "geometry": [{
+          "type": "MultiLineString",
+          "lod": 0,
+          "boundaries": [
+            [0,1,2,3], [4,5]
+          ]
+        }]
+      }
+  },
+  "vertices": [
+      [85094.000,446816.295, 0.0],
+      [85129.552,446857.131, 0.0],
+      [85162.221,446896.526, 0.0],
+      [85253.983,447011.829, 0.0],
+      [85240.051,446990.690, 0.0],
+      [85260.709,446995.615, 0.0]
+  ]
+}

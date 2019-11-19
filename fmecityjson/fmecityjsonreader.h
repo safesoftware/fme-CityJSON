@@ -43,7 +43,9 @@
 #include <fmefeat.h>
 #include <igeometry.h>
 #include <iaggregate.h>
+#include <imultipoint.h>
 #include <iline.h>
+#include <imulticurve.h>
 #include <iface.h>
 #include <isurface.h>
 #include <isurfaceiterator.h>
@@ -177,20 +179,32 @@ private:
                                     json::value_type &currentGeometry);
    // Parse a Multi- or CompositeSolid
    template <typename MCSolid>
-   void parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::array_t &boundaries,
+   void parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::value_type &boundaries,
                                  json::value_type &semantics);
    // Parse a Solid
-   IFMEBRepSolid *parseSolid(json::array_t &boundaries, json::value_type &semantics);
+   IFMEBRepSolid *parseSolid(json::value_type &boundaries, json::value_type &semantics);
    // Parse a Multi- or CompositeSurface
    template <typename MCSurface>
-   void parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::array_t &boundaries,
+   void parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries,
                                    json::value_type &semantics);
    // Parse a single Surface of the boundary
-   IFMEFace *parseCityJSONPolygon(json::value_type surface,
+   IFMEFace *parseCityJSONSurface(json::value_type surface,
                                   json::value_type semanticSurface);
+
+   // Parse a MultiLineString
+   void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries);
+
    // Parse a single Ring to an IFMELine
-   void parseCityJSONRing(IFMELine* line,
-                          json::value_type& boundary);
+   void parseCityJSONRings(std::vector<IFMELine *> *rings,
+                           json::value_type &boundary);
+
+   // Parse a single LineString
+   void parseLineString(IFMELine *line, json::value_type &boundary);
+
+   // Parse MultiPoint geometry
+   void parseMultiPoint(IFMEMultiPoint *mpoint,
+                        json::value_type &boundary);
+
    // Set the Level of Detail Trait on the geometry
    static void setTraitString(IFMEGeometry *geometry,
                               const std::string &traitName,

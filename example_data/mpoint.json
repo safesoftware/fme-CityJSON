@@ -1,0 +1,36 @@
+{
+  "type": "CityJSON",
+  "version": "1.0",
+  "metadata": {"referenceSystem": "urn:ogc:def:crs:EPSG::28992"},
+  "CityObjects": {
+    "onebigtree": {
+        "type": "SolitaryVegetationObject", 
+        "attributes": { 
+          "trunkDiameter": 5.3,
+          "crownDiameter": 11.0
+        },
+        "geometry": [{
+          "type": "MultiPoint",
+          "lod": 0,
+          "boundaries": [0]
+        }]
+      },
+      "manybigtrees": {
+        "type": "SolitaryVegetationObject", 
+        "attributes": { 
+          "maintainer": "my municipality"
+        },
+        "geometry": [{
+          "type": "MultiPoint",
+          "lod": 0,
+          "boundaries": [1, 2, 3]
+        }]
+      }
+  },
+  "vertices": [
+      [85136.158,446855.450, 0.0],
+      [85122.466,446839.115, 0.0],
+      [85117.301,446833.590, 0.0],
+      [85112.497,446828.185, 0.0]
+  ]
+}
