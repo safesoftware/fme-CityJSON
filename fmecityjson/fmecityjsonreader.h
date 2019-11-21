@@ -210,6 +210,10 @@ private:
                               const std::string &traitName,
                               const std::string &traitValue);
 
+   // Cast the geometry LoD to a string, even though the specs require a number.
+   // Because strings are easier to compare than floats (in case of extended LoD).
+   static std::string lodToString(json::object_t currentGeometry);
+
    // Data members
 
    // The value specified for the READER_TYPE in the mapping file.
@@ -247,6 +251,8 @@ private:
    json inputJSON_;
    json::iterator nextObject_;
    std::vector<std::tuple<double, double, double>> vertices_;
+   std::vector<std::string> lod_present_;
+   std::string lod_to_read_;
 
    bool schemaScanDone_;
    std::map<std::string, IFMEFeature*> schemaFeatures_;
