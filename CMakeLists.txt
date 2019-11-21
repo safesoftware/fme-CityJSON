@@ -13,6 +13,8 @@ add_library(fmecityjson SHARED
         ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsonwriter.cpp
         ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsonwriter.h)
 
+include_directories( ${CMAKE_SOURCE_DIR}/include/ )
+
 # Set an environment variable FME_DEV_HOME to be the path to the directory where FME is installed
 include_directories(${CMAKE_SOURCE_DIR}/fmecityjson
         ${CMAKE_SOURCE_DIR}/includes
