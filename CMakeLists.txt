@@ -23,6 +23,11 @@ include_directories(${CMAKE_SOURCE_DIR}/fmecityjson
 
 set_target_properties(fmecityjson PROPERTIES PREFIX "")
 
+if(APPLE)
+    # change fmecityjson.dylib to fmecityjson.so
+    set_target_properties(fmecityjson PROPERTIES SUFFIX ".so")
+endif()
+
 install(TARGETS fmecityjson DESTINATION ${FME_DEV_HOME}/plugins
         PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE
                     GROUP_READ GROUP_EXECUTE
