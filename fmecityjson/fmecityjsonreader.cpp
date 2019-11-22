@@ -394,9 +394,9 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    // Set the geometry
    for (auto &geometry: nextObject_.value()["geometry"])
    {
-     // TODO: Can FME handle multiple geometries for the same object? Lod 1 an lod2? How?
      // Set the geometry for the feature
-     FMECityJSONReader::parseCityObjectGeometry(feature, geometry);
+       IFMEGeometry *geom = FMECityJSONReader::parseCityObjectGeometry(geometry, vertices_);
+       if (geom != nullptr) { feature.setGeometry(geom); }
    }
   // Set the coordinate system
   feature.setCoordSys(coordSys_.c_str());
@@ -407,8 +407,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    return FME_SUCCESS;
 }
 
-void FMECityJSONReader::parseCityObjectGeometry(
-    IFMEFeature &feature, json::value_type &currentGeometry) {
+IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &currentGeometry, std::vector<std::tuple<double, double, double>> &vertices) {
 
   if (currentGeometry.is_object()) {
     std::string geometryType, geometryLodValue;
@@ -428,66 +427,68 @@ void FMECityJSONReader::parseCityObjectGeometry(
       if (geometryLodValue == lodParam_) {
         if (geometryType == "MultiPoint") {
           IFMEMultiPoint *mpoint = fmeGeometryTools_->createMultiPoint();
-          FMECityJSONReader::parseMultiPoint(mpoint, boundaries);
-          feature.setGeometry(mpoint);
+          FMECityJSONReader::parseMultiPoint(mpoint, boundaries, vertices);
+          return mpoint;
         }
         else if (geometryType == "MultiLineString") {
           IFMEMultiCurve* mlinestring = fmeGeometryTools_->createMultiCurve();
-          FMECityJSONReader::parseMultiLineString(mlinestring, boundaries);
-          feature.setGeometry(mlinestring);
+          FMECityJSONReader::parseMultiLineString(mlinestring, boundaries, vertices);
+          return mlinestring;
         }
         else if (geometryType == "MultiSurface") {
           IFMEMultiSurface *msurface = fmeGeometryTools_->createMultiSurface();
-          FMECityJSONReader::parseMultiCompositeSurface(msurface, boundaries, semantics);
+          FMECityJSONReader::parseMultiCompositeSurface(msurface, boundaries, semantics, vertices);
           // Set the Level of Detail Trait on the geometry
           FMECityJSONReader::setTraitString(msurface, geometryLodName, geometryLodValue);
           // Append the geometry to the FME feature
-          feature.setGeometry(msurface);
+          return msurface;
         }
         else if (geometryType == "CompositeSurface") {
           IFMECompositeSurface *csurface = fmeGeometryTools_->createCompositeSurface();
-          FMECityJSONReader::parseMultiCompositeSurface(csurface, boundaries, semantics);
+          FMECityJSONReader::parseMultiCompositeSurface(csurface, boundaries, semantics, vertices);
           FMECityJSONReader::setTraitString(csurface, geometryLodName, geometryLodValue);
-          feature.setGeometry(csurface);
+          return csurface;
         }
         else if (geometryType == "Solid") {
-          IFMEBRepSolid* BSolid = FMECityJSONReader::parseSolid(boundaries, semantics);
+          IFMEBRepSolid* BSolid = FMECityJSONReader::parseSolid(boundaries, semantics, vertices);
           FMECityJSONReader::setTraitString(BSolid, geometryLodName, geometryLodValue);
-          feature.setGeometry(BSolid);
+          return BSolid;
         }
         else if (geometryType == "MultiSolid") {
           IFMEMultiSolid *msolid = fmeGeometryTools_->createMultiSolid();
-          FMECityJSONReader::parseMultiCompositeSolid(msolid, boundaries, semantics);
+          FMECityJSONReader::parseMultiCompositeSolid(msolid, boundaries, semantics, vertices);
           FMECityJSONReader::setTraitString(msolid, geometryLodName, geometryLodValue);
-          feature.setGeometry(msolid);
+          return msolid;
         }
         else if (geometryType == "CompositeSolid") {
           IFMECompositeSolid *csolid = fmeGeometryTools_->createCompositeSolid();
-          FMECityJSONReader::parseMultiCompositeSolid(csolid, boundaries, semantics);
+          FMECityJSONReader::parseMultiCompositeSolid(csolid, boundaries, semantics, vertices);
           FMECityJSONReader::setTraitString(csolid, geometryLodName, geometryLodValue);
-          feature.setGeometry(csolid);
+          return csolid;
         }
         else if (geometryType == "GeometryInstance") {
           gLogFile->logMessageString(
               "Geometry type 'GeometryInstance' is not supported yet", FME_WARN);
+          return nullptr;
         }
         else {
           gLogFile->logMessageString(
               ("Unknown geometry type " + geometryType).c_str(), FME_WARN);
+          return nullptr;
         }
       }
     }
     else {
-      gLogFile->logMessageString("CityObject Geometry type is not set",
-                                 FME_WARN);
+      gLogFile->logMessageString("CityObject Geometry type is not set",FME_WARN);
+      return nullptr;
     }
   }
+  return nullptr;
 }
 
 
 template <typename MCSolid>
-void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::value_type &boundaries,
-                                                 json::value_type &semantics)
+void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::value_type &boundaries, json::value_type &semantics, std::vector<std::tuple<double, double, double>> &vertices)
 {
     int nrSolids = distance(begin(boundaries), end(boundaries));
     for (int i = 0; i < nrSolids; i++)
@@ -511,7 +512,7 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, js
                         }
                     }
                     IFMEFace *face = FMECityJSONReader::parseSurface(
-                        boundaries[i][j][k], semanticSrf);
+                        boundaries[i][j][k], semanticSrf, vertices);
                     outerSurface->appendPart(face);
                 }
             }
@@ -523,7 +524,7 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, js
                     json::value_type semanticSrf;
                     // Inner shells/surfaces do not have semantics
                     IFMEFace *face = FMECityJSONReader::parseSurface(
-                        boundaries[i][j][k], semanticSrf);
+                        boundaries[i][j][k], semanticSrf, vertices);
                     innerSurface->appendPart(face);
                 }
                 innerSurfaces.push_back(innerSurface);
@@ -537,7 +538,7 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, js
     }
 }
 
-IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json::value_type &semantics)
+IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json::value_type &semantics, std::vector<std::tuple<double, double, double>> &vertices)
 {
     IFMECompositeSurface *outerSurface = fmeGeometryTools_->createCompositeSurface();
     std::vector<IFMECompositeSurface *> innerSurfaces;
@@ -558,7 +559,7 @@ IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json:
                     }
                 }
                 IFMEFace *face = FMECityJSONReader::parseSurface(
-                    boundaries[i][j], semanticSrf);
+                    boundaries[i][j], semanticSrf, vertices);
                 outerSurface->appendPart(face);
             }
         }
@@ -570,7 +571,7 @@ IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json:
                 json::value_type semanticSrf;
                 // Inner shells/surfaces do not have semantics
                 IFMEFace *face = FMECityJSONReader::parseSurface(
-                    boundaries[i][j], semanticSrf);
+                    boundaries[i][j], semanticSrf, vertices);
                 innerSurface->appendPart(face);
             }
             innerSurfaces.push_back(innerSurface);
@@ -584,8 +585,7 @@ IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json:
 }
 
 template <typename MCSurface>
-void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries,
-                                                   json::value_type &semantics)
+void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries, json::value_type &semantics, std::vector<std::tuple<double, double, double>> &vertices)
 {
   int nrSurfaces = distance(begin(boundaries), end(boundaries));
   for (int i=0; i < nrSurfaces; i++) {
@@ -597,16 +597,16 @@ void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurfa
       }
     }
     IFMEFace *face =
-        FMECityJSONReader::parseSurface(boundaries[i], semanticSrf);
+        FMECityJSONReader::parseSurface(boundaries[i], semanticSrf, vertices);
 
     multiCompositeSurface->appendPart(face);
   }
 }
 
-IFMEFace* FMECityJSONReader::parseSurface(json::value_type surface, json::value_type semanticSurface)
+IFMEFace* FMECityJSONReader::parseSurface(json::value_type surface, json::value_type semanticSurface, std::vector<std::tuple<double, double, double>> &vertices)
 {
   std::vector<IFMELine *> rings;
-  FMECityJSONReader::parseRings(&rings, surface);
+  FMECityJSONReader::parseRings(&rings, surface, vertices);
   IFMELine *outerRing = rings[0];
 
   // TODO: Create the appearance for the face here. See:
@@ -666,50 +666,50 @@ IFMEFace* FMECityJSONReader::parseSurface(json::value_type surface, json::value_
   return face;
 }
 
-void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries)
+void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries, std::vector<std::tuple<double, double, double>> &vertices)
 {
     for (auto& linestring : boundaries) {
         IFMELine *line = fmeGeometryTools_->createLine();
-        FMECityJSONReader::parseLineString(line, linestring);
+        FMECityJSONReader::parseLineString(line, linestring, vertices);
         mlinestring->appendPart(line);
     }
 }
 
-void FMECityJSONReader::parseRings(std::vector<IFMELine *> *rings,
-                                           json::value_type &boundary)
+void FMECityJSONReader::parseRings(std::vector<IFMELine *> *rings, json::value_type &boundary, std::vector<std::tuple<double, double, double>> &vertices)
 {
     int nrRings = distance(begin(boundary), end(boundary));
     for (int i=0; i < nrRings; i++)
     {
         IFMELine *line = fmeGeometryTools_->createLine();
-        FMECityJSONReader::parseLineString(line, boundary[i]);
+        FMECityJSONReader::parseLineString(line, boundary[i], vertices);
         rings->push_back(line);
     }
 }
 
 void FMECityJSONReader::parseLineString(IFMELine *line,
-                                        json::value_type &boundary)
+                                        json::value_type &boundary,
+                                        std::vector<std::tuple<double, double, double>> &vertices)
 {
     for (json::iterator it = boundary.begin(); it != boundary.end(); it++)
     {
         for (int vertex : it.value())
         {
-            line->appendPointXYZ(std::get<0>(vertices_[vertex]),
-                                 std::get<1>(vertices_[vertex]),
-                                 std::get<2>(vertices_[vertex]));
+            line->appendPointXYZ(std::get<0>(vertices[vertex]),
+                                 std::get<1>(vertices[vertex]),
+                                 std::get<2>(vertices[vertex]));
         }
     }
 }
 
-void FMECityJSONReader::parseMultiPoint(IFMEMultiPoint *mpoint, json::value_type &boundary)
+void FMECityJSONReader::parseMultiPoint(IFMEMultiPoint *mpoint, json::value_type &boundary, std::vector<std::tuple<double, double, double>> &vertices)
 {
     for (json::iterator it = boundary.begin(); it != boundary.end(); it++)
     {
         for (int vertex : it.value())
         {
-            IFMEPoint *point = fmeGeometryTools_->createPointXYZ(std::get<0>(vertices_[vertex]),
-                                                                 std::get<1>(vertices_[vertex]),
-                                                                 std::get<2>(vertices_[vertex]));
+            IFMEPoint *point = fmeGeometryTools_->createPointXYZ(std::get<0>(vertices[vertex]),
+                                                                 std::get<1>(vertices[vertex]),
+                                                                 std::get<2>(vertices[vertex]));
             mpoint->appendPart(point);
         }
     }
