@@ -65,7 +65,7 @@ FMECityJSONWriter::FMECityJSONWriter(const char* writerTypeName, const char* wri
    visitor_(nullptr),
    schemaFeatures_(nullptr)
 {
-   gLogFile->logMessageString("$$$$ constructor", FME_WARN );
+   // gLogFile->logMessageString("$$$$ constructor", FME_WARN );
 }
 
 //===========================================================================
@@ -79,6 +79,8 @@ FMECityJSONWriter::~FMECityJSONWriter()
 // Open
 FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArray& parameters)
 {
+   gLogFile->logMessageString("$$$$ open()", FME_WARN );
+
    // Perform setup steps before opening file for writing
 
    // Get geometry tools
@@ -96,7 +98,7 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    
    // Log an opening writer message
    std::string msgOpeningWriter = kMsgOpeningWriter + dataset_;
-   gLogFile->logMessageString(msgOpeningWriter.c_str());
+   gLogFile->logMessageString(msgOpeningWriter.c_str(), FME_WARN);
 
    schemaFeatures_ = gFMESession->createFeatureVector();
 
@@ -121,7 +123,13 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
       // TODO: Should log a message
       return FME_FAILURE;
    }
+   outputJSON_["type"] = "CityJSON";
+   outputJSON_["version"] = "1.0";
+   outputJSON_["metadata"] = "is awesome";
+   outputJSON_["CityObjects"] = json::object();
+   outputJSON_["vertices"] = json::array();
 
+   outputJSON_["CityObjects"]["hugo"] = json::object();
    // -----------------------------------------------------------------------
 
    return FME_SUCCESS;
@@ -149,7 +157,7 @@ FME_Status FMECityJSONWriter::close()
    // Perform any closing operations / cleanup here; e.g. close opened files
    // -----------------------------------------------------------------------
 
-   outputJSON_["pi"] = 3.14159;
+   // outputJSON_["pi"] = 3.14159;
    outputFile_ << outputJSON_ << std::endl;
 
    // Delete the visitor
@@ -201,6 +209,21 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    // -----------------------------------------------------------------------
    // Perform your write operations here
    // -----------------------------------------------------------------------
+   IFMEString* s1 = gFMESession->createString();
+   feature.getAttribute("fid", *s1);
+   outputJSON_["CityObjects"][s1->data()] = json::object();
+
+   IFMEStringArray* allatt = gFMESession->createStringArray();
+   feature.getAllAttributeNames(*allatt);
+   for (FME_UInt32 i = 0; i < allatt->entries(); i++)
+   {
+      const char* t = allatt->elementAt(i)->data();
+      outputJSON_["CityObjects"][s1->data()][t] = json::object();
+
+
+   }
+
+
 
    return FME_SUCCESS;
 }
@@ -209,6 +232,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 // Fetch Schema Features
 void FMECityJSONWriter::fetchSchemaFeatures()
 {
+   gLogFile->logMessageString("$$$$ fetchSchemaFeatures()", FME_WARN );
    // Fetch all lines with the keyword "_DEF" from the mapping file because
    // those lines define the schema definition.
    IFMEStringArray* defLineList = gFMESession->createStringArray();
