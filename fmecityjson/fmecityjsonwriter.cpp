@@ -65,6 +65,7 @@ FMECityJSONWriter::FMECityJSONWriter(const char* writerTypeName, const char* wri
    visitor_(nullptr),
    schemaFeatures_(nullptr)
 {
+   gLogFile->logMessageString("$$$$ constructor", FME_WARN );
 }
 
 //===========================================================================
@@ -92,6 +93,7 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    // Add additional setup here
    // -----------------------------------------------------------------------
 
+   
    // Log an opening writer message
    std::string msgOpeningWriter = kMsgOpeningWriter + dataset_;
    gLogFile->logMessageString(msgOpeningWriter.c_str());
@@ -162,6 +164,7 @@ FME_Status FMECityJSONWriter::close()
 // Write
 FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 {
+   gLogFile->logMessageString("$$$$ write()");
    // Log the feature
    // gLogFile->logFeature(feature);
 
