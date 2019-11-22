@@ -40,6 +40,9 @@
 #include <sstream>
 #include <string>
 
+#include "json.hpp"
+using json = nlohmann::json;
+
 // Forward declarations
 class IFMEFeature;
 class IFMEFeatureVector;
@@ -182,7 +185,8 @@ private:
    // Insert additional private data members here
    // -----------------------------------------------------------------------
 
-   std::ifstream outputFile_;
+   std::ofstream outputFile_;
+   json outputJSON_;
 };
 
 #endif

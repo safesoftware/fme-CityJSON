@@ -114,13 +114,14 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    // -----------------------------------------------------------------------
    // Open the dataset here
    // e.g. outputFile_.open(dataset_.c_str(), ios::out|ios::trunc);
-    outputFile_.open(dataset_.c_str(), std::ios::out | std::ios::trunc );
-    // Check that the file exists.
-    if (!outputFile_.good())
-    {
-        // TODO: Should log a message
-        return FME_FAILURE;
-    }
+   outputFile_.open(dataset_.c_str(), std::ios::out | std::ios::trunc );
+   // Check that the file exists.
+   if (!outputFile_.good())
+   {
+      // TODO: Should log a message
+      return FME_FAILURE;
+   }
+
    // -----------------------------------------------------------------------
 
    return FME_SUCCESS;
@@ -147,6 +148,9 @@ FME_Status FMECityJSONWriter::close()
    // -----------------------------------------------------------------------
    // Perform any closing operations / cleanup here; e.g. close opened files
    // -----------------------------------------------------------------------
+
+   outputJSON_["pi"] = 3.14159;
+   outputFile_ << outputJSON_ << std::endl;
 
    // Delete the visitor
    if (visitor_)
