@@ -114,6 +114,13 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    // -----------------------------------------------------------------------
    // Open the dataset here
    // e.g. outputFile_.open(dataset_.c_str(), ios::out|ios::trunc);
+    outputFile_.open(dataset_.c_str(), std::ios::out | std::ios::trunc );
+    // Check that the file exists.
+    if (!outputFile_.good())
+    {
+        // TODO: Should log a message
+        return FME_FAILURE;
+    }
    // -----------------------------------------------------------------------
 
    return FME_SUCCESS;
@@ -157,6 +164,10 @@ FME_Status FMECityJSONWriter::close()
    // Log that the writer is done
    gLogFile->logMessageString((kMsgClosingWriter + dataset_).c_str());
 
+   // close the file
+   outputFile_.close();
+
+
    return FME_SUCCESS;
 }
 
@@ -164,7 +175,7 @@ FME_Status FMECityJSONWriter::close()
 // Write
 FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 {
-   gLogFile->logMessageString("$$$$ write()");
+   gLogFile->logMessageString("$$$$ write()", FME_WARN );
    // Log the feature
    // gLogFile->logFeature(feature);
 

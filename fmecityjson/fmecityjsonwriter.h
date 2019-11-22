@@ -36,6 +36,7 @@
 =============================================================================*/
 
 #include <fmewrt.h>
+#include <fstream>
 #include <sstream>
 #include <string>
 
@@ -181,6 +182,7 @@ private:
    // Insert additional private data members here
    // -----------------------------------------------------------------------
 
+   std::ifstream outputFile_;
 };
 
 #endif
