@@ -51,8 +51,8 @@ const static char* const kMsgStartVisiting = "Starting visit to geometry type ";
 const static char* const kMsgVisiting      = "Visiting geometry type ";
 const static char* const kMsgEndVisiting   = "Finishing visit to geometry type ";
 
-const static char* const kCityJSONParamTag = "CityJSON Parameters: ";
-const static char* const kSrcCityJSONParamTag = "_SOURCE_CITYJSON_PARAM";
-const static char* const kMsgNoCityJSONParam = "No CityJSON Parameters were entered.";
+const static char* const kLodParamTag = "Level of Detail: ";
+const static char* const kSrcLodParamTag = "_LOD";
+const static char* const kMsgNoLodParam = "No Level of Detail were choosen.";
 
 #endif

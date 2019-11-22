@@ -28,13 +28,13 @@ END_SOURCE_PREAMBLE
 
 SOURCE_SETTINGS
 
-GUI GROUP SOURCE_FMECITYJSON_PARAM Parameters
+GUI GROUP LOD Parameters
 
 !----------------------------------------------------------------------
 ! Specify the fields.
 !----------------------------------------------------------------------
-DEFAULT_VALUE SOURCE_FMECITYJSON_PARAM "" 
-GUI OPTIONAL TEXT SOURCE_FMECITYJSON_PARAM CityJSON Parameters:
+DEFAULT_VALUE LOD ""
+GUI OPTIONAL TEXT LOD CityJSON Level of Detail:
 
 DEFAULT_VALUE EXPOSE_ATTRS_GROUP $(EXPOSE_ATTRS_GROUP)
 -GUI DISCLOSUREGROUP EXPOSE_ATTRS_GROUP $(FORMAT_SHORT_NAME)_EXPOSE_FORMAT_ATTRS Schema Attributes

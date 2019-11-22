@@ -241,7 +241,7 @@ private:
 
    // The parameters value used for reading the dataset.
    // For some formats, they have no need for parameters.
-   std::string cityJsonParameters_;
+   std::string lodParam_;
 
    // -----------------------------------------------------------------------
    // Insert additional private data members here
@@ -251,8 +251,7 @@ private:
    json inputJSON_;
    json::iterator nextObject_;
    std::vector<std::tuple<double, double, double>> vertices_;
-   std::vector<std::string> lod_present_;
-   std::string lod_to_read_;
+   std::vector<std::string> lodInData_;
 
    bool schemaScanDone_;
    std::map<std::string, IFMEFeature*> schemaFeatures_;

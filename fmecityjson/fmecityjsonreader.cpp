@@ -213,8 +213,9 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
         for (auto &geometry : cityObject.at("geometry")) {
             // Check which LoD is present in the data
             std::string lod = FMECityJSONReader::lodToString(geometry);
-            if (std::find(lod_present_.begin(), lod_present_.end(), lod) == lod_present_.end()) {
-                lod_present_.push_back(lod);
+            if (std::find(lodInData_.begin(), lodInData_.end(), lod) ==
+                lodInData_.end()) {
+              lodInData_.push_back(lod);
             }
         }
     }
@@ -226,16 +227,33 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
         readParametersDialog();
     }
 
-    // Report the user which LoD is present in the data. Ideally the required LoD would be set from a Parameter.
-    lod_to_read_ = lod_present_[0];
-    if (lod_present_.size() > 1) {
+    if (lodInData_.size() > 1) {
         std::stringstream lodMsg;
         lodMsg << "There are multiple Levels of Detail present in the CityJSON data: ";
-        for (auto &l : lod_present_) lodMsg << l << "  ";
-        lodMsg << ". Only using Level of Detail " << lod_to_read_ << " for this reader.";
-        gLogFile->logMessageString(lodMsg.str().c_str(), FME_WARN);
-    }
+        for (auto &l : lodInData_) lodMsg << l << ", ";
+        std::string lodMsgStr = lodMsg.str();
+        lodMsgStr.erase(lodMsgStr.end()-2);
+        gLogFile->logMessageString(lodMsgStr.c_str(), FME_INFORM);
 
+        if (lodParam_.empty()) {
+            // The default LoD to read is the LoD of the first Geometry of the
+            // first CityObject.
+            std::string defaultMsg = "No value is set for the 'CityJSON Level of "
+                                     "Detail' parameter. Defaulting to: " + lodInData_[0];
+            gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
+            lodParam_ = lodInData_[0];
+        } else if (std::find(lodInData_.begin(), lodInData_.end(), lodParam_) == lodInData_.end()) {
+            std::string defaultMsg = "The provided 'CityJSON Level of Detail' parameter value " + lodParam_ +
+                                     " is not present in the data. Defaulting to: " + lodInData_[0];
+            gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
+            lodParam_ = lodInData_[0];
+        }
+
+    } else {
+        // In case there is only one LoD in the data, we ignore the Parameter
+        // even if it is set.
+        lodParam_ = lodInData_[0];
+    }
 
     return FME_SUCCESS;
 }
@@ -407,7 +425,7 @@ void FMECityJSONReader::parseCityObjectGeometry(
     // TODO: get "transformationMatrix"
 
     if (!geometryType.empty()) {
-      if (geometryLodValue == lod_to_read_) {
+      if (geometryLodValue == lodParam_) {
         if (geometryType == "MultiPoint") {
           IFMEMultiPoint *mpoint = fmeGeometryTools_->createMultiPoint();
           FMECityJSONReader::parseMultiPoint(mpoint, boundaries);
@@ -913,21 +931,20 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature &feature, FME_Boolean &endO
 void FMECityJSONReader::readParametersDialog()
 {
    IFMEString* paramValue = gFMESession->createString();
-   if (gMappingFile->fetchWithPrefix(readerKeyword_.c_str(), readerTypeName_.c_str(), kSrcCityJSONParamTag, *paramValue)) 
+
+   if (gMappingFile->fetchWithPrefix(readerKeyword_.c_str(), readerTypeName_.c_str(), kSrcLodParamTag, *paramValue))
    {
       // A parameter value has been found, so set the values.
-      cityJsonParameters_ = paramValue->data();
+      lodParam_ = paramValue->data();
 
       // Let's log to the user that a parameter value has been specified.
-      std::string paramMsg = (kCityJSONParamTag + cityJsonParameters_).c_str();
-      gLogFile->logMessageString("Let's log to the user that a parameter value has been specified.", FME_INFORM);
+      std::string paramMsg = (kLodParamTag + lodParam_).c_str();
       gLogFile->logMessageString(paramMsg.c_str(), FME_INFORM);
    }
    else
    {
       // Log that no parameter value was entered.
-      gLogFile->logMessageString("Log that no parameter value was entered", FME_INFORM);
-      gLogFile->logMessageString(kMsgNoCityJSONParam, FME_INFORM);
+      gLogFile->logMessageString(kMsgNoLodParam, FME_INFORM);
    }
    gFMESession->destroyString(paramValue);
 }
