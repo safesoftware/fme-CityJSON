@@ -378,7 +378,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    {
      // TODO: Can FME handle multiple geometries for the same object? Lod 1 an lod2? How?
      // Set the geometry for the feature
-     FMECityJSONReader::parseCityJSONObjectGeometry(feature, geometry);
+     FMECityJSONReader::parseCityObjectGeometry(feature, geometry);
    }
   // Set the coordinate system
   feature.setCoordSys(coordSys_.c_str());
@@ -389,7 +389,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    return FME_SUCCESS;
 }
 
-void FMECityJSONReader::parseCityJSONObjectGeometry(
+void FMECityJSONReader::parseCityObjectGeometry(
     IFMEFeature &feature, json::value_type &currentGeometry) {
 
   if (currentGeometry.is_object()) {
@@ -492,7 +492,8 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, js
                             semanticSrf = semantics["surfaces"][semanticIdx];
                         }
                     }
-                    IFMEFace *face = FMECityJSONReader::parseCityJSONSurface(boundaries[i][j][k], semanticSrf);
+                    IFMEFace *face = FMECityJSONReader::parseSurface(
+                        boundaries[i][j][k], semanticSrf);
                     outerSurface->appendPart(face);
                 }
             }
@@ -503,7 +504,8 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, js
                 {
                     json::value_type semanticSrf;
                     // Inner shells/surfaces do not have semantics
-                    IFMEFace *face = FMECityJSONReader::parseCityJSONSurface(boundaries[i][j][k], semanticSrf);
+                    IFMEFace *face = FMECityJSONReader::parseSurface(
+                        boundaries[i][j][k], semanticSrf);
                     innerSurface->appendPart(face);
                 }
                 innerSurfaces.push_back(innerSurface);
@@ -537,7 +539,8 @@ IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json:
                         semanticSrf = semantics["surfaces"][semanticIdx];
                     }
                 }
-                IFMEFace *face = FMECityJSONReader::parseCityJSONSurface(boundaries[i][j], semanticSrf);
+                IFMEFace *face = FMECityJSONReader::parseSurface(
+                    boundaries[i][j], semanticSrf);
                 outerSurface->appendPart(face);
             }
         }
@@ -548,7 +551,8 @@ IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json:
             {
                 json::value_type semanticSrf;
                 // Inner shells/surfaces do not have semantics
-                IFMEFace *face = FMECityJSONReader::parseCityJSONSurface(boundaries[i][j], semanticSrf);
+                IFMEFace *face = FMECityJSONReader::parseSurface(
+                    boundaries[i][j], semanticSrf);
                 innerSurface->appendPart(face);
             }
             innerSurfaces.push_back(innerSurface);
@@ -574,16 +578,17 @@ void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurfa
         semanticSrf = semantics["surfaces"][semanticIdx];
       }
     }
-    IFMEFace *face = FMECityJSONReader::parseCityJSONSurface(boundaries[i], semanticSrf);
+    IFMEFace *face =
+        FMECityJSONReader::parseSurface(boundaries[i], semanticSrf);
 
     multiCompositeSurface->appendPart(face);
   }
 }
 
-IFMEFace* FMECityJSONReader::parseCityJSONSurface(json::value_type surface, json::value_type semanticSurface)
+IFMEFace* FMECityJSONReader::parseSurface(json::value_type surface, json::value_type semanticSurface)
 {
   std::vector<IFMELine *> rings;
-  FMECityJSONReader::parseCityJSONRings(&rings, surface);
+  FMECityJSONReader::parseRings(&rings, surface);
   IFMELine *outerRing = rings[0];
 
   // TODO: Create the appearance for the face here. See:
@@ -652,7 +657,7 @@ void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve *mlinestring, json::
     }
 }
 
-void FMECityJSONReader::parseCityJSONRings(std::vector<IFMELine *> *rings,
+void FMECityJSONReader::parseRings(std::vector<IFMELine *> *rings,
                                            json::value_type &boundary)
 {
     int nrRings = distance(begin(boundary), end(boundary));

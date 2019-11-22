@@ -175,7 +175,7 @@ private:
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
    // Parse a single Geometry of a CityObject
-   void parseCityJSONObjectGeometry(IFMEFeature& feature,
+   void parseCityObjectGeometry(IFMEFeature& feature,
                                     json::value_type &currentGeometry);
    // Parse a Multi- or CompositeSolid
    template <typename MCSolid>
@@ -188,14 +188,14 @@ private:
    void parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries,
                                    json::value_type &semantics);
    // Parse a single Surface of the boundary
-   IFMEFace *parseCityJSONSurface(json::value_type surface,
+   IFMEFace *parseSurface(json::value_type surface,
                                   json::value_type semanticSurface);
 
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries);
 
    // Parse a single Ring to an IFMELine
-   void parseCityJSONRings(std::vector<IFMELine *> *rings,
+   void parseRings(std::vector<IFMELine *> *rings,
                            json::value_type &boundary);
 
    // Parse a single LineString
