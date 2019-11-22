@@ -175,7 +175,7 @@ private:
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
    // Parse a single Geometry of a CityObject
-   void parseCityJSONObjectGeometry(IFMEFeature& feature,
+   void parseCityObjectGeometry(IFMEFeature& feature,
                                     json::value_type &currentGeometry);
    // Parse a Multi- or CompositeSolid
    template <typename MCSolid>
@@ -188,14 +188,14 @@ private:
    void parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries,
                                    json::value_type &semantics);
    // Parse a single Surface of the boundary
-   IFMEFace *parseCityJSONSurface(json::value_type surface,
+   IFMEFace *parseSurface(json::value_type surface,
                                   json::value_type semanticSurface);
 
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries);
 
    // Parse a single Ring to an IFMELine
-   void parseCityJSONRings(std::vector<IFMELine *> *rings,
+   void parseRings(std::vector<IFMELine *> *rings,
                            json::value_type &boundary);
 
    // Parse a single LineString
@@ -209,6 +209,10 @@ private:
    static void setTraitString(IFMEGeometry *geometry,
                               const std::string &traitName,
                               const std::string &traitValue);
+
+   // Cast the geometry LoD to a string, even though the specs require a number.
+   // Because strings are easier to compare than floats (in case of extended LoD).
+   static std::string lodToString(json::object_t currentGeometry);
 
    // Data members
 
@@ -237,7 +241,7 @@ private:
 
    // The parameters value used for reading the dataset.
    // For some formats, they have no need for parameters.
-   std::string cityJsonParameters_;
+   std::string lodParam_;
 
    // -----------------------------------------------------------------------
    // Insert additional private data members here
@@ -247,6 +251,7 @@ private:
    json inputJSON_;
    json::iterator nextObject_;
    std::vector<std::tuple<double, double, double>> vertices_;
+   std::vector<std::string> lodInData_;
 
    bool schemaScanDone_;
    std::map<std::string, IFMEFeature*> schemaFeatures_;
