@@ -52,7 +52,6 @@
 #include <iraster.h>
 #include <ilibrary.h>
 
-#include <typeinfo>
 #include <sstream>
 #include <iomanip>
 
@@ -163,7 +162,6 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     }
     catch (json::out_of_range &e)
     {
-        // TODO: Is it possible to detect if the CRS is missing when the reader is created?
         gLogFile->logMessageString("Coordinate Reference System is not set in the file", FME_WARN);
     }
 
@@ -205,17 +203,40 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     // Because we don't have a way to handle Semantic Surface hierarchies (eg. Door is a child of a WallSurface)
     gLogFile->logMessageString("Semantic Surface hierarchy (children, parent) is discarded", FME_WARN);
 
-    // start by pointing to the first object to read
-    nextObject_ = inputJSON_.at("CityObjects").begin();
-
     // Need to go through the whole file to extract the LoD of each geometry
-    for (auto &cityObject : inputJSON_.at("CityObjects")) {
-        for (auto &geometry : cityObject.at("geometry")) {
+    for (json::iterator it = inputJSON_.at("CityObjects").begin(); it != inputJSON_.at("CityObjects").end(); it++) {
+        for (const auto &geometry : it.value().at("geometry")) {
+            // These are maybe too many checks on the presence of an attribute. Ideally, the file would be
+            //      validated for the schema before it goes into FME, so we can omit these checks.
             // Check which LoD is present in the data
-            std::string lod = FMECityJSONReader::lodToString(geometry);
-            if (std::find(lodInData_.begin(), lodInData_.end(), lod) ==
-                lodInData_.end()) {
-              lodInData_.push_back(lod);
+            std::string lod;
+            try
+            {
+                geometry.at("lod");
+                lod = lodToString(geometry);
+            }
+            catch (json::out_of_range &e)
+            {
+                try
+                {
+                    int tId = geometry.at("template");
+                    lod = lodToString(inputJSON_.at("geometry-templates").at("templates")[tId]);
+                }
+                catch (json::out_of_range &e)
+                {
+                    gLogFile->logMessageString(("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
+                    return FME_FAILURE;
+                }
+            }
+
+            if (not lod.empty()) {
+                if (std::find(lodInData_.begin(), lodInData_.end(), lod) ==
+                    lodInData_.end()) {
+                    lodInData_.push_back(lod);
+                }
+            }
+            else {
+                gLogFile->logMessageString(("The 'lod' attibute is empty in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
             }
         }
     }
@@ -253,7 +274,38 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
         // In case there is only one LoD in the data, we ignore the Parameter
         // even if it is set.
         lodParam_ = lodInData_[0];
+        gLogFile->logMessageString(("Level of Detail in file: " + lodParam_).c_str(), FME_INFORM);
     }
+
+    // Reading the Geometry Templates and adding them to IFMELibrary as geometry instances
+    try
+    {
+        json templates = inputJSON_.at("geometry-templates").at("templates");
+        json verticesTemplates = inputJSON_.at("geometry-templates").at("vertices-templates");
+        std::vector<std::tuple<double, double, double>> verticesTemplatesVec;
+        FME_MsgNum badLuck;
+
+        for (auto vtx: verticesTemplates) { verticesTemplatesVec.emplace_back(vtx[0], vtx[1], vtx[2]); }
+        int nrTemplates = distance(begin(templates), end(templates));
+        for (int i = 0; i < nrTemplates; i++) {
+            IFMEGeometry *geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec);
+            FME_UInt32 geomRef(0);
+            badLuck = gFMESession->getLibrary()->addGeometryDefinition(geomRef, geom);
+            if (badLuck) {
+                std::string msg = "Not able to add geometry template #" + std::to_string(i) + " to IFMELibrary";
+                gLogFile->logMessageString(msg.c_str(), FME_ERROR);
+                return FME_FAILURE;
+            }
+            else {
+                // Add the geometry instance reference to the lookup table
+                geomTemplateMap_.insert({i, geomRef});
+            }
+        }
+    }
+    catch (json::out_of_range &e){}
+
+    // start by pointing to the first object to read
+    nextObject_ = inputJSON_.at("CityObjects").begin();
 
     return FME_SUCCESS;
 }
@@ -391,101 +443,108 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
         gFMESession->destroyStringArray(parents);
     }
 
-   // Set the geometry
-   for (auto &geometry: nextObject_.value()["geometry"])
-   {
-     // Set the geometry for the feature
-       IFMEGeometry *geom = FMECityJSONReader::parseCityObjectGeometry(geometry, vertices_);
-       if (geom != nullptr) { feature.setGeometry(geom); }
-   }
-  // Set the coordinate system
-  feature.setCoordSys(coordSys_.c_str());
+    // Set the geometry
+    for (auto &geometry: nextObject_.value()["geometry"])
+    {
+        // Set the geometry for the feature
+        IFMEGeometry *geom = parseCityObjectGeometry(geometry, vertices_);
+        if (geom != nullptr) { feature.setGeometry(geom); }
+    }
 
-   ++nextObject_;
+    // Set the coordinate system
+    feature.setCoordSys(coordSys_.c_str());
 
-   endOfFile = FME_FALSE;
-   return FME_SUCCESS;
+    ++nextObject_;
+
+    endOfFile = FME_FALSE;
+    return FME_SUCCESS;
 }
 
-IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &currentGeometry, std::vector<std::tuple<double, double, double>> &vertices) {
+IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &currentGeometry,
+                                                         std::vector<std::tuple<double, double, double>> &vertices) {
 
-  if (currentGeometry.is_object()) {
-    std::string geometryType, geometryLodValue;
-    std::string geometryLodName = "Level of Detail"; // geometry Trait name
-    json::value_type boundaries = currentGeometry.at("boundaries");
-    json::value_type semantics = currentGeometry["semantics"];
+    if (currentGeometry.is_object()) {
+        std::string geometryType, geometryLodValue;
+        std::string geometryLodName = "Level of Detail"; // geometry Trait name
+        json::value_type boundaries = currentGeometry.at("boundaries");
+        json::value_type semantics = currentGeometry["semantics"];
 
+        // geometry type and level of detail
+        geometryType = currentGeometry.at("type");
+        if (geometryType != "GeometryInstance") {
+            geometryLodValue = lodToString(currentGeometry);
+        } else {
+            int tId = currentGeometry.at("template");
+            geometryLodValue = lodToString(inputJSON_.at("geometry-templates").at("templates")[tId]);
+        }
 
-    // geometry type and level of detail
-    geometryType = currentGeometry.at("type");
-    geometryLodValue = FMECityJSONReader::lodToString(currentGeometry);
-
-    // TODO: get "template"
-    // TODO: get "transformationMatrix"
-
-    if (!geometryType.empty()) {
-      if (geometryLodValue == lodParam_) {
-        if (geometryType == "MultiPoint") {
-          IFMEMultiPoint *mpoint = fmeGeometryTools_->createMultiPoint();
-          FMECityJSONReader::parseMultiPoint(mpoint, boundaries, vertices);
-          return mpoint;
+        if (not geometryType.empty()) {
+            if (geometryLodValue == lodParam_) {
+                if (geometryType == "MultiPoint") {
+                    IFMEMultiPoint *mpoint = fmeGeometryTools_->createMultiPoint();
+                    FMECityJSONReader::parseMultiPoint(mpoint, boundaries, vertices);
+                    return mpoint;
+                } else if (geometryType == "MultiLineString") {
+                    IFMEMultiCurve *mlinestring = fmeGeometryTools_->createMultiCurve();
+                    FMECityJSONReader::parseMultiLineString(mlinestring, boundaries, vertices);
+                    return mlinestring;
+                } else if (geometryType == "MultiSurface") {
+                    IFMEMultiSurface *msurface = fmeGeometryTools_->createMultiSurface();
+                    FMECityJSONReader::parseMultiCompositeSurface(msurface, boundaries, semantics, vertices);
+                    // Set the Level of Detail Trait on the geometry
+                    FMECityJSONReader::setTraitString(msurface, geometryLodName, geometryLodValue);
+                    // Append the geometry to the FME feature
+                    return msurface;
+                } else if (geometryType == "CompositeSurface") {
+                    IFMECompositeSurface *csurface = fmeGeometryTools_->createCompositeSurface();
+                    FMECityJSONReader::parseMultiCompositeSurface(csurface, boundaries, semantics, vertices);
+                    FMECityJSONReader::setTraitString(csurface, geometryLodName, geometryLodValue);
+                    return csurface;
+                } else if (geometryType == "Solid") {
+                    IFMEBRepSolid *BSolid = FMECityJSONReader::parseSolid(boundaries, semantics, vertices);
+                    FMECityJSONReader::setTraitString(BSolid, geometryLodName, geometryLodValue);
+                    return BSolid;
+                } else if (geometryType == "MultiSolid") {
+                    IFMEMultiSolid *msolid = fmeGeometryTools_->createMultiSolid();
+                    FMECityJSONReader::parseMultiCompositeSolid(msolid, boundaries, semantics, vertices);
+                    FMECityJSONReader::setTraitString(msolid, geometryLodName, geometryLodValue);
+                    return msolid;
+                } else if (geometryType == "CompositeSolid") {
+                    IFMECompositeSolid *csolid = fmeGeometryTools_->createCompositeSolid();
+                    FMECityJSONReader::parseMultiCompositeSolid(csolid, boundaries, semantics, vertices);
+                    FMECityJSONReader::setTraitString(csolid, geometryLodName, geometryLodValue);
+                    return csolid;
+                } else if (geometryType == "GeometryInstance") {
+                    IFMEAggregate *ginst = fmeGeometryTools_->createAggregate();
+                    int templ = currentGeometry.at("template");
+                    FME_UInt32 geomRef = geomTemplateMap_[templ];
+                    ginst->setGeometryDefinitionReference(geomRef);
+                    int vtx = currentGeometry.at("boundaries")[0];
+                    FME_Real64 x = std::get<0>(vertices_[vtx]);
+                    FME_Real64 y = std::get<1>(vertices_[vtx]);
+                    FME_Real64 z = std::get<2>(vertices_[vtx]);
+                    ginst->setGeometryInstanceLocalOrigin(x, y, z);
+                    json::array_t tm = currentGeometry.at("transformationMatrix");
+                    FME_Real64 m[3][4] = {
+                            {tm[0], tm[1], tm[2],  tm[3]},
+                            {tm[4], tm[5], tm[6],  tm[7]},
+                            {tm[8], tm[9], tm[10], tm[11]}
+                    };
+                    ginst->setGeometryInstanceMatrix(m);
+                    return ginst;
+                } else {
+                    gLogFile->logMessageString(
+                            ("Unknown geometry type " + geometryType).c_str(), FME_WARN);
+                    return nullptr;
+                }
+            }
+        } else {
+            gLogFile->logMessageString("CityObject Geometry type is not set", FME_WARN);
+            return nullptr;
         }
-        else if (geometryType == "MultiLineString") {
-          IFMEMultiCurve* mlinestring = fmeGeometryTools_->createMultiCurve();
-          FMECityJSONReader::parseMultiLineString(mlinestring, boundaries, vertices);
-          return mlinestring;
-        }
-        else if (geometryType == "MultiSurface") {
-          IFMEMultiSurface *msurface = fmeGeometryTools_->createMultiSurface();
-          FMECityJSONReader::parseMultiCompositeSurface(msurface, boundaries, semantics, vertices);
-          // Set the Level of Detail Trait on the geometry
-          FMECityJSONReader::setTraitString(msurface, geometryLodName, geometryLodValue);
-          // Append the geometry to the FME feature
-          return msurface;
-        }
-        else if (geometryType == "CompositeSurface") {
-          IFMECompositeSurface *csurface = fmeGeometryTools_->createCompositeSurface();
-          FMECityJSONReader::parseMultiCompositeSurface(csurface, boundaries, semantics, vertices);
-          FMECityJSONReader::setTraitString(csurface, geometryLodName, geometryLodValue);
-          return csurface;
-        }
-        else if (geometryType == "Solid") {
-          IFMEBRepSolid* BSolid = FMECityJSONReader::parseSolid(boundaries, semantics, vertices);
-          FMECityJSONReader::setTraitString(BSolid, geometryLodName, geometryLodValue);
-          return BSolid;
-        }
-        else if (geometryType == "MultiSolid") {
-          IFMEMultiSolid *msolid = fmeGeometryTools_->createMultiSolid();
-          FMECityJSONReader::parseMultiCompositeSolid(msolid, boundaries, semantics, vertices);
-          FMECityJSONReader::setTraitString(msolid, geometryLodName, geometryLodValue);
-          return msolid;
-        }
-        else if (geometryType == "CompositeSolid") {
-          IFMECompositeSolid *csolid = fmeGeometryTools_->createCompositeSolid();
-          FMECityJSONReader::parseMultiCompositeSolid(csolid, boundaries, semantics, vertices);
-          FMECityJSONReader::setTraitString(csolid, geometryLodName, geometryLodValue);
-          return csolid;
-        }
-        else if (geometryType == "GeometryInstance") {
-          gLogFile->logMessageString(
-              "Geometry type 'GeometryInstance' is not supported yet", FME_WARN);
-          return nullptr;
-        }
-        else {
-          gLogFile->logMessageString(
-              ("Unknown geometry type " + geometryType).c_str(), FME_WARN);
-          return nullptr;
-        }
-      }
     }
-    else {
-      gLogFile->logMessageString("CityObject Geometry type is not set",FME_WARN);
-      return nullptr;
-    }
-  }
-  return nullptr;
+    return nullptr;
 }
-
 
 template <typename MCSolid>
 void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::value_type &boundaries, json::value_type &semantics, std::vector<std::tuple<double, double, double>> &vertices)
@@ -627,6 +686,7 @@ IFMEFace* FMECityJSONReader::parseSurface(json::value_type surface, json::value_
   // Setting semantics
   if (not semanticSurface.is_null()) {
     IFMEString *geometryName = gFMESession->createString();
+    // FIXME: do not use .dump() for getting the SemanticSurface type, because it dumps the string including the " quotes
     geometryName->set(semanticSurface.at("type").dump().c_str(), semanticSurface.at("type").dump().length());
     face->setName(*geometryName, nullptr);
     gFMESession->destroyString(geometryName);
@@ -730,19 +790,28 @@ void FMECityJSONReader::setTraitString(IFMEGeometry *geometry,
   gFMESession->destroyString(value);
 }
 
-std::string FMECityJSONReader::lodToString(json::object_t currentGeometry) {
-  if (currentGeometry.at("lod").is_number_integer())
-    return std::to_string(int(currentGeometry.at("lod")));
-  else if (currentGeometry.at("lod").is_number_float()) {
-    // We want the LoD as string, even though CityJSON specs currently
-    // prescribe a number
-    std::stringstream stream;
-    stream << std::fixed << std::setprecision(1)
-           << float(currentGeometry.at("lod"));
-    return stream.str();
-  } else {
-    return currentGeometry.at("lod");
-  }
+std::string FMECityJSONReader::lodToString(json currentGeometry) {
+    json::value_type lod;
+    try
+    {
+        lod = currentGeometry.at("lod");
+    }
+    catch (json::out_of_range &e)
+    {
+        return "";
+    }
+    if (lod.is_number_integer())
+        return std::to_string(int(lod));
+    else if (lod.is_number_float()) {
+        // We want the LoD as string, even though CityJSON specs currently
+        // prescribe a number
+        std::stringstream stream;
+        stream << std::fixed << std::setprecision(1)
+               << float(lod);
+        return stream.str();
+    } else {
+        return lod;
+    }
 }
 
 //===========================================================================
@@ -867,6 +936,10 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature &feature, FME_Boolean &endO
 
                     std::string attributeName = "fme_geometry{" + std::to_string(i) + "}";
                     std::string type = cityObject.at("geometry")[i].at("type");
+                    if (type == "GeometryInstance") {
+                        int tId = cityObject.at("geometry")[i].at("template");
+                        type = inputJSON_["geometry-templates"]["templates"][tId]["type"];
+                    }
 
                     // Set the geometry types from the data
                     if (type == "MultiPoint")

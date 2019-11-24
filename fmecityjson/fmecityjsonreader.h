@@ -212,7 +212,7 @@ private:
 
    // Cast the geometry LoD to a string, even though the specs require a number.
    // Because strings are easier to compare than floats (in case of extended LoD).
-   static std::string lodToString(json::object_t currentGeometry);
+   static std::string lodToString(json currentGeometry);
 
    // Data members
 
@@ -251,6 +251,7 @@ private:
    json inputJSON_;
    json::iterator nextObject_;
    std::vector<std::tuple<double, double, double>> vertices_;
+   std::map<int, FME_UInt32> geomTemplateMap_;
    std::vector<std::string> lodInData_;
 
    bool schemaScanDone_;
