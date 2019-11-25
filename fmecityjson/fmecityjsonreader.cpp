@@ -123,17 +123,17 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     inputJSON_ = json::parse(inputFile_);
 
     // Let's make sure we're parsing this correctly.
-    if (inputJSON_.at("type") != "CityJSON")
+    if (inputJSON_.at("type").get<std::string>() != "CityJSON")
     {
         gLogFile->logMessageString("Not a CityJSON file", FME_ERROR);
         return FME_FAILURE;
     }
     std::string supportedVersion = "1.0";
-    if (inputJSON_.at("version") < supportedVersion)
+    if (inputJSON_.at("version").get<std::string>() < supportedVersion)
     {
         std::stringstream versionStream;
         versionStream << "Unsupported CityJSON version: "
-                      << inputJSON_.at("version").dump()
+                      << inputJSON_.at("version").get<std::string>()
                       << ". Only the version "
                       << supportedVersion
                       << " or higher are supported.";
@@ -144,7 +144,7 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     // Scrape the coordinate system
     try
     {
-        std::string inputCoordSys = inputJSON_.at("metadata").at("referenceSystem");
+        std::string inputCoordSys = inputJSON_.at("metadata").at("referenceSystem").get<std::string>();
         // Looking to make the form EPSG:XXXX
         inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
         if (inputCoordSys.find("::") != std::string::npos) {
@@ -375,14 +375,14 @@ FME_Status FMECityJSONReader::read(IFMEFeature &feature, FME_Boolean &endOfFile)
                 const std::string &attributeValue = it.value();
                 feature.setAttribute(attributeName.c_str(), attributeValue.c_str());
             } else if (it.value().is_number_float()) {
-                const double &attributeValue = it.value();
+                FME_Real64 attributeValue = it.value();
                 feature.setAttribute(attributeName.c_str(), attributeValue);
             } else if (it.value().is_number_integer()) {
-                const int &attributeValue = it.value();
+                FME_Int32 attributeValue = it.value();
                 feature.setAttribute(attributeName.c_str(), attributeValue);
             } else if (it.value().is_boolean()) {
-                if (it.value()) feature.setAttribute(attributeName.c_str(), FME_TRUE);
-                else feature.setAttribute(attributeName.c_str(), FME_FALSE);
+                if (it.value()) feature.setBooleanAttribute(attributeName.c_str(), FME_TRUE);
+                else feature.setBooleanAttribute(attributeName.c_str(), FME_FALSE);
             } else {
                 // TODO: I'm considering to allow the 'array' and 'object' JSON types as attributes, but
                 //  array:
@@ -447,7 +447,7 @@ IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &curre
         json::value_type semantics = currentGeometry["semantics"];
 
         // geometry type and level of detail
-        geometryType = currentGeometry.at("type");
+        geometryType = currentGeometry.at("type").get<std::string>();
         if (geometryType != "GeometryInstance") {
             geometryLodValue = lodToString(currentGeometry);
         } else {
@@ -652,7 +652,7 @@ IFMEFace *FMECityJSONReader::parseSurface(json::value_type surface, json::value_
     if (not semanticSurface.is_null()) {
 
         IFMEString *geometryName = gFMESession->createString();
-        std::string semType = semanticSurface.at("type");
+        std::string semType = semanticSurface.at("type").get<std::string>();
         geometryName->set(semType.c_str(), semType.length());
         face->setName(*geometryName, nullptr);
         gFMESession->destroyString(geometryName);
@@ -803,7 +803,7 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature &feature, FME_Boolean &endO
 
             // Let's find out what we will be using as the "feature_type", and
             // group the schema features by that.  I'll pick the field "type".
-            std::string featureType = cityObject.at("type");
+            std::string featureType = cityObject.at("type").get<std::string>();
 
             // Let's see if we already have seen a feature of this 'type'.
             // If not, create a new schema feature.  If we have, just add to it I guess.
@@ -892,10 +892,10 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature &feature, FME_Boolean &endO
                 {
 
                     std::string attributeName = "fme_geometry{" + std::to_string(i) + "}";
-                    std::string type = cityObject.at("geometry")[i].at("type");
+                    std::string type = cityObject.at("geometry")[i].at("type").get<std::string>();
                     if (type == "GeometryInstance") {
                         int tId = cityObject.at("geometry")[i].at("template");
-                        type = inputJSON_["geometry-templates"]["templates"][tId]["type"];
+                        type = inputJSON_["geometry-templates"]["templates"][tId]["type"].get<std::string>();
                     }
 
                     // Set the geometry types from the data
