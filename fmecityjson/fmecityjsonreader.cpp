@@ -200,9 +200,6 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
         vertices_.emplace_back(x, y, z);
     }
 
-    // Because we don't have a way to handle Semantic Surface hierarchies (eg. Door is a child of a WallSurface)
-    gLogFile->logMessageString("Semantic Surface hierarchy (children, parent) is discarded", FME_WARN);
-
     // Need to go through the whole file to extract the LoD of each geometry
     for (json::iterator it = inputJSON_.at("CityObjects").begin(); it != inputJSON_.at("CityObjects").end(); it++) {
         for (const auto &geometry : it.value().at("geometry")) {
@@ -651,17 +648,24 @@ IFMEFace *FMECityJSONReader::parseSurface(json::value_type surface, json::value_
     // TODO: Set the appearance for the face here. See:
     // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L346-L350
 
-    // We ignore Semantic Surface hierachies and the 'children' and 'parent' tag is discarded
     // Setting semantics
     if (not semanticSurface.is_null()) {
+
         IFMEString *geometryName = gFMESession->createString();
-        // FIXME: do not use .dump() for getting the SemanticSurface type, because it dumps the string including the " quotes
-        geometryName->set(semanticSurface.at("type").dump().c_str(), semanticSurface.at("type").dump().length());
+        std::string semType = semanticSurface.at("type");
+        geometryName->set(semType.c_str(), semType.length());
         face->setName(*geometryName, nullptr);
         gFMESession->destroyString(geometryName);
 
         for (json::iterator it = semanticSurface.begin(); it != semanticSurface.end(); it++) {
-            if (it.key() != "type" && it.key() != "children" && it.key() != "parent") {
+            if (it.key() == "children" || it.key() == "parent") {
+                // We ignore Semantic Surface hierachies and the 'children' and 'parent' tag is discarded,
+                // because we don't have a way to handle Semantic Surface hierarchies (eg. Door is a child of a
+                // WallSurface).
+                gLogFile->logMessageString("Semantic Surface hierarchy (children, parent) is discarded",
+                        FME_WARN);
+            }
+            else if (it.key() != "type") {
                 if (it.value().is_string()) {
                     setTraitString(face, it.key(), it.value());
                 } else if (it.value().is_number_float()) {
