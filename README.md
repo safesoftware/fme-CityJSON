@@ -1,6 +1,5 @@
-![CityJSON Format Plugin for FME](https://is3-ssl.mzstatic.com/image/thumb/Purple118/v4/31/9c/c7/319cc748-5ac6-2d91-8b1a-afdc7e3e164e/AppIcon-1x_U007emarketing-0-0-GLES2_U002c0-512MB-sRGB-0-0-0-85-220-0-0-0-6.png/246x0w.jpg)
+![](https://homepage.tudelft.nl/23t4p/images/cityjson-fme.jpg)
 
-![CityJSON](https://www.cityjson.org/assets/images/cityjson_logo.svg)
 
 # CityJSON Format Plugin for FME
 
@@ -23,9 +22,6 @@ FME 2018.0 or later installed on either
 We are working toward full CityJSON support.  We have tested ...
 
 ## How to build
-* Requires this [JSON parser](https://github.com/nlohmann/json)
-
-For CMake place the `json.hpp` file to `./includes/nlohmann/json.hpp` so it can find it.
 
 ### Linux and macOS
 
@@ -45,6 +41,8 @@ make && make install
 ```
 The option `-DFME_DEV_HOME` is required for both linking the FME libraries and installing the plugin. See the *Installation Instructions* below for the details, and the `CMakeLists.txt`.
 
+Under macOS, the .app are usually installed under `/Applications/` but you need to specify the folder where everything is installed, by default `/Library/FME/2019.1/` it seems (or later version).
+
 ### Windows
 Set an environment variable FME_DEV_HOME to be the path to the directory where FME is installed.  For example, C:\Program Files\FME
 In Visual Studio (2017 or later), open `fmecityjson.sln`.
@@ -60,10 +58,12 @@ from the menu. In the Error List pane, check that there
 are 0 errors.
 
 ## Installation Instructions
+
 There are several steps necessary to extend FME to include this CityJSON Format support.
 
+
 * The Plugin:
-**Build the CityJSON plugin, using the instructions above.  This will produce a file `fmecityjson.so` file on Linux and macOS, or a `fmecityjson.dll` file on Windows.  Copy this file into the `plugins` subdirectory where FME is installed.
+**Build the CityJSON plugin, using the instructions above.  This will produce a file `fmecityjson.so` file on Linux and macOS (a `.dylib` will be created under macOS, but the CMake will rename it to a `.so` otherwise FME won't work), or a `fmecityjson.dll` file on Windows.  Copy this file into the `plugins` subdirectory where FME is installed.
 * The Format Information File :
 ** Copy the file `cityjson.db` into the `formatsinfo` subdirectory where FME is installed.
 (This file will supply the Reader and
@@ -85,5 +85,4 @@ schemas and so on.)
 3. `export LD_LIBRARY_PATH=/opt/fme-desktop-2019/fmecore`
 4. Start debugger against `/opt/fme-desktop-2019/bin/fme` (not the shell script in the install root)
 
-## Licenses
-* [JSON parser](https://github.com/nlohmann/json/blob/master/LICENSE)
+

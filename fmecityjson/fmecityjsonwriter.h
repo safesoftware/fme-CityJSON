@@ -36,8 +36,12 @@
 =============================================================================*/
 
 #include <fmewrt.h>
+#include <fstream>
 #include <sstream>
 #include <string>
+
+#include "json.hpp"
+using json = nlohmann::json;
 
 // Forward declarations
 class IFMEFeature;
@@ -181,6 +185,8 @@ private:
    // Insert additional private data members here
    // -----------------------------------------------------------------------
 
+   std::ofstream outputFile_;
+   json outputJSON_;
 };
 
 #endif
