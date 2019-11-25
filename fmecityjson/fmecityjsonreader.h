@@ -174,6 +174,10 @@ private:
 
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
+   // Parse the attributes of a CityObject or metadata and assign it as attributes to the feature.
+   // Takes an iterator over a json object. Also need to pass the end of the iterator to know when to stop.
+   static void parseAttributes(IFMEFeature &feature, json::iterator &it, const json::iterator &_end);
+
    // Parse a single Geometry of a CityObject
    IFMEGeometry *parseCityObjectGeometry(json::value_type &currentGeometry, std::vector<std::tuple<double, double, double>> &vertices);
 
@@ -249,12 +253,14 @@ private:
 
    std::ifstream inputFile_;
    json inputJSON_;
+   json metaObject_; // for storing the metadata object
    json::iterator nextObject_;
    std::vector<std::tuple<double, double, double>> vertices_;
    std::map<int, FME_UInt32> geomTemplateMap_;
    std::vector<std::string> lodInData_;
 
    bool schemaScanDone_;
+   bool schemaScaneDoneMeta_;
    std::map<std::string, IFMEFeature*> schemaFeatures_;
 
    IFMEString* textureCoordUName_;

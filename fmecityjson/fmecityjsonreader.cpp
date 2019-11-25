@@ -123,46 +123,22 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     inputJSON_ = json::parse(inputFile_);
 
     // Let's make sure we're parsing this correctly.
-    if (inputJSON_.at("type") != "CityJSON")
+    if (inputJSON_.at("type").get<std::string>() != "CityJSON")
     {
         gLogFile->logMessageString("Not a CityJSON file", FME_ERROR);
         return FME_FAILURE;
     }
     std::string supportedVersion = "1.0";
-    if (inputJSON_.at("version") < supportedVersion)
+    if (inputJSON_.at("version").get<std::string>() < supportedVersion)
     {
         std::stringstream versionStream;
         versionStream << "Unsupported CityJSON version: "
-                      << inputJSON_.at("version").dump()
+                      << inputJSON_.at("version").get<std::string>()
                       << ". Only the version "
                       << supportedVersion
                       << " or higher are supported.";
         gLogFile->logMessageString(versionStream.str().c_str(), FME_ERROR);
         return FME_FAILURE;
-    }
-
-    // Scrape the coordinate system
-    try
-    {
-        std::string inputCoordSys = inputJSON_.at("metadata").at("referenceSystem");
-        // Looking to make the form EPSG:XXXX
-        inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
-        if (inputCoordSys.find("::") != std::string::npos) {
-            // In case of OGC URN 'urn:ogc:def:crs:EPSG::7415
-            coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
-        }
-        else if (inputCoordSys.find(":") != std::string::npos) {
-            // In case of legacy EPSG:7415
-            coordSys_ = inputCoordSys;
-        } else {
-            gLogFile->logMessageString("Cannot parse EPSG code. Please provide the EPSG code as OGC URN, for example "
-                                       "'urn:ogc:def:crs:EPSG::7415'.", FME_WARN);
-        }
-        gLogFile->logMessageString(("Coordinate Reference System is set to " + coordSys_).c_str(), FME_INFORM);
-    }
-    catch (json::out_of_range &e)
-    {
-        gLogFile->logMessageString("Coordinate Reference System is not set in the file", FME_WARN);
     }
 
     // Transform object
@@ -301,7 +277,44 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     }
     catch (json::out_of_range &e){}
 
-    // start by pointing to the first object to read
+    // Check for metadata in the file
+    try
+    {
+        metaObject_ = inputJSON_.at("metadata");
+        schemaScaneDoneMeta_ = false;
+
+        // Scrape the coordinate system
+        try
+        {
+            std::string inputCoordSys = metaObject_.at("referenceSystem");
+            // Looking to make the form EPSG:XXXX
+            inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
+            if (inputCoordSys.find("::") != std::string::npos) {
+                // In case of OGC URN 'urn:ogc:def:crs:EPSG::7415
+                coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
+            }
+            else if (inputCoordSys.find(":") != std::string::npos) {
+                // In case of legacy EPSG:7415
+                coordSys_ = inputCoordSys;
+            } else {
+                gLogFile->logMessageString("Cannot parse EPSG code. Please provide the EPSG code as OGC URN, "
+                                           "for example 'urn:ogc:def:crs:EPSG::7415'.", FME_WARN);
+            }
+            gLogFile->logMessageString(("Coordinate Reference System is set to " + coordSys_).c_str(), FME_INFORM);
+        }
+        catch (json::out_of_range &e)
+        {
+            gLogFile->logMessageString("Coordinate Reference System is not set in the file", FME_WARN);
+        }
+    }
+    catch (json::out_of_range &e)
+    {
+        gLogFile->logMessageString("The file does not contain any metadata ('referenceSystem', "
+                                   "'geographicalExtent' etc.)", FME_WARN);
+        schemaScaneDoneMeta_ = true;
+    }
+
+    // Start by pointing to the first CityObject to read
     nextObject_ = inputJSON_.at("CityObjects").begin();
 
     return FME_SUCCESS;
@@ -354,87 +367,103 @@ FME_Status FMECityJSONReader::read(IFMEFeature &feature, FME_Boolean &endOfFile)
     // Perform read actions here
     // -----------------------------------------------------------------------
 
-    if (nextObject_ == inputJSON_.at("CityObjects").end()) {
+    if (nextObject_ == inputJSON_.at("CityObjects").end() and metaObject_.empty()) {
         endOfFile = FME_TRUE;
         return FME_SUCCESS;
     }
 
-    std::string objectId = nextObject_.key();
+    if (not metaObject_.empty()) {
+        // reading the metadata into a feature
+        feature.setFeatureType("Metadata");
+        json::iterator metaIt = metaObject_.begin();
+        const json::iterator metaItEnd = metaObject_.end();
+        parseAttributes(feature, metaIt, metaItEnd);
 
-    // Set the feature type
-    std::string featureType = nextObject_.value().at("type");
-    feature.setFeatureType(featureType.c_str());
+        metaObject_.clear();
+        endOfFile = FME_FALSE;
+        return FME_SUCCESS;
+    } else {
+        // reading CityObjects into features
+        std::string objectId = nextObject_.key();
 
-    // Set feature attributes
-    feature.setAttribute("fid", objectId.c_str());
-    if (not nextObject_.value()["attributes"].is_null()) {
-        for (json::iterator it = nextObject_.value().at("attributes").begin();
-             it != nextObject_.value().at("attributes").end(); ++it) {
-            const std::string &attributeName = it.key();
-            if (it.value().is_string()) {
-                const std::string &attributeValue = it.value();
-                feature.setAttribute(attributeName.c_str(), attributeValue.c_str());
-            } else if (it.value().is_number_float()) {
-                const double &attributeValue = it.value();
-                feature.setAttribute(attributeName.c_str(), attributeValue);
-            } else if (it.value().is_number_integer()) {
-                const int &attributeValue = it.value();
-                feature.setAttribute(attributeName.c_str(), attributeValue);
-            } else if (it.value().is_boolean()) {
-                if (it.value()) feature.setAttribute(attributeName.c_str(), FME_TRUE);
-                else feature.setAttribute(attributeName.c_str(), FME_FALSE);
-            } else {
-                // TODO: I'm considering to allow the 'array' and 'object' JSON types as attributes, but
-                //  array:
-                //     We can only store the array as IFMEStringArray, so need to cast the elements to strings. Do we want this?
-                //  object:
-                //     This would be unpacked to the root of the feature attributes
-                std::string msg = "Attribute value type '";
-                msg.append(it.value().type_name());
-                msg.append("' is not allowed, in '");
-                msg.append(attributeName);
-                msg.append("'.");
-                gLogFile->logMessageString(msg.c_str(), FME_WARN);
+        // Set the feature type
+        std::string featureType = nextObject_.value().at("type");
+        feature.setFeatureType(featureType.c_str());
+
+        // Set feature attributes
+        feature.setAttribute("fid", objectId.c_str());
+
+        json attributes;
+        try { attributes = nextObject_.value().at("attributes"); }
+        catch (json::out_of_range &e) {}
+        if (not attributes.empty()) {
+            json::iterator attrIt = attributes.begin();
+            const json::iterator attrItEnd = attributes.end();
+            parseAttributes(feature, attrIt, attrItEnd);
+        }
+        // Set child and parent CityObjects as attributes. In FME we don't have/set an explicit object hierarchy, but each
+        // feature is on the same level. Therefore we store the child-parent relationships in
+        // attributes, for those who are interested in the hierarchies. Just like in cityjson.
+        // I'm not adding the children and parents attributes to the schema, because its better if they are hidden from the
+        // table view, since there can be many-many children for each feature.
+        if (not nextObject_.value()["children"].is_null() && not nextObject_.value()["children"].empty()) {
+            IFMEStringArray *children = gFMESession->createStringArray();
+            for (std::string child : nextObject_.value()["children"]) {
+                children->append(child.c_str());
             }
+            feature.setListAttributeNonSequenced("children", *children);
+            gFMESession->destroyStringArray(children);
         }
-    }
-    // Set child and parent CityObjects as attributes. In FME we don't have/set an explicit object hierarchy, but each
-    // feature is on the same level. Therefore we store the child-parent relationships in
-    // attributes, for those who are interested in the hierarchies. Just like in cityjson.
-    // I'm not adding the children and parents attributes to the schema, because its better if they are hidden from the
-    // table view, since there can be many-many children for each feature.
-    if (not nextObject_.value()["children"].is_null() && not nextObject_.value()["children"].empty()) {
-        IFMEStringArray *children = gFMESession->createStringArray();
-        for (std::string child : nextObject_.value()["children"]) {
-            children->append(child.c_str());
+
+        if (not nextObject_.value()["parents"].is_null() && not nextObject_.value()["parents"].empty()) {
+            IFMEStringArray *parents = gFMESession->createStringArray();
+            for (std::string parent : nextObject_.value()["parents"]) {
+                parents->append(parent.c_str());
+            }
+            feature.setListAttributeNonSequenced("parents", *parents);
+            gFMESession->destroyStringArray(parents);
         }
-        feature.setListAttributeNonSequenced("children", *children);
-        gFMESession->destroyStringArray(children);
-    }
 
-    if (not nextObject_.value()["parents"].is_null() && not nextObject_.value()["parents"].empty()) {
-        IFMEStringArray *parents = gFMESession->createStringArray();
-        for (std::string parent : nextObject_.value()["parents"]) {
-            parents->append(parent.c_str());
+        // Set the geometry
+        for (auto &geometry: nextObject_.value()["geometry"]) {
+            // Set the geometry for the feature
+            IFMEGeometry *geom = parseCityObjectGeometry(geometry, vertices_);
+            if (geom != nullptr) { feature.setGeometry(geom); }
         }
-        feature.setListAttributeNonSequenced("parents", *parents);
-        gFMESession->destroyStringArray(parents);
+
+        // Set the coordinate system
+        feature.setCoordSys(coordSys_.c_str());
+
+        ++nextObject_;
+
+        endOfFile = FME_FALSE;
+        return FME_SUCCESS;
     }
+}
 
-    // Set the geometry
-    for (auto &geometry: nextObject_.value()["geometry"]) {
-        // Set the geometry for the feature
-        IFMEGeometry *geom = parseCityObjectGeometry(geometry, vertices_);
-        if (geom != nullptr) { feature.setGeometry(geom); }
+void FMECityJSONReader::parseAttributes(IFMEFeature &feature, json::iterator &it, const json::iterator &_end) {
+    while (it != _end) {
+        const std::string &attributeName = it.key();
+        if (it.value().is_string()) {
+            std::string attributeValue = it.value();
+            feature.setAttribute(attributeName.c_str(), attributeValue.c_str());
+        } else if (it.value().is_number_float()) {
+            FME_Real64 attributeValue = it.value();
+            feature.setAttribute(attributeName.c_str(), attributeValue);
+        } else if (it.value().is_number_integer()) {
+            FME_Int32 attributeValue = it.value();
+            feature.setAttribute(attributeName.c_str(), attributeValue);
+        } else if (it.value().is_boolean()) {
+            if (it.value()) feature.setBooleanAttribute(attributeName.c_str(), FME_TRUE);
+            else feature.setBooleanAttribute(attributeName.c_str(), FME_FALSE);
+        } else {
+            // value is object or array
+            std::string attributeValue = it.value().dump();
+            feature.setAttribute(attributeName.c_str(), attributeValue.c_str());
+        }
+
+        it++;
     }
-
-    // Set the coordinate system
-    feature.setCoordSys(coordSys_.c_str());
-
-    ++nextObject_;
-
-    endOfFile = FME_FALSE;
-    return FME_SUCCESS;
 }
 
 IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &currentGeometry,
@@ -447,7 +476,7 @@ IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &curre
         json::value_type semantics = currentGeometry["semantics"];
 
         // geometry type and level of detail
-        geometryType = currentGeometry.at("type");
+        geometryType = currentGeometry.at("type").get<std::string>();
         if (geometryType != "GeometryInstance") {
             geometryLodValue = lodToString(currentGeometry);
         } else {
@@ -772,7 +801,7 @@ std::string FMECityJSONReader::lodToString(json currentGeometry) {
                << float(lod);
         return stream.str();
     } else {
-        return lod;
+        return lod.get<std::string>();
     }
 }
 
@@ -793,7 +822,46 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature &feature, FME_Boolean &endO
     // scan it once, store up the schema features, and return them one at a time
     // when asked.
 
-    if (!schemaScanDone_)
+    // Create a feature for the metadata
+    if (not schemaScaneDoneMeta_) {
+        try
+        {
+            // try to catch early
+            json metadata = inputJSON_.at("metadata");
+
+            std::string featureType = "Metadata";
+            auto schemaFeature = schemaFeatures_.find(featureType);
+            IFMEFeature *sf(nullptr);
+            if (schemaFeature == schemaFeatures_.end())
+            {
+                sf = gFMESession->createFeature();
+                sf->setFeatureType(featureType.c_str());
+                schemaFeatures_[featureType] = sf; // gives up ownership
+            }
+            else
+            {
+                sf = schemaFeature->second;
+            }
+
+            {
+                std::string attributeName = "fme_geometry{0}";
+                sf->setAttribute(attributeName.c_str(), "cityjson_text");
+            }
+
+            // Go trough the metadata and add as attributes
+            for (json::iterator it = metadata.begin(); it != metadata.end(); it++) {
+                const std::string &attributeName = it.key();
+                std::string attributeType = "string";
+                sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
+
+            }
+        }
+        catch (json::out_of_range &e){}
+
+        schemaScaneDoneMeta_ = true;
+    }
+
+    if (not schemaScanDone_ and schemaScaneDoneMeta_)
     {
         // iterate through every object in the file.
         for (auto &cityObject: inputJSON_.at("CityObjects"))
