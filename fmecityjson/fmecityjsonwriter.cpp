@@ -241,19 +241,21 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       gLogFile->logMessageString(*s1, FME_WARN);
       outputJSON_["CityObjects"][s1->data()] = json::object();
 
-      IFMEStringArray* allatt = gFMESession->createStringArray();
-      feature.getAllAttributeNames(*allatt);
       std::string ft(feature.getFeatureType());
+      outputJSON_["CityObjects"][s1->data()]["type"] = ft;
+
+      IFMEStringArray* allatt = gFMESession->createStringArray();
+      outputJSON_["CityObjects"][s1->data()]["attributes"] = json::object();
+      feature.getAllAttributeNames(*allatt);
       for (FME_UInt32 i = 0; i < allatt->entries(); i++)
       {
          const char* t = allatt->elementAt(i)->data();
          std::string ts(t);
          if (attrToWrite_[ft].count(ts) != 0)
          {
-            // outputJSON_["CityObjects"][s1->data()][t] = json::object();
             IFMEString* tmps = gFMESession->createString();
             feature.getAttribute(t, *tmps);
-            outputJSON_["CityObjects"][s1->data()][t] = tmps->data();
+            outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmps->data();
          }
       }
    }
