@@ -108,11 +108,29 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    // Write the schema information to the file. In this template,
    // since we are not writing to a file we will log the schema information
    // instead.
+   gLogFile->logMessageString("=====", FME_WARN );
+
    for (FME_UInt32 i = 0; i < schemaFeatures_->entries(); i++)
    {
-       IFMEFeature* schemaFeature = (*schemaFeatures_)(i);
-       gLogFile->logFeature(*schemaFeature, FME_INFORM, 20);
+      IFMEFeature* schemaFeature = (*schemaFeatures_)(i);
+      gLogFile->logMessageString(schemaFeature->getFeatureType(), FME_WARN );
+    
+      IFMEStringArray* allatt = gFMESession->createStringArray();
+      schemaFeature->getAllAttributeNames(*allatt);
+      std::set<std::string> sa;
+      for (FME_UInt32 i = 0; i < allatt->entries(); i++)
+      {
+         const char* t = allatt->elementAt(i)->data();
+         sa.insert(std::string(t));
+         gLogFile->logMessageString(t, FME_WARN);
+      }
+      std::string st(schemaFeature->getFeatureType());
+      attrToWrite_[st] = sa;
+      gLogFile->logFeature(*schemaFeature, FME_INFORM, 20);
    }
+   gLogFile->logMessageString("=====", FME_WARN );
+
+
    // -----------------------------------------------------------------------
    // Open the dataset here
    // e.g. outputFile_.open(dataset_.c_str(), ios::out|ios::trunc);
@@ -129,7 +147,6 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    outputJSON_["CityObjects"] = json::object();
    outputJSON_["vertices"] = json::array();
 
-   outputJSON_["CityObjects"]["hugo"] = json::object();
    // -----------------------------------------------------------------------
 
    return FME_SUCCESS;
@@ -153,6 +170,15 @@ FME_Status FMECityJSONWriter::abort()
 // Close
 FME_Status FMECityJSONWriter::close()
 {
+   // gLogFile->logMessageString("8888", FME_WARN);
+   // gLogFile->logMessageString(std::to_string(attrToWrite_.size()).c_str(), FME_WARN);
+
+   // for (auto s: attrToWrite_["Building"])
+   // {
+   //    gLogFile->logMessageString(s.c_str(), FME_WARN);      
+   // }
+
+
    // -----------------------------------------------------------------------
    // Perform any closing operations / cleanup here; e.g. close opened files
    // -----------------------------------------------------------------------
@@ -210,21 +236,27 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    // Perform your write operations here
    // -----------------------------------------------------------------------
    IFMEString* s1 = gFMESession->createString();
-   feature.getAttribute("fid", *s1);
-   outputJSON_["CityObjects"][s1->data()] = json::object();
-
-   IFMEStringArray* allatt = gFMESession->createStringArray();
-   feature.getAllAttributeNames(*allatt);
-   for (FME_UInt32 i = 0; i < allatt->entries(); i++)
+   if (feature.getAttribute("fid", *s1) == FME_TRUE) 
    {
-      const char* t = allatt->elementAt(i)->data();
-      outputJSON_["CityObjects"][s1->data()][t] = json::object();
+      gLogFile->logMessageString(*s1, FME_WARN);
+      outputJSON_["CityObjects"][s1->data()] = json::object();
 
-
+      IFMEStringArray* allatt = gFMESession->createStringArray();
+      feature.getAllAttributeNames(*allatt);
+      std::string ft(feature.getFeatureType());
+      for (FME_UInt32 i = 0; i < allatt->entries(); i++)
+      {
+         const char* t = allatt->elementAt(i)->data();
+         std::string ts(t);
+         if (attrToWrite_[ft].count(ts) != 0)
+         {
+            // outputJSON_["CityObjects"][s1->data()][t] = json::object();
+            IFMEString* tmps = gFMESession->createString();
+            feature.getAttribute(t, *tmps);
+            outputJSON_["CityObjects"][s1->data()][t] = tmps->data();
+         }
+      }
    }
-
-
-
    return FME_SUCCESS;
 }
 

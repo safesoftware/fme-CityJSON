@@ -39,6 +39,9 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <map>
+#include <set>
+
 
 #include "json.hpp"
 using json = nlohmann::json;
@@ -187,6 +190,8 @@ private:
 
    std::ofstream outputFile_;
    json outputJSON_;
+
+   std::map<std::string, std::set<std::string> > attrToWrite_;
 };
 
 #endif
