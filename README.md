@@ -20,7 +20,19 @@ FME 2018.0 or later installed on either
 * Windows
 
 ## Limitation
-We are working toward full CityJSON support.  We have tested ...
+We are working toward full CityJSON support. We have tested the reader on the file in the [example data directory](https://github.com/safesoftware/fme-CityJSON/tree/master/example_data), and some more.
+
+### Reader
+
++ SemanticSurface hierarchies (children, parent) are not supported
+
++ MultiGeometries are not supported
+
++ Appearances (textures, materials) are not supported
+
++ Extenstions are not supported
+
+\**not supported* means in this case that the property is ignored when reading the file, but doesn't break the process
 
 ## How to build
 * Requires this [JSON parser](https://github.com/nlohmann/json)
