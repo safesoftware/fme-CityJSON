@@ -127,7 +127,7 @@ public:
    // -----------------------------------------------------------------------
 
    static json::value_type geometryJSON;
-   static std::map<const FMECoord3D, unsigned long> FMECityJSONWriter::vertices;
+   static std::map<const FMECoord3D, unsigned long> vertices;
 
 private:
 
