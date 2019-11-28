@@ -56,7 +56,6 @@
 #include <imultisolid.h>
 #include <icompositesolid.h>
 
-// #include <nlohmann/json.hpp>
 #include "json.hpp"
 // for convenience
 using json = nlohmann::json;
@@ -177,40 +176,44 @@ private:
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
    // Parse a single Geometry of a CityObject
-   void parseCityJSONObjectGeometry(IFMEFeature& feature,
-                                    json::value_type &currentGeometry);
+   IFMEGeometry *parseCityObjectGeometry(json::value_type &currentGeometry, std::vector<std::tuple<double, double, double>> &vertices);
+
    // Parse a Multi- or CompositeSolid
    template <typename MCSolid>
-   void parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::value_type &boundaries,
-                                 json::value_type &semantics);
+   void parseMultiCompositeSolid(MCSolid multiCompositeSolid, json::value_type &boundaries, json::value_type &semantics, std::vector<std::tuple<double, double, double>> &vertices);
+
    // Parse a Solid
-   IFMEBRepSolid *parseSolid(json::value_type &boundaries, json::value_type &semantics);
+   IFMEBRepSolid *parseSolid(json::value_type &boundaries, json::value_type &semantics, std::vector<std::tuple<double, double, double>> &vertices);
+
    // Parse a Multi- or CompositeSurface
    template <typename MCSurface>
-   void parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries,
-                                   json::value_type &semantics);
+   void parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries, json::value_type &semantics, std::vector<std::tuple<double, double, double>> &vertices);
+
    // Parse a single Surface of the boundary
-   IFMEFace *parseCityJSONSurface(json::value_type surface,
-                                  json::value_type semanticSurface);
+   IFMEFace *parseSurface(json::value_type surface, json::value_type semanticSurface, std::vector<std::tuple<double, double, double>> &vertices);
 
    // Parse a MultiLineString
-   void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries);
+   void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries, std::vector<std::tuple<double, double, double>> &vertices);
 
    // Parse a single Ring to an IFMELine
-   void parseCityJSONRings(std::vector<IFMELine *> *rings,
-                           json::value_type &boundary);
+   void parseRings(std::vector<IFMELine *> *rings, json::value_type &boundary, std::vector<std::tuple<double, double, double>> &vertices);
 
    // Parse a single LineString
-   void parseLineString(IFMELine *line, json::value_type &boundary);
+   static void parseLineString(IFMELine *line, json::value_type &boundary, std::vector<std::tuple<double, double, double>> &vertices);
 
    // Parse MultiPoint geometry
    void parseMultiPoint(IFMEMultiPoint *mpoint,
-                        json::value_type &boundary);
+                        json::value_type &boundary,
+                        std::vector<std::tuple<double, double, double>> &vertices);
 
    // Set the Level of Detail Trait on the geometry
    static void setTraitString(IFMEGeometry *geometry,
                               const std::string &traitName,
                               const std::string &traitValue);
+
+   // Cast the geometry LoD to a string, even though the specs require a number.
+   // Because strings are easier to compare than floats (in case of extended LoD).
+   static std::string lodToString(json currentGeometry);
 
    // Data members
 
@@ -239,7 +242,7 @@ private:
 
    // The parameters value used for reading the dataset.
    // For some formats, they have no need for parameters.
-   std::string cityJsonParameters_;
+   std::string lodParam_;
 
    // -----------------------------------------------------------------------
    // Insert additional private data members here
@@ -249,6 +252,8 @@ private:
    json inputJSON_;
    json::iterator nextObject_;
    std::vector<std::tuple<double, double, double>> vertices_;
+   std::map<int, FME_UInt32> geomTemplateMap_;
+   std::vector<std::string> lodInData_;
 
    bool schemaScanDone_;
    std::map<std::string, IFMEFeature*> schemaFeatures_;
