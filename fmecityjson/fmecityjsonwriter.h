@@ -39,8 +39,9 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <igeometry.h>
 
-#include "json.hpp"
+#include <json.hpp>
 using json = nlohmann::json;
 
 // Forward declarations
@@ -100,11 +101,10 @@ public:
    // multiFileWriter()
    FME_Boolean multiFileWriter() const override { return FME_FALSE; }
 
-
    // -----------------------------------------------------------------------
    // Insert additional public methods here
    // -----------------------------------------------------------------------
-
+   //static IFMEString* getSemanticSurfaceType(const IFMEFace& face);
 
    // Data members
 
@@ -126,6 +126,8 @@ public:
    // Insert additional public data members here
    // -----------------------------------------------------------------------
 
+   static json::value_type geometryJSON;
+   static std::map<const FMECoord3D, unsigned long> FMECityJSONWriter::vertices;
 
 private:
 

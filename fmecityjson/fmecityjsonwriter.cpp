@@ -42,6 +42,7 @@
 #include <ifeatvec.h>
 #include <igeometry.h>
 #include <igeometrytools.h>
+#include <iface.h>
 #include <ilogfile.h>
 #include <isession.h>
 #include <fmemap.h>
@@ -54,6 +55,8 @@ IFMEMappingFile* FMECityJSONWriter::gMappingFile = nullptr;
 IFMECoordSysManager* FMECityJSONWriter::gCoordSysMan = nullptr;
 extern IFMESession* gFMESession;
 
+json::value_type FMECityJSONWriter::geometryJSON;
+std::map<const FMECoord3D, unsigned long> FMECityJSONWriter::vertices;
 //===========================================================================
 // Constructor
 FMECityJSONWriter::FMECityJSONWriter(const char* writerTypeName, const char* writerKeyword)
@@ -128,8 +131,6 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    outputJSON_["metadata"] = "is awesome";
    outputJSON_["CityObjects"] = json::object();
    outputJSON_["vertices"] = json::array();
-
-   outputJSON_["CityObjects"]["hugo"] = json::object();
    // -----------------------------------------------------------------------
 
    return FME_SUCCESS;
@@ -157,7 +158,16 @@ FME_Status FMECityJSONWriter::close()
    // Perform any closing operations / cleanup here; e.g. close opened files
    // -----------------------------------------------------------------------
 
-   // outputJSON_["pi"] = 3.14159;
+   // write vertex list
+  std::vector<std::vector<double>> thepts;
+  thepts.resize(vertices.size());
+  for (auto& p : vertices)
+    thepts[p.second] = { p.first.x, p.first.y, p.first.z };
+  vertices.clear();
+
+   outputJSON_["vertices"] = thepts;
+   thepts.clear();
+   
    outputFile_ << outputJSON_ << std::endl;
 
    // Delete the visitor
@@ -196,37 +206,114 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    // at this point.
    // -----------------------------------------------------------------------
 
-   // Extract the geometry from the feature
-   const IFMEGeometry* geometry = (const_cast<IFMEFeature&>(feature)).getGeometry();
-   FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
-   if (badNews)
-   {
-      // There was an error in writing the geometry
-      gLogFile->logMessageString(kMsgWriteError);
-      return FME_FAILURE;
-   }
-
    // -----------------------------------------------------------------------
    // Perform your write operations here
    // -----------------------------------------------------------------------
+   // write fid for CityObject
    IFMEString* s1 = gFMESession->createString();
    feature.getAttribute("fid", *s1);
-   outputJSON_["CityObjects"][s1->data()] = json::object();
+   std::string fid = s1->data();
+   outputJSON_["CityObjects"][fid] = json::object();
+   gFMESession->destroyString(s1);
 
+   // write values for children to array
+   IFMEStringArray* childrenValues = gFMESession->createStringArray();
+   feature.getListAttribute("children", *childrenValues);
+   for (FME_UInt32 i = 0; i < childrenValues->entries(); i++) {
+      outputJSON_["CityObjects"][fid]["children"].push_back(childrenValues->elementAt(i)->data());
+   }
+   gFMESession->destroyStringArray(childrenValues);
+
+   // write values for parrents to array
+   IFMEStringArray* parentValues = gFMESession->createStringArray();
+   feature.getListAttribute("parents", *parentValues);
+   for (FME_UInt32 i = 0; i < parentValues->entries(); i++) {
+     outputJSON_["CityObjects"][fid]["parents"].push_back(parentValues->elementAt(i)->data());
+   }
+   gFMESession->destroyStringArray(parentValues);
+
+   // write values for other attributes
    IFMEStringArray* allatt = gFMESession->createStringArray();
    feature.getAllAttributeNames(*allatt);
-   for (FME_UInt32 i = 0; i < allatt->entries(); i++)
-   {
-      const char* t = allatt->elementAt(i)->data();
-      outputJSON_["CityObjects"][s1->data()][t] = json::object();
+   for (FME_UInt32 i = 0; i < allatt->entries(); i++) {
+     const char* attName = allatt->elementAt(i)->data();
+     IFMEString* value = gFMESession->createString();
+     feature.getAttribute(attName, *value);
+     FME_AttributeType type = feature.getAttributeType(attName);
 
+     // check if there are attributes defined we want to skip
+     if (std::strcmp(attName, "fid") != 0 &&
+          std::strncmp(attName, "children", 8) != 0 &&
+          std::strncmp(attName, "parents", 7) != 0 &&
+          std::strcmp(attName, "cityjson_type") != 0 &&
+          std::strncmp(attName, "fme_", 4) != 0) {
 
+       if (type == FME_ATTR_STRING) {
+         outputJSON_["CityObjects"][fid]["attributes"][attName] = value->data();
+       }
+       else if (type == FME_ATTR_INT32) {
+         outputJSON_["CityObjects"][fid]["attributes"][attName] = std::stoi(value->data());
+       }
+       else if (type == FME_ATTR_REAL32) {
+         outputJSON_["CityObjects"][fid]["attributes"][attName] = std::stod(value->data());
+       }
+       else if (type == FME_ATTR_BOOLEAN) {
+         bool val = true;
+         if (value->data() == "false") {
+           val = false;
+         }
+         outputJSON_["CityObjects"][fid]["attributes"][attName] = val;
+       }
+       else {
+         std::string msg = "Attribute value type is not allowed, in '";
+         msg.append(attName);
+         msg.append("'.");
+         gLogFile->logMessageString(msg.c_str(), FME_WARN);
+       }
+     }
+     gFMESession->destroyString(value);
+   }
+   gFMESession->destroyStringArray(allatt);
+
+   //TODO: Check if geometry exists
+
+   // Extract the geometry from the feature
+   const IFMEGeometry* geometry = (const_cast<IFMEFeature&>(feature)).getGeometry();
+   FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
+   if (badNews) {
+     // There was an error in writing the geometry
+     gLogFile->logMessageString(kMsgWriteError);
+     return FME_FAILURE;
+   }
+   outputJSON_["CityObjects"][fid]["geometry"] = json::array();
+   if (!geometryJSON.empty()) {
+     outputJSON_["CityObjects"][fid]["geometry"].push_back(geometryJSON);
    }
 
+   //TODO: handle lod trait
+   IFMEStringArray *names = gFMESession->createStringArray();
+   geometry->getTraitNames(*names);
+   for (int i = 0; i < names->entries(); i++) {
+     //gLogFile->logMessageString(names->elementAt(i)->data(), FME_WARN);
+   }
 
-
+   //TODO: Check if geometry exists, if not skip writing bounds
+   // write gepgraphical extent
+   if (!outputJSON_["CityObjects"][fid]["geometry"].empty()) {
+     FME_Real64 minx, miny, minz, maxx, maxy, maxz;
+     feature.boundingCube(minx, maxx, miny, maxy, minz, maxz);
+     //gLogFile->logMessageString(std::to_string(minx).c_str(), FME_WARN);
+     outputJSON_["CityObjects"][fid]["geographicalExtent"] = { minx, miny, minz, maxx, maxy, maxz };
+   }
    return FME_SUCCESS;
 }
+
+//IFMEString* FMECityJSONWriter::getSemanticSurfaceType(const IFMEFace& face) {
+//  IFMEString *name = gFMESession->createString();
+//  face.getName(*name, nullptr);
+//  return name;
+//}
+
 
 //===========================================================================
 // Fetch Schema Features
