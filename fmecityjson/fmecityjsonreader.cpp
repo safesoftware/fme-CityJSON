@@ -266,6 +266,7 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
             gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
             lodParam_ = lodInData_[0];
         }
+
     } else {
         // In case there is only one LoD in the data, we ignore the Parameter
         // even if it is set.
@@ -441,7 +442,7 @@ IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &curre
 
     if (currentGeometry.is_object()) {
         std::string geometryType, geometryLodValue;
-        std::string geometryLodName = "LoD"; // geometry Trait name
+        std::string geometryLodName = "Level of Detail"; // geometry Trait name
         json::value_type boundaries = currentGeometry.at("boundaries");
         json::value_type semantics = currentGeometry["semantics"];
 
