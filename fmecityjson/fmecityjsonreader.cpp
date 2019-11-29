@@ -408,7 +408,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature &feature, FME_Boolean &endOfFile)
         for (std::string child : nextObject_.value()["children"]) {
             children->append(child.c_str());
         }
-        feature.setListAttributeNonSequenced("children", *children);
+        feature.setListAttributeNonSequenced("cityjson_children", *children);
         gFMESession->destroyStringArray(children);
     }
 
@@ -417,7 +417,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature &feature, FME_Boolean &endOfFile)
         for (std::string parent : nextObject_.value()["parents"]) {
             parents->append(parent.c_str());
         }
-        feature.setListAttributeNonSequenced("parents", *parents);
+        feature.setListAttributeNonSequenced("cityjson_parents", *parents);
         gFMESession->destroyStringArray(parents);
     }
 
