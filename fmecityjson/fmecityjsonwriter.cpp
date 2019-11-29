@@ -260,6 +260,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
             outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmps->data();
          }
       }
+    }
    // Extract the geometry from the feature
    const IFMEGeometry* geometry = (const_cast<IFMEFeature&>(feature)).getGeometry();
    FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
@@ -268,9 +269,9 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
      gLogFile->logMessageString(kMsgWriteError);
      return FME_FAILURE;
    }
-   outputJSON_["CityObjects"][fid]["geometry"] = json::array();
+   outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
    if (!geometryJSON.empty()) {
-     outputJSON_["CityObjects"][fid]["geometry"].push_back(geometryJSON);
+     outputJSON_["CityObjects"][s1->data()]["geometry"].push_back(geometryJSON);
    }
 
    //TODO: handle lod trait
@@ -282,11 +283,11 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    //TODO: Check if geometry exists, if not skip writing bounds
    // write gepgraphical extent
-   if (!outputJSON_["CityObjects"][fid]["geometry"].empty()) {
+   if (!outputJSON_["CityObjects"][s1->data()]["geometry"].empty()) {
      FME_Real64 minx, miny, minz, maxx, maxy, maxz;
      feature.boundingCube(minx, maxx, miny, maxy, minz, maxz);
      //gLogFile->logMessageString(std::to_string(minx).c_str(), FME_WARN);
-     outputJSON_["CityObjects"][fid]["geographicalExtent"] = { minx, miny, minz, maxx, maxy, maxz };
+     outputJSON_["CityObjects"][s1->data()]["geographicalExtent"] = { minx, miny, minz, maxx, maxy, maxz };
    }
    return FME_SUCCESS;
 }
