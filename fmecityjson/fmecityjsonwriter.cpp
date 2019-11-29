@@ -260,7 +260,30 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
             outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmps->data();
          }
       }
+      
+      //-- cityjson_children
+      IFMEStringArray* childrenValues = gFMESession->createStringArray();
+      feature.getListAttribute("cityjson_children", *childrenValues);
+      if (childrenValues->entries() > 0)
+      outputJSON_["CityObjects"][s1->data()]["children"] = json::array();   
+      for (FME_UInt32 i = 0; i < childrenValues->entries(); i++) {
+         outputJSON_["CityObjects"][s1->data()]["children"].push_back(childrenValues->elementAt(i)->data());
+      }
+      gFMESession->destroyStringArray(childrenValues);
+
+      //-- cityjson_parents
+      IFMEStringArray* parentValues = gFMESession->createStringArray();
+      feature.getListAttribute("cityjson_parents", *parentValues);
+      if (parentValues->entries() > 0)
+      outputJSON_["CityObjects"][s1->data()]["parents"] = json::array();   
+      for (FME_UInt32 i = 0; i < parentValues->entries(); i++) {
+         outputJSON_["CityObjects"][s1->data()]["parents"].push_back(parentValues->elementAt(i)->data());
+      }
+      gFMESession->destroyStringArray(parentValues);
+
     }
+
+
    // Extract the geometry from the feature
    const IFMEGeometry* geometry = (const_cast<IFMEFeature&>(feature)).getGeometry();
    FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
