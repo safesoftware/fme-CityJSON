@@ -323,16 +323,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    //-- reset the internal DS for one feature
    (visitor_)->reset();
 
-
-   //TODO: Check if geometry exists, if not skip writing bounds
-   // write gepgraphical extent
-   // TODO: I wouldn't write the bbox of each object, remove this
-   // if (!outputJSON_["CityObjects"][s1->data()]["geometry"].empty()) {
-   //   FME_Real64 minx, miny, minz, maxx, maxy, maxz;
-   //   feature.boundingCube(minx, maxx, miny, maxy, minz, maxz);
-   //   //gLogFile->logMessageString(std::to_string(minx).c_str(), FME_WARN);
-   //   outputJSON_["CityObjects"][s1->data()]["geographicalExtent"] = { minx, miny, minz, maxx, maxy, maxz };
-   // }
    return FME_SUCCESS;
 }
 
