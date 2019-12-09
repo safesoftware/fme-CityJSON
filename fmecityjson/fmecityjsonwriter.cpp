@@ -38,6 +38,7 @@
 #include "fmecityjsonpriv.h"
 #include "fmecityjsongeometryvisitor.h"
 
+
 #include <ifeature.h>
 #include <ifeatvec.h>
 #include <igeometry.h>
@@ -47,6 +48,15 @@
 #include <isession.h>
 #include <fmemap.h>
 #include <vector>
+
+#include <icompositesurface.h>
+#include <isoliditerator.h>
+#include <isurfaceiterator.h>
+#include <imultisurface.h>
+#include <imultiarea.h>
+#include <igeometryiterator.h>
+
+#include <typeinfo>
 
 // These are initialized externally when a writer object is created so all
 // methods in this file can assume they are ready to use.
@@ -289,6 +299,30 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    //-- extract the geometries from the feature
    const IFMEGeometry* geometry = (const_cast<IFMEFeature&>(feature)).getGeometry();
+
+//======================================================
+   // FME_GeometryType fmegeomtype = (const_cast<IFMEFeature&>(feature)).getGeometryType();
+   // if fmegeomtype == 
+   // std::string s = typeid(*geometry).name();
+   // gLogFile->logMessageString(s.c_str(), FME_WARN);
+
+   // if (dynamic_cast<const IFMEBRepSolid*>(geometry))
+   // {
+   //    gLogFile->logMessageString("I am a IFMEBRepSolid", FME_WARN);
+   //    const IFMEBRepSolid* g = dynamic_cast<const IFMEBRepSolid*>(geometry);
+   //    const IFMESurface* outerSurface = g->getOuterSurface();
+   //    const IFMECompositeSurface* cs = dynamic_cast<const IFMECompositeSurface*>(outerSurface);
+   //    IFMESurfaceIterator* iterator = cs->getIterator();
+   //    while (iterator->next())
+   //    {
+   //       // Get the next surface
+   //       const IFMESurface* surface = iterator->getPart();
+   //       gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("surface LEDOUX")).c_str());
+   //    }
+
+   // }
+//======================================================
+
    FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
    if (badNews) {
      // There was an error in writing the geometry

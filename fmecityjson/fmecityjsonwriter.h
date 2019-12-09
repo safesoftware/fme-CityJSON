@@ -36,6 +36,8 @@
 =============================================================================*/
 
 #include <fmewrt.h>
+#include <fmetypes.h>
+#include <ibrepsolid.h>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -53,6 +55,7 @@ class IFMEFeatureVector;
 class IFMELogFile;
 class IFMEGeometryTools;
 class FMECityJSONGeometryVisitor;
+class IFMEBRepSolid;
 
 class FMECityJSONWriter : public IFMEWriter
 {
