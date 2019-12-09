@@ -55,8 +55,6 @@ IFMEMappingFile* FMECityJSONWriter::gMappingFile = nullptr;
 IFMECoordSysManager* FMECityJSONWriter::gCoordSysMan = nullptr;
 extern IFMESession* gFMESession;
 
-json::value_type FMECityJSONWriter::geometryJSON;
-std::map<const FMECoord3D, unsigned long> FMECityJSONWriter::vertices;
 //===========================================================================
 // Constructor
 FMECityJSONWriter::FMECityJSONWriter(const char* writerTypeName, const char* writerKeyword)
@@ -185,15 +183,16 @@ FME_Status FMECityJSONWriter::close()
    // Perform any closing operations / cleanup here; e.g. close opened files
    // -----------------------------------------------------------------------
 
-   // write vertex list
-  std::vector<std::vector<double>> thepts;
-  thepts.resize(vertices.size());
-  for (auto& p : vertices)
-    thepts[p.second] = { p.first.x, p.first.y, p.first.z };
-  vertices.clear();
+   // // write vertex list
+   // std::vector<std::vector<double>> thepts;
+   // thepts.resize(vertices.size());
+   // for (auto& p : vertices)
+   //    thepts[p.second] = { p.first.x, p.first.y, p.first.z };
+   // vertices.clear();
 
-   outputJSON_["vertices"] = thepts;
-   thepts.clear();
+   outputJSON_["vertices"] = vertices_;
+   // thepts.clear();
+   vertices_.clear();
    
    outputFile_ << outputJSON_ << std::endl;
 
@@ -292,9 +291,14 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
      gLogFile->logMessageString(kMsgWriteError);
      return FME_FAILURE;
    }
+
+   json fgeomjson = (visitor_)->getGeomJSON();
+   json fvertices = (visitor_)->getGeomVertices();
+   // json::value_type fgeomjson = visitor->getGeomJSON();
+
    outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
-   if (!geometryJSON.empty()) {
-     outputJSON_["CityObjects"][s1->data()]["geometry"].push_back(geometryJSON);
+   if (!fgeomjson.empty()) {
+      outputJSON_["CityObjects"][s1->data()]["geometry"].push_back(fgeomjson);
    }
 
    //TODO: handle lod trait
@@ -308,12 +312,12 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    //TODO: Check if geometry exists, if not skip writing bounds
    // write gepgraphical extent
    // TODO: I wouldn't write the bbox of each object, remove this
-   if (!outputJSON_["CityObjects"][s1->data()]["geometry"].empty()) {
-     FME_Real64 minx, miny, minz, maxx, maxy, maxz;
-     feature.boundingCube(minx, maxx, miny, maxy, minz, maxz);
-     //gLogFile->logMessageString(std::to_string(minx).c_str(), FME_WARN);
-     outputJSON_["CityObjects"][s1->data()]["geographicalExtent"] = { minx, miny, minz, maxx, maxy, maxz };
-   }
+   // if (!outputJSON_["CityObjects"][s1->data()]["geometry"].empty()) {
+   //   FME_Real64 minx, miny, minz, maxx, maxy, maxz;
+   //   feature.boundingCube(minx, maxx, miny, maxy, minz, maxz);
+   //   //gLogFile->logMessageString(std::to_string(minx).c_str(), FME_WARN);
+   //   outputJSON_["CityObjects"][s1->data()]["geographicalExtent"] = { minx, miny, minz, maxx, maxy, maxz };
+   // }
    return FME_SUCCESS;
 }
 
@@ -443,10 +447,3 @@ void FMECityJSONWriter::logFMEStringArray(IFMEStringArray& stringArray)
    gLogFile->logMessageString(sample.c_str(), FME_INFORM);
 }
 
-//===========================================================================
-// add CityJSON vertex
-// returns its index in the global array
-unsigned long add_cityjson_vertex(double x, double y, double z)
-{
-   
-}

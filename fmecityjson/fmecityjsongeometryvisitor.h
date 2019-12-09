@@ -38,6 +38,11 @@
 #include <igeometrytools.h>
 #include <igeometryvisitor.h>
 
+#include <vector>
+
+#include <json.hpp>
+using json = nlohmann::json;
+
 class IFMESession;
 
 // This returns a string that contains the geometry of a feature passed in.
@@ -190,6 +195,12 @@ public:
    // Visitor logs the values of the passed in IFMEFeatureTable geometry object.
    FME_Status visitFeatureTable(const IFMEFeatureTable& featureTable) override;
 
+   json getGeomJSON();
+
+   json getGeomVertices();
+
+   void reset();
+
 private:
 
    //---------------------------------------------------------------
@@ -224,6 +235,18 @@ private:
    // The fmeSession_ member stores a pointer to an IFMESession object
    // which performs the services on the FME Objects.
    IFMESession* fmeSession_;
+
+   
+
+
+
+   //---------- private data members
+   std::vector< std::vector< double > > vertices_;
+   json onegeom_;
+   std::vector<unsigned long> face_;
+   std::vector<std::vector<unsigned long>> surface_;
+   std::vector<std::vector<std::vector<unsigned long>>> multisurface_;
+
 
 };
 

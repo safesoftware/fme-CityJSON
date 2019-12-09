@@ -82,9 +82,7 @@
 
 #include <string>
 
-std::vector<std::vector<std::vector<unsigned long>>> multisurface_;
-std::vector<std::vector<unsigned long>> surface_;
-std::vector<unsigned long> face_;
+
 
 //===========================================================================
 // Constructor.
@@ -102,6 +100,25 @@ FMECityJSONGeometryVisitor::~FMECityJSONGeometryVisitor()
    // Perform any necessary cleanup
    //------------------------------------------------------------------------
 }
+
+
+json FMECityJSONGeometryVisitor::getGeomJSON()
+{
+   return onegeom_;
+}
+
+json FMECityJSONGeometryVisitor::getGeomVertices()
+{
+   return vertices_;
+}
+
+void FMECityJSONGeometryVisitor::reset()
+{
+   onegeom_.clear();
+   vertices_.clear();
+}
+
+
 
 //=====================================================================
 //
@@ -432,20 +449,26 @@ FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
   
    // push points to face list
    for (int i = 0; i < line.numPoints()-1; i++) {
-     FMECoord3D coords;
-     line.getPointAt3D(i, coords);
+      FMECoord3D coords;
+      line.getPointAt3D(i, coords);
+      std::vector< double > v;
+      v.push_back(coords.x);
+      v.push_back(coords.y);
+      v.push_back(coords.z);
+      unsigned long a = vertices_.size();
+      vertices_.push_back(v);
+      face_.push_back(a);
 
-     // push vertex to global vertex list
-     unsigned long a;
-     auto it = FMECityJSONWriter::vertices.find(coords);
-     if (it == FMECityJSONWriter::vertices.end()) {
-       a = FMECityJSONWriter::vertices.size();
-       FMECityJSONWriter::vertices[coords] = a;
-     }
-     else
-       a = it->second;
-
-     face_.push_back(a);
+      // push vertex to the vertex list vertices_
+      // auto it = FMECityJSONWriter::vertices_.find(coords);
+      // if (it == FMECityJSONWriter::vertices.end()) {
+      //    a = FMECityJSONWriter::vertices.size();
+      //    FMECityJSONWriter::vertices[coords] = a;
+      // }
+      // else {
+      //    a = it->second;
+      // }
+      // face_.push_back(a);
    }
    return FME_SUCCESS;
 }
@@ -927,9 +950,9 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
       }
    }
 
-   FMECityJSONWriter::geometryJSON = json::object();
-   FMECityJSONWriter::geometryJSON["type"] = "MultiSurface";
-   FMECityJSONWriter::geometryJSON["boundaries"] = multisurface_;
+   onegeom_ = json::object();
+   onegeom_["type"] = "MultiSurface";
+   onegeom_["boundaries"] = multisurface_;
 
    // Done with the iterator
    multiSurface.destroyIterator(iterator);

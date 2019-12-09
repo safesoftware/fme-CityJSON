@@ -125,14 +125,14 @@ public:
    // object is created.
    static IFMECoordSysManager* gCoordSysMan;
 
-   unsigned long add_cityjson_vertex(double x, double y, double z);
+   // unsigned long add_cityjson_vertex(double x, double y, double z);
 
    // -----------------------------------------------------------------------
    // Insert additional public data members here
    // -----------------------------------------------------------------------
 
-   static json::value_type geometryJSON;
-   static std::map<const FMECoord3D, unsigned long> vertices;
+   // static json::value_type geometryJSON;
+   // static std::map<const FMECoord3D, unsigned long> vertices;
 
 private:
 
