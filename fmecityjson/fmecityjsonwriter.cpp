@@ -281,9 +281,13 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       gFMESession->destroyStringArray(parentValues);
    }
 
+//-- GEOMETRIES -----
 
+   //-- update the offset (for writing vertices in the global list of CityJSON)
+   //-- in the visitor.
    (visitor_)->setVerticesOffset(vertices_.size());
-   // Extract the geometry from the feature
+
+   //-- extract the geometries from the feature
    const IFMEGeometry* geometry = (const_cast<IFMEFeature&>(feature)).getGeometry();
    FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
    if (badNews) {
@@ -307,14 +311,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    //-- reset the internal DS for one feature
    (visitor_)->reset();
 
-
-   //TODO: handle lod trait
-   // IFMEStringArray *names = gFMESession->createStringArray();
-   // geometry->getTraitNames(*names);
-   // for (int i = 0; i < names->entries(); i++) {
-   //   gLogFile->logMessageString("LoD", FME_WARN);
-   //   gLogFile->logMessageString(names->elementAt(i)->data(), FME_WARN);
-   // }
 
    //TODO: Check if geometry exists, if not skip writing bounds
    // write gepgraphical extent
