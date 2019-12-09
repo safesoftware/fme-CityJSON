@@ -197,9 +197,11 @@ public:
 
    json getGeomJSON();
 
-   json getGeomVertices();
+   std::vector< std::vector< double > > getGeomVertices();
 
    void reset();
+
+   void setVerticesOffset(long unsigned offset);
 
 private:
 
@@ -237,10 +239,8 @@ private:
    IFMESession* fmeSession_;
 
    
-
-
-
    //---------- private data members
+   long unsigned offset_;
    std::vector< std::vector< double > > vertices_;
    json onegeom_;
    std::vector<unsigned long> face_;

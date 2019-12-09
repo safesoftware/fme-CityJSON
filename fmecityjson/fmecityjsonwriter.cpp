@@ -279,10 +279,10 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
          outputJSON_["CityObjects"][s1->data()]["parents"].push_back(parentValues->elementAt(i)->data());
       }
       gFMESession->destroyStringArray(parentValues);
+   }
 
-    }
 
-
+   (visitor_)->setVerticesOffset(vertices_.size());
    // Extract the geometry from the feature
    const IFMEGeometry* geometry = (const_cast<IFMEFeature&>(feature)).getGeometry();
    FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
@@ -292,14 +292,21 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
      return FME_FAILURE;
    }
 
+   gLogFile->logMessageString("==> 1", FME_WARN);
    json fgeomjson = (visitor_)->getGeomJSON();
-   json fvertices = (visitor_)->getGeomVertices();
-   // json::value_type fgeomjson = visitor->getGeomJSON();
-
    outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
    if (!fgeomjson.empty()) {
       outputJSON_["CityObjects"][s1->data()]["geometry"].push_back(fgeomjson);
    }
+   gLogFile->logMessageString("==> 2", FME_WARN);
+
+   std::vector<std::vector<double>> vtmp = (visitor_)->getGeomVertices();
+   vertices_.insert(vertices_.end(), vtmp.begin(), vtmp.end());
+   gLogFile->logMessageString("==> 3", FME_WARN);
+
+   //-- reset the internal DS for one feature
+   (visitor_)->reset();
+
 
    //TODO: handle lod trait
    // IFMEStringArray *names = gFMESession->createStringArray();

@@ -90,7 +90,9 @@ FMECityJSONGeometryVisitor::FMECityJSONGeometryVisitor(const IFMEGeometryTools* 
 :
    fmeGeometryTools_(geomTools),
    fmeSession_(session)
-{}
+{
+   offset_ = 0;
+}
 
 //===========================================================================
 // Destructor.
@@ -107,7 +109,7 @@ json FMECityJSONGeometryVisitor::getGeomJSON()
    return onegeom_;
 }
 
-json FMECityJSONGeometryVisitor::getGeomVertices()
+std::vector< std::vector< double > > FMECityJSONGeometryVisitor::getGeomVertices()
 {
    return vertices_;
 }
@@ -116,6 +118,12 @@ void FMECityJSONGeometryVisitor::reset()
 {
    onegeom_.clear();
    vertices_.clear();
+}
+
+
+void FMECityJSONGeometryVisitor::setVerticesOffset(long unsigned offset)
+{
+   offset_ = offset;
 }
 
 
@@ -446,8 +454,6 @@ FME_Status FMECityJSONGeometryVisitor::visitArcB3P(const IFMEArc& arc)
 FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
 {
    //FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("line")).c_str());
-  
-   // push points to face list
    for (int i = 0; i < line.numPoints()-1; i++) {
       FMECoord3D coords;
       line.getPointAt3D(i, coords);
@@ -456,19 +462,8 @@ FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
       v.push_back(coords.y);
       v.push_back(coords.z);
       unsigned long a = vertices_.size();
+      face_.push_back(a + offset_);
       vertices_.push_back(v);
-      face_.push_back(a);
-
-      // push vertex to the vertex list vertices_
-      // auto it = FMECityJSONWriter::vertices_.find(coords);
-      // if (it == FMECityJSONWriter::vertices.end()) {
-      //    a = FMECityJSONWriter::vertices.size();
-      //    FMECityJSONWriter::vertices[coords] = a;
-      // }
-      // else {
-      //    a = it->second;
-      // }
-      // face_.push_back(a);
    }
    return FME_SUCCESS;
 }
