@@ -195,13 +195,24 @@ public:
    // Visitor logs the values of the passed in IFMEFeatureTable geometry object.
    FME_Status visitFeatureTable(const IFMEFeatureTable& featureTable) override;
 
+   //----------------------------------------------------------------------
+   // get the JSON object for the geometry (without the "lod")
    json getGeomJSON();
 
+   //----------------------------------------------------------------------
+   // get the array of vertices for the geometry
    std::vector< std::vector< double > > getGeomVertices();
 
+   //----------------------------------------------------------------------
+   // set an offset for the indices used by the geometry, since in CityJSON
+   // all the indices are global
+   void setVerticesOffset(long unsigned offset);
+
+   //----------------------------------------------------------------------
+   // reset the variables vertices_ and onegeom_ so that a new geometry
+   // can be written
    void reset();
 
-   void setVerticesOffset(long unsigned offset);
 
 private:
 

@@ -137,6 +137,9 @@ FME_Status FMECityJSONGeometryVisitor::visitAggregate(const IFMEAggregate& aggre
    FME_Status badNews;
 
    // Create iterator to get all geometries
+   //-- TODO: ban all aggregate from being written in CityJSON? That would simplify things, the 
+   //-- user is in charge of giving us "valid" CityJSON geometries. 
+   //-- I guess that's the spirit of FME, innit?
    IFMEGeometryIterator* iterator = aggregate.getIterator();
    while (iterator->next())
    {
