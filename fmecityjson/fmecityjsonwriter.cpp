@@ -296,13 +296,25 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
      return FME_FAILURE;
    }
 
-   gLogFile->logMessageString("==> 1", FME_WARN);
+   //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
    json fgeomjson = (visitor_)->getGeomJSON();
+   //-- fetch the LoD of the geometry
+   IFMEString* slod = gFMESession->createString();
+   slod->set("LoD", 3);
+   IFMEString* stmp = gFMESession->createString();
+   if (geometry->getTraitString(*slod, *stmp) == FME_FALSE)
+   {
+      gLogFile->logMessageString(kMsgWriteError);
+      return FME_FAILURE;
+   }
+   //-- TODO: write '2' or '2.0' is fine for the "lod"?
+   fgeomjson["lod"] = atof(stmp->data());
+
+   //-- write it to the JSON object
    outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
    if (!fgeomjson.empty()) {
       outputJSON_["CityObjects"][s1->data()]["geometry"].push_back(fgeomjson);
    }
-   gLogFile->logMessageString("==> 2", FME_WARN);
 
    std::vector<std::vector<double>> vtmp = (visitor_)->getGeomVertices();
    vertices_.insert(vertices_.end(), vtmp.begin(), vtmp.end());
