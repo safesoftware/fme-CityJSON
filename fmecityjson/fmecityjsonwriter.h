@@ -125,6 +125,8 @@ public:
    // object is created.
    static IFMECoordSysManager* gCoordSysMan;
 
+   unsigned long add_cityjson_vertex(double x, double y, double z);
+
    // -----------------------------------------------------------------------
    // Insert additional public data members here
    // -----------------------------------------------------------------------
@@ -192,8 +194,10 @@ private:
 
    std::ofstream outputFile_;
    json outputJSON_;
+   std::vector< std::vector< double > > vertices_;
 
    std::map<std::string, std::set<std::string> > attrToWrite_;
+
 };
 
 #endif

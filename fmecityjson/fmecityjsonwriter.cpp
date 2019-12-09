@@ -298,14 +298,16 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    }
 
    //TODO: handle lod trait
-   IFMEStringArray *names = gFMESession->createStringArray();
-   geometry->getTraitNames(*names);
-   for (int i = 0; i < names->entries(); i++) {
-     //gLogFile->logMessageString(names->elementAt(i)->data(), FME_WARN);
-   }
+   // IFMEStringArray *names = gFMESession->createStringArray();
+   // geometry->getTraitNames(*names);
+   // for (int i = 0; i < names->entries(); i++) {
+   //   gLogFile->logMessageString("LoD", FME_WARN);
+   //   gLogFile->logMessageString(names->elementAt(i)->data(), FME_WARN);
+   // }
 
    //TODO: Check if geometry exists, if not skip writing bounds
    // write gepgraphical extent
+   // TODO: I wouldn't write the bbox of each object, remove this
    if (!outputJSON_["CityObjects"][s1->data()]["geometry"].empty()) {
      FME_Real64 minx, miny, minz, maxx, maxy, maxz;
      feature.boundingCube(minx, maxx, miny, maxy, minz, maxz);
@@ -439,4 +441,12 @@ void FMECityJSONWriter::logFMEStringArray(IFMEStringArray& stringArray)
       sample.append("\' ");
    }
    gLogFile->logMessageString(sample.c_str(), FME_INFORM);
+}
+
+//===========================================================================
+// add CityJSON vertex
+// returns its index in the global array
+unsigned long add_cityjson_vertex(double x, double y, double z)
+{
+   
 }
