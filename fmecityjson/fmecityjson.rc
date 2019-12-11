@@ -37,10 +37,10 @@ BEGIN
             VALUE "FileDescription", FME_COMPONENT " " FME_EXTENSION "\0"
             VALUE "FileVersion", "1.0.0.0\0"
             VALUE "InternalName", FME_COMPONENT "\0"
-            VALUE "LegalCopyright", "Copyright (c) 1994 - 2018, Safe Software Inc. \0"
+            VALUE "LegalCopyright", "Copyright (c) 1994 - 2019, Safe Software Inc. \0"
             VALUE "LegalTrademarks", "\0"
             VALUE "OriginalFilename", FME_ORIGINAL_FILENAME "\0"
-            VALUE "ProductName", "FME(R) 2018\0"
+            VALUE "ProductName", "FME(R) 2020\0"
             VALUE "ProductVersion",  "\0"
         END
     END
