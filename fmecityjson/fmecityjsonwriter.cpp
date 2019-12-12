@@ -91,6 +91,7 @@ FMECityJSONWriter::~FMECityJSONWriter()
 FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArray& parameters)
 {
    gLogFile->logMessageString("$$$$ open()", FME_WARN );
+   gLogFile->logMessageString("Thank you for using CityJSON, the better encoding for the CityGML data model.");
 
    // Perform setup steps before opening file for writing
 
@@ -233,7 +234,6 @@ FME_Status FMECityJSONWriter::close()
 // Write
 FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 {
-   gLogFile->logMessageString("$$$$ write()", FME_WARN );
    // Log the feature
    // gLogFile->logFeature(feature);
 
@@ -247,49 +247,52 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    // -----------------------------------------------------------------------
    // write fid for CityObject
    IFMEString* s1 = gFMESession->createString();
-   if (feature.getAttribute("fid", *s1) == FME_TRUE) 
+   if (feature.getAttribute("fid", *s1) == FME_FALSE) 
    {
-      gLogFile->logMessageString(*s1, FME_WARN);
-      outputJSON_["CityObjects"][s1->data()] = json::object();
-
-      std::string ft(feature.getFeatureType());
-      outputJSON_["CityObjects"][s1->data()]["type"] = ft;
-
-      IFMEStringArray* allatt = gFMESession->createStringArray();
-      outputJSON_["CityObjects"][s1->data()]["attributes"] = json::object();
-      feature.getAllAttributeNames(*allatt);
-      for (FME_UInt32 i = 0; i < allatt->entries(); i++)
-      {
-         const char* t = allatt->elementAt(i)->data();
-         std::string ts(t);
-         if (attrToWrite_[ft].count(ts) != 0)
-         {
-            IFMEString* tmps = gFMESession->createString();
-            feature.getAttribute(t, *tmps);
-            outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmps->data();
-         }
-      }
-      
-      //-- cityjson_children
-      IFMEStringArray* childrenValues = gFMESession->createStringArray();
-      feature.getListAttribute("cityjson_children", *childrenValues);
-      if (childrenValues->entries() > 0)
-      outputJSON_["CityObjects"][s1->data()]["children"] = json::array();   
-      for (FME_UInt32 i = 0; i < childrenValues->entries(); i++) {
-         outputJSON_["CityObjects"][s1->data()]["children"].push_back(childrenValues->elementAt(i)->data());
-      }
-      gFMESession->destroyStringArray(childrenValues);
-
-      //-- cityjson_parents
-      IFMEStringArray* parentValues = gFMESession->createStringArray();
-      feature.getListAttribute("cityjson_parents", *parentValues);
-      if (parentValues->entries() > 0)
-      outputJSON_["CityObjects"][s1->data()]["parents"] = json::array();   
-      for (FME_UInt32 i = 0; i < parentValues->entries(); i++) {
-         outputJSON_["CityObjects"][s1->data()]["parents"].push_back(parentValues->elementAt(i)->data());
-      }
-      gFMESession->destroyStringArray(parentValues);
+      gLogFile->logMessageString("CityJSON features must have an attribute named 'fid' to uniquely identify them.", FME_WARN );
+      return FME_FAILURE;
    }
+
+   gLogFile->logMessageString(*s1, FME_WARN);
+   outputJSON_["CityObjects"][s1->data()] = json::object();
+
+   std::string ft(feature.getFeatureType());
+   outputJSON_["CityObjects"][s1->data()]["type"] = ft;
+
+   IFMEStringArray* allatt = gFMESession->createStringArray();
+   outputJSON_["CityObjects"][s1->data()]["attributes"] = json::object();
+   feature.getAllAttributeNames(*allatt);
+   for (FME_UInt32 i = 0; i < allatt->entries(); i++)
+   {
+      const char* t = allatt->elementAt(i)->data();
+      std::string ts(t);
+      if (attrToWrite_[ft].count(ts) != 0)
+      {
+         IFMEString* tmps = gFMESession->createString();
+         feature.getAttribute(t, *tmps);
+         outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmps->data();
+      }
+   }
+   
+   //-- cityjson_children
+   IFMEStringArray* childrenValues = gFMESession->createStringArray();
+   feature.getListAttribute("cityjson_children", *childrenValues);
+   if (childrenValues->entries() > 0)
+   outputJSON_["CityObjects"][s1->data()]["children"] = json::array();   
+   for (FME_UInt32 i = 0; i < childrenValues->entries(); i++) {
+      outputJSON_["CityObjects"][s1->data()]["children"].push_back(childrenValues->elementAt(i)->data());
+   }
+   gFMESession->destroyStringArray(childrenValues);
+
+   //-- cityjson_parents
+   IFMEStringArray* parentValues = gFMESession->createStringArray();
+   feature.getListAttribute("cityjson_parents", *parentValues);
+   if (parentValues->entries() > 0)
+   outputJSON_["CityObjects"][s1->data()]["parents"] = json::array();   
+   for (FME_UInt32 i = 0; i < parentValues->entries(); i++) {
+      outputJSON_["CityObjects"][s1->data()]["parents"].push_back(parentValues->elementAt(i)->data());
+   }
+   gFMESession->destroyStringArray(parentValues);
 
 //-- GEOMETRIES -----
 
@@ -325,22 +328,26 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
    if (badNews) {
-     // There was an error in writing the geometry
-     gLogFile->logMessageString(kMsgWriteError);
-     return FME_FAILURE;
+      // There was an error in writing the geometry
+      gLogFile->logMessageString(kMsgWriteError);
+      return FME_FAILURE;
    }
 
-   //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
-   json fgeomjson = (visitor_)->getGeomJSON();
    //-- fetch the LoD of the geometry
    IFMEString* slod = gFMESession->createString();
    slod->set("LoD", 3);
    IFMEString* stmp = gFMESession->createString();
    if (geometry->getTraitString(*slod, *stmp) == FME_FALSE)
    {
-      gLogFile->logMessageString(kMsgWriteError);
+      std::stringstream ss;
+      ss << "The '" << feature.getFeatureType() << "' feature will not be written because the geometry does not have a 'LoD' trait.";
+      gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
+      // The 'Building' feature with geometry type 'IFMEBRepSolid' will not be written because the geometry does not have a citygml_lod_name.
       return FME_FAILURE;
    }
+
+   //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
+   json fgeomjson = (visitor_)->getGeomJSON();
    //-- TODO: write '2' or '2.0' is fine for the "lod"?
    fgeomjson["lod"] = atof(stmp->data());
 
