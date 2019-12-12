@@ -98,4 +98,4 @@ schemas and so on.)
 4. Start debugger against `/opt/fme-desktop-2019/bin/fme` (not the shell script in the install root)
 
 ## Licenses
-* [JSON parser](https://github.com/nlohmann/json/blob/master/LICENSE)
+* [JSON parser](https://github.com/nlohmann/json/blob/master/LICENSE.MIT)
