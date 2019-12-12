@@ -795,30 +795,33 @@ FME_Status FMECityJSONGeometryVisitor::visitBox(const IFMEBox& box)
 //
 FME_Status FMECityJSONGeometryVisitor::visitExtrusion(const IFMEExtrusion& extrusion)
 {
+
+   FMECityJSONWriter::gLogFile->logMessageString("IFMEExtrusion geometry is not allowed, use a GeometryCoercer.", FME_WARN);
    return FME_FAILURE;
-   FME_Status badNews;
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("extrusion")).c_str());
+   // FME_Status badNews;
 
-   // Get the base of the extrusion
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("face")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("extrusion")).c_str());
 
-   const IFMEFace* extrusionBase = extrusion.getBaseAsFace();
-   if (extrusionBase == nullptr)
-   {
-      // A base is needed
-      return FME_FAILURE;
-   }
-   // re-visit the base
-   badNews = extrusionBase->acceptGeometryVisitorConst(*this);
-   if (badNews)
-   {
-      return FME_FAILURE;
-   }
+   // // Get the base of the extrusion
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("face")).c_str());
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("extrusion")).c_str());
+   // const IFMEFace* extrusionBase = extrusion.getBaseAsFace();
+   // if (extrusionBase == nullptr)
+   // {
+   //    // A base is needed
+   //    return FME_FAILURE;
+   // }
+   // // re-visit the base
+   // badNews = extrusionBase->acceptGeometryVisitorConst(*this);
+   // if (badNews)
+   // {
+   //    return FME_FAILURE;
+   // }
 
-   return FME_SUCCESS;
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("extrusion")).c_str());
+
+   // return FME_SUCCESS;
 }
 
 //=====================================================================
@@ -845,7 +848,7 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
       return FME_FAILURE;
    }
    tmpSolid_.push_back(tmpMultiFace_);
-   tmpMultiFace_.clear();
+   // tmpMultiFace_.clear();
 
 
    // Create iterator to loop though all the inner surfaces
@@ -864,7 +867,7 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
          return FME_FAILURE;
       }
       tmpSolid_.push_back(tmpMultiFace_);
-      tmpMultiFace_.clear();
+      // tmpMultiFace_.clear();
 
    }
 
@@ -874,10 +877,6 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
 
    // Done with the iterator
    brepSolid.destroyIterator(iterator);
-   // tmpRing_.clear();
-   // tmpFace_.clear();
-   // tmpMultiFace_.clear();
-   // tmpSolid_.clear();
 
    FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("boundary representation solid")).c_str());
 
@@ -906,14 +905,10 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
       {
          // Destroy iterator before leaving
          compositeSurface.destroyIterator(iterator);
-         tmpRing_.clear();
-         tmpFace_.clear();
-         tmpMultiFace_.clear();
          return FME_FAILURE;
       }
       if (tmpFace_.size() > 0) {
         tmpMultiFace_.push_back(tmpFace_);
-        tmpFace_.clear();
       }
    }
 
@@ -923,9 +918,6 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
 
    // Done with the iterator
    compositeSurface.destroyIterator(iterator);
-   // tmpRing_.clear();
-   // tmpFace_.clear();
-   // tmpMultiFace_.clear();
 
    return FME_SUCCESS;
 }
@@ -962,14 +954,10 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
       {
          // Destroy iterator before leaving
          multiSurface.destroyIterator(iterator);
-         tmpRing_.clear();
-         tmpFace_.clear();
-         tmpMultiFace_.clear();
          return FME_FAILURE;
       }
       if (tmpFace_.size() > 0) {
         tmpMultiFace_.push_back(tmpFace_);
-        tmpFace_.clear();
       }
    }
 
@@ -979,9 +967,6 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
 
    // Done with the iterator
    multiSurface.destroyIterator(iterator);
-   // tmpRing_.clear();
-   // tmpFace_.clear();
-   // tmpMultiFace_.clear();
 
    //FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("multi surface")).c_str());
 
@@ -992,8 +977,9 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
 //
 FME_Status FMECityJSONGeometryVisitor::visitMultiSolid(const IFMEMultiSolid& multiSolid)
 {
-   FME_Status badNews;
+   tmpMultiSolid_.clear();
 
+   FME_Status badNews;
    FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("multi solid")).c_str());
 
    // Create an iterator to loop through all the solids this multi solid contains
@@ -1003,7 +989,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSolid(const IFMEMultiSolid& mul
       // Get the next solid.
       const IFMESolid* solid = iterator->getPart();
 
-      FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("solid")).c_str());
+      // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("solid")).c_str());
 
       // re-visit the solid geometry
       badNews = solid->acceptGeometryVisitorConst(*this);
@@ -1013,12 +999,19 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSolid(const IFMEMultiSolid& mul
          multiSolid.destroyIterator(iterator);
          return FME_FAILURE;
       }
+      if (tmpSolid_.size() > 0) {
+        tmpMultiSolid_.push_back(tmpSolid_);
+      }
    }
+
+   outputgeom_ = json::object();
+   outputgeom_["type"] = "MultiSolid";
+   outputgeom_["boundaries"] = tmpMultiSolid_;
 
    // Done with the iterator
    multiSolid.destroyIterator(iterator);
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("multi solid")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("multi solid")).c_str());
 
    return FME_SUCCESS;
 }
@@ -1027,33 +1020,41 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSolid(const IFMEMultiSolid& mul
 //
 FME_Status FMECityJSONGeometryVisitor::visitCompositeSolid(const IFMECompositeSolid& compositeSolid)
 {
+   tmpMultiSolid_.clear();
+
    FME_Status badNews;
+   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("CompositeSolid")).c_str());
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("composite solid")).c_str());
-
-   // Create an iterator to loop through all the simple solids this composite solid contains
+   // Create an iterator to loop through all the solids this multi solid contains
    IFMESimpleSolidIterator* iterator = compositeSolid.getIterator();
    while (iterator->next())
    {
-      // Get next simple solid
-      const IFMESimpleSolid* simpleSolid = iterator->getPart();
+      // Get the next solid.
+      const IFMESimpleSolid* solid = iterator->getPart();
 
-      FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("simple solid")).c_str());
+      // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("solid")).c_str());
 
-      // re-visit the simple solid geometry
-      badNews = simpleSolid->acceptGeometryVisitorConst(*this);
+      // re-visit the solid geometry
+      badNews = solid->acceptGeometryVisitorConst(*this);
       if (badNews)
       {
          // Destroy iterator before leaving
          compositeSolid.destroyIterator(iterator);
          return FME_FAILURE;
       }
+      if (tmpSolid_.size() > 0) {
+        tmpMultiSolid_.push_back(tmpSolid_);
+      }
    }
+
+   outputgeom_ = json::object();
+   outputgeom_["type"] = "CompositeSolid";
+   outputgeom_["boundaries"] = tmpMultiSolid_;
 
    // Done with the iterator
    compositeSolid.destroyIterator(iterator);
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("composite solid")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("multi solid")).c_str());
 
    return FME_SUCCESS;
 }
