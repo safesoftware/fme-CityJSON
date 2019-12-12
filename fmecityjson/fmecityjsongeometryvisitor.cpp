@@ -106,7 +106,7 @@ FMECityJSONGeometryVisitor::~FMECityJSONGeometryVisitor()
 
 json FMECityJSONGeometryVisitor::getGeomJSON()
 {
-   return onegeom_;
+   return outputgeom_;
 }
 
 std::vector< std::vector< double > > FMECityJSONGeometryVisitor::getGeomVertices()
@@ -116,7 +116,7 @@ std::vector< std::vector< double > > FMECityJSONGeometryVisitor::getGeomVertices
 
 void FMECityJSONGeometryVisitor::reset()
 {
-   onegeom_.clear();
+   outputgeom_.clear();
    vertices_.clear();
 }
 
@@ -465,7 +465,7 @@ FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
       v.push_back(coords.y);
       v.push_back(coords.z);
       unsigned long a = vertices_.size();
-      face_.push_back(a + offset_);
+      tmpRing_.push_back(a + offset_);
       vertices_.push_back(v);
    }
    return FME_SUCCESS;
@@ -610,8 +610,8 @@ FME_Status FMECityJSONGeometryVisitor::visitDonut(const IFMEDonut& donut)
    {
       return FME_FAILURE;
    }
-   surface_.push_back(face_);
-   face_.clear();
+   tmpFace_.push_back(tmpRing_);
+   tmpRing_.clear();
 
    // Get the inner boundary
    //FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("inner boundary")).c_str());
@@ -626,8 +626,8 @@ FME_Status FMECityJSONGeometryVisitor::visitDonut(const IFMEDonut& donut)
          donut.destroyIterator(iterator);
          return FME_FAILURE;
       }
-      surface_.push_back(face_);
-      face_.clear();
+      tmpFace_.push_back(tmpRing_);
+      tmpRing_.clear();
 
    }
    // Done with iterator, destroy it
@@ -752,12 +752,12 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
    badNews = area->acceptGeometryVisitorConst(*this);
    if (badNews)
    {
-      surface_.clear();
+      tmpFace_.clear();
       return FME_FAILURE;
    }
-   if (face_.size() > 0) {
-     surface_.push_back(face_);
-     face_.clear();
+   if (tmpRing_.size() > 0) {
+     tmpFace_.push_back(tmpRing_);
+     tmpRing_.clear();
    }
 
    return FME_SUCCESS;
@@ -794,6 +794,7 @@ FME_Status FMECityJSONGeometryVisitor::visitBox(const IFMEBox& box)
 //
 FME_Status FMECityJSONGeometryVisitor::visitExtrusion(const IFMEExtrusion& extrusion)
 {
+   return FME_FAILURE;
    FME_Status badNews;
 
    FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("extrusion")).c_str());
@@ -825,11 +826,10 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
 {
    FME_Status badNews;
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("boundary representation solid")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("boundary representation solid")).c_str());
 
    // Get the outer surface
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("outer surface")).c_str());
-
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("outer surface")).c_str());
    const IFMESurface* outerSurface = brepSolid.getOuterSurface();
    if (outerSurface == nullptr)
    {
@@ -842,6 +842,9 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
    {
       return FME_FAILURE;
    }
+   tmpSolid_.push_back(tmpMultiFace_);
+   tmpMultiFace_.clear();
+
 
    // Create iterator to loop though all the inner surfaces
    IFMESurfaceIterator* iterator = brepSolid.getIterator();
@@ -860,10 +863,20 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
          brepSolid.destroyIterator(iterator);
          return FME_FAILURE;
       }
+      tmpSolid_.push_back(tmpMultiFace_);
+      tmpMultiFace_.clear();
+
    }
+
+   outputgeom_ = json::object();
+   outputgeom_["type"] = "Solid";
+   outputgeom_["boundaries"] = tmpSolid_;
 
    // Done with the iterator
    brepSolid.destroyIterator(iterator);
+   tmpRing_.clear();
+   tmpFace_.clear();
+   tmpMultiFace_.clear();
 
    FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("boundary representation solid")).c_str());
 
@@ -876,31 +889,41 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
 {
    FME_Status badNews;
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("composite surface")).c_str());
-
-   // Create an iterator to loop through all the surfaces this composite contains
+   // Create an iterator to loop through all the surfaces this multi surface contains
    IFMESurfaceIterator* iterator = compositeSurface.getIterator();
    while (iterator->next())
    {
       // Get the next surface
       const IFMESurface* surface = iterator->getPart();
 
-      FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("surface")).c_str());
+      //FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("surface")).c_str());
 
       // re-visit the surface geometry
       badNews = surface->acceptGeometryVisitorConst(*this);
       if (badNews)
       {
-         // Destroy the iterator before leaving
+         // Destroy iterator before leaving
          compositeSurface.destroyIterator(iterator);
+         tmpRing_.clear();
+         tmpFace_.clear();
+         tmpMultiFace_.clear();
          return FME_FAILURE;
+      }
+      if (tmpFace_.size() > 0) {
+        tmpMultiFace_.push_back(tmpFace_);
+        tmpFace_.clear();
       }
    }
 
+   outputgeom_ = json::object();
+   outputgeom_["type"] = "CompositeSurface";
+   outputgeom_["boundaries"] = tmpMultiFace_;
+
    // Done with the iterator
    compositeSurface.destroyIterator(iterator);
-
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("composite surface")).c_str());
+   tmpRing_.clear();
+   tmpFace_.clear();
+   tmpMultiFace_.clear();
 
    return FME_SUCCESS;
 }
@@ -909,9 +932,9 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
 //
 FME_Status FMECityJSONGeometryVisitor::visitRectangleFace(const IFMERectangleFace& rectangle)
 {
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("rectangle face")).c_str());
-
-   return FME_SUCCESS;
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("rectangle face")).c_str());
+   FMECityJSONWriter::gLogFile->logMessageString((std::string("rectangle face not supported")).c_str());
+   return FME_FAILURE;
 }
 
 //=====================================================================
@@ -937,26 +960,26 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
       {
          // Destroy iterator before leaving
          multiSurface.destroyIterator(iterator);
-         face_.clear();
-         surface_.clear();
-         multisurface_.clear();
+         tmpRing_.clear();
+         tmpFace_.clear();
+         tmpMultiFace_.clear();
          return FME_FAILURE;
       }
-      if (surface_.size() > 0) {
-        multisurface_.push_back(surface_);
-        surface_.clear();
+      if (tmpFace_.size() > 0) {
+        tmpMultiFace_.push_back(tmpFace_);
+        tmpFace_.clear();
       }
    }
 
-   onegeom_ = json::object();
-   onegeom_["type"] = "MultiSurface";
-   onegeom_["boundaries"] = multisurface_;
+   outputgeom_ = json::object();
+   outputgeom_["type"] = "MultiSurface";
+   outputgeom_["boundaries"] = tmpMultiFace_;
 
    // Done with the iterator
    multiSurface.destroyIterator(iterator);
-   face_.clear();
-   surface_.clear();
-   multisurface_.clear();
+   tmpRing_.clear();
+   tmpFace_.clear();
+   tmpMultiFace_.clear();
 
    //FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("multi surface")).c_str());
 

@@ -209,6 +209,9 @@ public:
    void setVerticesOffset(long unsigned offset);
 
    //----------------------------------------------------------------------
+   void setOutputGeometryType(int level);
+
+   //----------------------------------------------------------------------
    // reset the variables vertices_ and onegeom_ so that a new geometry
    // can be written
    void reset();
@@ -249,15 +252,19 @@ private:
    // which performs the services on the FME Objects.
    IFMESession* fmeSession_;
 
-   
    //---------- private data members
-   long unsigned offset_;
-   std::vector< std::vector< double > > vertices_;
-   json onegeom_;
-   std::vector<unsigned long> face_;
-   std::vector<std::vector<unsigned long>> surface_;
-   std::vector<std::vector<std::vector<unsigned long>>> multisurface_;
 
+   long unsigned offset_;
+
+   std::vector< std::vector< double > > vertices_;
+   
+   json outputgeom_;
+   
+   std::vector<unsigned long> tmpRing_;                                                            //-- level 1
+   std::vector<std::vector<unsigned long>> tmpFace_;                                               //-- level 2
+   std::vector<std::vector<std::vector<unsigned long>>> tmpMultiFace_;                             //-- level 3
+   std::vector<std::vector<std::vector<std::vector<unsigned long>>>> tmpSolid_;                    //-- level 4
+   std::vector<std::vector<std::vector<std::vector<std::vector<unsigned long>>>>> tmpMultiSolid_;  //-- level 5
 
 };
 
