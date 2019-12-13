@@ -71,7 +71,9 @@ FMECityJSONReader::FMECityJSONReader(const char* readerTypeName, const char* rea
    dataset_(""),
    coordSys_(""),
    fmeGeometryTools_(nullptr),
-   schemaScanDone_(false)
+   schemaScanDone_(false),
+   textureCoordUName_(nullptr),
+   textureCoordVName_(nullptr)
 {
 }
 
