@@ -56,7 +56,7 @@
 #include <imultisolid.h>
 #include <icompositesolid.h>
 
-#include "json.hpp"
+#include <nlohmann/json.hpp>
 // for convenience
 using json = nlohmann::json;
 
