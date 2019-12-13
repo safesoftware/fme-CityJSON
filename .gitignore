@@ -12,3 +12,5 @@ fmecityjson/test.cpp
 includes
 .directory
 build/
+fmecityjson/*.user
+

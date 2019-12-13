@@ -23,13 +23,13 @@ We are working toward full CityJSON support. We have tested the reader on the fi
 
 ### Reader
 
-+ SemanticSurface hierarchies (children, parent) are not supported
++ SemanticSurface hierarchies (children, parent) are not supported yet
 
-+ MultiGeometries are not supported
++ MultiGeometries are not supported yet
 
-+ Appearances (textures, materials) are not supported
++ Appearances (textures, materials) are not supported yet
 
-+ Extenstions are not supported
++ Extenstions are not supported yet
 
 \**not supported* means in this case that the property is ignored when reading the file, but doesn't break the process
 
@@ -70,7 +70,8 @@ from the menu. In the Error List pane, check that there
 are 0 errors.
 
 ## Installation Instructions
-There are several steps necessary to extend FME to include this CityJSON Format support.
+The latest beta versions of FME now already ship with this included.
+If you wish to update FME yourself, there are several steps necessary to extend FME to include this CityJSON Format support.
 
 * The Plugin:
 **Build the CityJSON plugin, using the instructions above.  This will produce a file `fmecityjson.so` file on Linux and macOS (a `.dylib` will be created under macOS, but the CMake will rename it to a `.so` otherwise FME won't work), or a `fmecityjson.dll` file on Windows.  Copy this file into the `plugins` subdirectory where FME is installed.
