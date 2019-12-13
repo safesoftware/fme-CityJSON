@@ -35,9 +35,6 @@ We are working toward full CityJSON support. We have tested the reader on the fi
 \**not supported* means in this case that the property is ignored when reading the file, but doesn't break the process
 
 ## How to build
-* Requires this [JSON parser](https://github.com/nlohmann/json)
-
-For CMake place the `json.hpp` file to `./includes/nlohmann/json.hpp` so it can find it.
 
 ### Linux and macOS
 
@@ -57,6 +54,8 @@ make && make install
 ```
 The option `-DFME_DEV_HOME` is required for both linking the FME libraries and installing the plugin. See the *Installation Instructions* below for the details, and the `CMakeLists.txt`.
 
+Under macOS, the .app are usually installed under `/Applications/` but you need to specify the folder where everything is installed, by default `/Library/FME/2019.1/` it seems (or later version).
+
 ### Windows
 Set an environment variable FME_DEV_HOME to be the path to the directory where FME is installed.  For example, C:\Program Files\FME
 In Visual Studio (2017 or later), open `fmecityjson.sln`.
@@ -75,7 +74,7 @@ are 0 errors.
 There are several steps necessary to extend FME to include this CityJSON Format support.
 
 * The Plugin:
-**Build the CityJSON plugin, using the instructions above.  This will produce a file `fmecityjson.so` file on Linux and macOS, or a `fmecityjson.dll` file on Windows.  Copy this file into the `plugins` subdirectory where FME is installed.
+**Build the CityJSON plugin, using the instructions above.  This will produce a file `fmecityjson.so` file on Linux and macOS (a `.dylib` will be created under macOS, but the CMake will rename it to a `.so` otherwise FME won't work), or a `fmecityjson.dll` file on Windows.  Copy this file into the `plugins` subdirectory where FME is installed.
 * The Format Information File :
 ** Copy the file `cityjson.db` into the `formatsinfo` subdirectory where FME is installed.
 (This file will supply the Reader and
@@ -96,6 +95,3 @@ schemas and so on.)
 2. From within fmecityjson, run `scons`
 3. `export LD_LIBRARY_PATH=/opt/fme-desktop-2019/fmecore`
 4. Start debugger against `/opt/fme-desktop-2019/bin/fme` (not the shell script in the install root)
-
-## Licenses
-* [JSON parser](https://github.com/nlohmann/json/blob/master/LICENSE.MIT)
