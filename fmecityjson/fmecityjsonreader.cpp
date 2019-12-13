@@ -471,7 +471,7 @@ IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &curre
 
     if (currentGeometry.is_object()) {
         std::string geometryType, geometryLodValue;
-        std::string geometryLodName = "cityjson_LoD"; // geometry Trait name
+        std::string geometryLodName = "cityjson_lod"; // geometry Trait name
         json::value_type boundaries = currentGeometry.at("boundaries");
         json::value_type semantics = currentGeometry["semantics"];
 

@@ -354,7 +354,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    //-- fetch the LoD of the geometry
    IFMEString* slod = gFMESession->createString();
-   slod->set("cityjson_LoD", 12);
+   slod->set("cityjson_lod", 12);
    IFMEString* stmp = gFMESession->createString();
    if (geometry->getTraitString(*slod, *stmp) == FME_FALSE)
    {
