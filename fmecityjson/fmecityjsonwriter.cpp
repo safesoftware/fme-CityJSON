@@ -65,6 +65,31 @@ IFMEMappingFile* FMECityJSONWriter::gMappingFile = nullptr;
 IFMECoordSysManager* FMECityJSONWriter::gCoordSysMan = nullptr;
 extern IFMESession* gFMESession;
 
+const std::vector<std::string> FMECityJSONWriter::cityjsonTypes_ = std::vector<std::string>(
+   {
+      "Building", 
+      "BuildingPart",
+      "BuildingInstallation",
+      "Bridge",
+      "BridgePart",
+      "BridgeInstallation",
+      "CityObjectGroup",
+      "CityFurniture",
+      "GenericCityObject",
+      "LandUse",
+      "PlantCover",
+      "Railway",
+      "Road",
+      "SolitaryVegetationObject",
+      "TINRelief",
+      "TransportationSquare",
+      "Tunnel",
+      "TunnelPart",
+      "TunnelInstallation",
+      "WaterBody"
+   }
+);
+
 //===========================================================================
 // Constructor
 FMECityJSONWriter::FMECityJSONWriter(const char* writerTypeName, const char* writerKeyword)
@@ -149,7 +174,7 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    }
    outputJSON_["type"] = "CityJSON";
    outputJSON_["version"] = "1.0";
-   outputJSON_["metadata"] = "is awesome";
+   // outputJSON_["metadata"] = "is awesome";
    outputJSON_["CityObjects"] = json::object();
    outputJSON_["vertices"] = json::array();
    // -----------------------------------------------------------------------
@@ -223,18 +248,34 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    // -----------------------------------------------------------------------
    // Perform your write operations here
    // -----------------------------------------------------------------------
-   // write fid for CityObject
+   
+   //-- check if the type is one of the allowed CityJSON type,
+   //-- or an Extension (eg '+Shed')
+   //-- FAILURE if not one of these
+   std::string ft(feature.getFeatureType());
+   auto it = std::find(cityjsonTypes_.begin(), cityjsonTypes_.end(), ft); 
+   if (it == cityjsonTypes_.end()) 
+   {
+      if (ft[0] != '+')
+      {
+         gLogFile->logMessageString("CityJSON feature is not one of the CityJSON types (https://www.cityjson.org/specs/#cityjson-object) or an Extension ('+').", FME_WARN );
+         return FME_FAILURE;
+      }
+   }
+
+   //-- write fid for CityObject
+   //-- FAILURE if not one of these
    IFMEString* s1 = gFMESession->createString();
    if (feature.getAttribute("fid", *s1) == FME_FALSE) 
    {
       gLogFile->logMessageString("CityJSON features must have an attribute named 'fid' to uniquely identify them.", FME_WARN );
       return FME_FAILURE;
    }
+   
 
    gLogFile->logMessageString(*s1, FME_WARN);
    outputJSON_["CityObjects"][s1->data()] = json::object();
 
-   std::string ft(feature.getFeatureType());
    outputJSON_["CityObjects"][s1->data()]["type"] = ft;
 
    IFMEStringArray* allatt = gFMESession->createStringArray();
