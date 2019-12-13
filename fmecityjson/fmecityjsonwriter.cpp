@@ -76,7 +76,6 @@ FMECityJSONWriter::FMECityJSONWriter(const char* writerTypeName, const char* wri
    visitor_(nullptr),
    schemaFeatures_(nullptr)
 {
-   // gLogFile->logMessageString("$$$$ constructor", FME_WARN );
 }
 
 //===========================================================================
@@ -90,7 +89,6 @@ FMECityJSONWriter::~FMECityJSONWriter()
 // Open
 FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArray& parameters)
 {
-   gLogFile->logMessageString("$$$$ open()", FME_WARN );
    gLogFile->logMessageString("Thank you for using CityJSON, the better encoding for the CityGML data model.");
 
    // Perform setup steps before opening file for writing
@@ -106,7 +104,6 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    // -----------------------------------------------------------------------
    // Add additional setup here
    // -----------------------------------------------------------------------
-
    
    // Log an opening writer message
    std::string msgOpeningWriter = kMsgOpeningWriter + dataset_;
@@ -120,7 +117,6 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    // Write the schema information to the file. In this template,
    // since we are not writing to a file we will log the schema information
    // instead.
-   gLogFile->logMessageString("=====", FME_WARN );
 
    for (FME_UInt32 i = 0; i < schemaFeatures_->entries(); i++)
    {
@@ -140,8 +136,6 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
       attrToWrite_[st] = sa;
       gLogFile->logFeature(*schemaFeature, FME_INFORM, 20);
    }
-   gLogFile->logMessageString("=====", FME_WARN );
-
 
    // -----------------------------------------------------------------------
    // Open the dataset here
@@ -181,25 +175,9 @@ FME_Status FMECityJSONWriter::abort()
 // Close
 FME_Status FMECityJSONWriter::close()
 {
-   // gLogFile->logMessageString("8888", FME_WARN);
-   // gLogFile->logMessageString(std::to_string(attrToWrite_.size()).c_str(), FME_WARN);
-
-   // for (auto s: attrToWrite_["Building"])
-   // {
-   //    gLogFile->logMessageString(s.c_str(), FME_WARN);      
-   // }
-
-
    // -----------------------------------------------------------------------
    // Perform any closing operations / cleanup here; e.g. close opened files
    // -----------------------------------------------------------------------
-
-   // // write vertex list
-   // std::vector<std::vector<double>> thepts;
-   // thepts.resize(vertices.size());
-   // for (auto& p : vertices)
-   //    thepts[p.second] = { p.first.x, p.first.y, p.first.z };
-   // vertices.clear();
 
    outputJSON_["vertices"] = vertices_;
    // thepts.clear();
