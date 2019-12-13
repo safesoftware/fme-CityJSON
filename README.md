@@ -95,3 +95,6 @@ schemas and so on.)
 2. From within fmecityjson, run `scons`
 3. `export LD_LIBRARY_PATH=/opt/fme-desktop-2019/fmecore`
 4. Start debugger against `/opt/fme-desktop-2019/bin/fme` (not the shell script in the install root)
+
+## Licenses
+* [JSON parser](https://github.com/nlohmann/json/blob/master/LICENSE.MIT)
