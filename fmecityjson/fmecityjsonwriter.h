@@ -36,8 +36,18 @@
 =============================================================================*/
 
 #include <fmewrt.h>
+#include <fmetypes.h>
+#include <ibrepsolid.h>
+#include <fstream>
 #include <sstream>
 #include <string>
+#include <igeometry.h>
+#include <map>
+#include <set>
+
+
+#include <json.hpp>
+using json = nlohmann::json;
 
 // Forward declarations
 class IFMEFeature;
@@ -45,6 +55,7 @@ class IFMEFeatureVector;
 class IFMELogFile;
 class IFMEGeometryTools;
 class FMECityJSONGeometryVisitor;
+class IFMEBRepSolid;
 
 class FMECityJSONWriter : public IFMEWriter
 {
@@ -96,11 +107,10 @@ public:
    // multiFileWriter()
    FME_Boolean multiFileWriter() const override { return FME_FALSE; }
 
-
    // -----------------------------------------------------------------------
    // Insert additional public methods here
    // -----------------------------------------------------------------------
-
+   //static IFMEString* getSemanticSurfaceType(const IFMEFace& face);
 
    // Data members
 
@@ -121,7 +131,6 @@ public:
    // -----------------------------------------------------------------------
    // Insert additional public data members here
    // -----------------------------------------------------------------------
-
 
 private:
 
@@ -180,6 +189,13 @@ private:
    // -----------------------------------------------------------------------
    // Insert additional private data members here
    // -----------------------------------------------------------------------
+
+   std::ofstream                                  outputFile_;
+   json                                           outputJSON_;
+   std::vector< std::vector< double > >           vertices_;
+   std::map<std::string, std::set<std::string> >  attrToWrite_;
+
+   static const std::vector<std::string>          cityjsonTypes_;
 
 };
 

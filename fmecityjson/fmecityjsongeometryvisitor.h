@@ -38,6 +38,11 @@
 #include <igeometrytools.h>
 #include <igeometryvisitor.h>
 
+#include <vector>
+
+#include <json.hpp>
+using json = nlohmann::json;
+
 class IFMESession;
 
 // This returns a string that contains the geometry of a feature passed in.
@@ -190,6 +195,28 @@ public:
    // Visitor logs the values of the passed in IFMEFeatureTable geometry object.
    FME_Status visitFeatureTable(const IFMEFeatureTable& featureTable) override;
 
+   //----------------------------------------------------------------------
+   // get the JSON object for the geometry (without the "lod")
+   json getGeomJSON();
+
+   //----------------------------------------------------------------------
+   // get the array of vertices for the geometry
+   std::vector< std::vector< double > > getGeomVertices();
+
+   //----------------------------------------------------------------------
+   // set an offset for the indices used by the geometry, since in CityJSON
+   // all the indices are global
+   void setVerticesOffset(long unsigned offset);
+
+   //----------------------------------------------------------------------
+   void setOutputGeometryType(int level);
+
+   //----------------------------------------------------------------------
+   // reset the variables vertices_ and onegeom_ so that a new geometry
+   // can be written
+   void reset();
+
+
 private:
 
    //---------------------------------------------------------------
@@ -224,6 +251,20 @@ private:
    // The fmeSession_ member stores a pointer to an IFMESession object
    // which performs the services on the FME Objects.
    IFMESession* fmeSession_;
+
+   //---------- private data members
+
+   long unsigned offset_;
+
+   std::vector< std::vector< double > > vertices_;
+   
+   json outputgeom_;
+   
+   std::vector<unsigned long> tmpRing_;                                                            //-- level 1
+   std::vector<std::vector<unsigned long>> tmpFace_;                                               //-- level 2
+   std::vector<std::vector<std::vector<unsigned long>>> tmpMultiFace_;                             //-- level 3
+   std::vector<std::vector<std::vector<std::vector<unsigned long>>>> tmpSolid_;                    //-- level 4
+   std::vector<std::vector<std::vector<std::vector<std::vector<unsigned long>>>>> tmpMultiSolid_;  //-- level 5
 
 };
 
