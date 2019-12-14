@@ -378,7 +378,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    std::vector<std::vector<double>> vtmp = (visitor_)->getGeomVertices();
    vertices_.insert(vertices_.end(), vtmp.begin(), vtmp.end());
-   gLogFile->logMessageString("==> 3", FME_WARN);
+   // gLogFile->logMessageString("==> 3", FME_WARN);
 
    //-- reset the internal DS for one feature
    (visitor_)->reset();
@@ -390,7 +390,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 // Fetch Schema Features
 void FMECityJSONWriter::fetchSchemaFeatures()
 {
-   gLogFile->logMessageString("$$$$ fetchSchemaFeatures()", FME_WARN );
+   // gLogFile->logMessageString("$$$$ fetchSchemaFeatures()", FME_WARN );
    // Fetch all lines with the keyword "_DEF" from the mapping file because
    // those lines define the schema definition.
    IFMEStringArray* defLineList = gFMESession->createStringArray();
