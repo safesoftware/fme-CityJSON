@@ -359,7 +359,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    if (geometry->getTraitString(*slod, *stmp) == FME_FALSE)
    {
       std::stringstream ss;
-      ss << "The '" << feature.getFeatureType() << "' feature will not be written because the geometry does not have a 'cityjson_LoD' trait.";
+      ss << "The '" << feature.getFeatureType() << "' feature will not be written because the geometry does not have a 'cityjson_lod' trait.";
       gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
       // The 'Building' feature with geometry type 'IFMEBRepSolid' will not be written because the geometry does not have a citygml_lod_name.
       return FME_FAILURE;
