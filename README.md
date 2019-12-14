@@ -3,12 +3,12 @@
 
 # CityJSON Format Plugin for FME
 
-This repository contains the source code of the CityJSON Format Plugin for FME.
+This repository contains the source code of the CityJSON Format Plugin for FME, which allows us to read CityJSON files, and to write to CityJSON files.
 
 ## Description
-The CityJSON Format Plugin for FME ...
 
-[CityJSON](https://www.cityjson.org) is a format for encoding a subset of the CityGML data model (version 2.0.0) using JavaScript Object Notation (JSON). A CityJSON file represents both the geometry and the semantics of the city features of a given area, eg buildings, roads, rivers, the vegetation, and the city furniture.
+[CityJSON](https://www.cityjson.org) is a format for encoding a subset of the CityGML data model (version 2.0.0) using JavaScript Object Notation (JSON). 
+A CityJSON file represents both the geometry and the semantics of the city features of a given area, eg buildings, roads, rivers, the vegetation, and the city furniture.
 
 [FME](https://www.safe.com) is the all-in-one tool for data integration and productivity.
 
@@ -18,20 +18,25 @@ FME 2018.0 or later installed on either
 * Mac
 * Windows
 
-## Limitation
-We are working toward full CityJSON support. We have tested the reader on the file in the [example data directory](https://github.com/safesoftware/fme-CityJSON/tree/master/example_data), and some more.
+## Limitations
+We are working toward full CityJSON support. 
+We have tested the reader on the file in the [example data directory](https://github.com/safesoftware/fme-CityJSON/tree/master/example_data), and some more.
 
-### Reader
+### Reader limitations
 
-+ SemanticSurface hierarchies (children, parent) are not supported yet
+  - MultiGeometries are not supported yet
+  - Appearances (textures, materials) are not supported yet
+  - SemanticSurface hierarchies (children, parent) are not supported yet
+  - Extenstions are not supported yet
 
-+ MultiGeometries are not supported yet
+\**not supported* means in this case that the property is ignored when reading the file, but doesn't break the process.
 
-+ Appearances (textures, materials) are not supported yet
+### Writer limitations
 
-+ Extenstions are not supported yet
+  - Appearances (textures, materials) are not supported yet
+  - SemanticSurfaces are not written yet
+  - GeometryTemplates are not written yet
 
-\**not supported* means in this case that the property is ignored when reading the file, but doesn't break the process
 
 ## How to build
 
