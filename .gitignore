@@ -13,4 +13,5 @@ includes
 .directory
 build/
 fmecityjson/*.user
+include/
 
