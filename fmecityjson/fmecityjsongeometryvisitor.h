@@ -204,6 +204,10 @@ public:
    std::vector< std::vector< double > > getGeomVertices();
 
    //----------------------------------------------------------------------
+   // get the array of semantics for the geometry
+   json getSemantics();
+
+   //----------------------------------------------------------------------
    // set an offset for the indices used by the geometry, since in CityJSON
    // all the indices are global
    void setVerticesOffset(long unsigned offset);
@@ -259,12 +263,14 @@ private:
    std::vector< std::vector< double > > vertices_;
    
    json outputgeom_;
+
+   json semantics_;
    
-   std::vector<unsigned long> tmpRing_;                                                            //-- level 1
-   std::vector<std::vector<unsigned long>> tmpFace_;                                               //-- level 2
-   std::vector<std::vector<std::vector<unsigned long>>> tmpMultiFace_;                             //-- level 3
-   std::vector<std::vector<std::vector<std::vector<unsigned long>>>> tmpSolid_;                    //-- level 4
-   std::vector<std::vector<std::vector<std::vector<std::vector<unsigned long>>>>> tmpMultiSolid_;  //-- level 5
+   std::vector< unsigned long > tmpRing_;                                                                   //-- level 1
+   std::vector< std::vector< unsigned long> > tmpFace_;                                                     //-- level 2
+   std::vector< std::vector< std::vector< unsigned long > > > tmpMultiFace_;                                //-- level 3
+   std::vector< std::vector< std::vector< std::vector< unsigned long > > > > tmpSolid_;                     //-- level 4
+   std::vector< std::vector< std::vector< std::vector< std::vector< unsigned long> > > > > tmpMultiSolid_;  //-- level 5
 
 };
 

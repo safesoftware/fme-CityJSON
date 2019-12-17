@@ -114,10 +114,15 @@ std::vector< std::vector< double > > FMECityJSONGeometryVisitor::getGeomVertices
    return vertices_;
 }
 
+json FMECityJSONGeometryVisitor::getSemantics() {
+   return semantics_;
+}
+
 void FMECityJSONGeometryVisitor::reset()
 {
    outputgeom_.clear();
    vertices_.clear();
+   semantics_.clear();
 }
 
 
@@ -741,14 +746,81 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
    FME_Status badNews;
    FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("Face")).c_str());
 
+   //-- fetch the semantic surface type of the geometry
+   if (face.hasName()) {   
+     if (semantics_["surfaces"].size() == 0) {
+       semantics_["surfaces"] = json::array();
+       semantics_["values"] = json::array();
+     }
+
+     IFMEString* type = fmeSession_->createString();
+     face.getName(*type, nullptr);
+     json surface;
+     surface["type"] = type->data();
+     fmeSession_->destroyString(type);
+
+     //-- fetch the semantic surface traits of the geometry
+     IFMEStringArray* traitNames = fmeSession_->createStringArray();
+     face.getTraitNames(*traitNames);
+     //FMECityJSONWriter::gLogFile->logMessageString(std::to_string(traitNames->entries()).c_str());
+     for (int i = 0; i < traitNames->entries(); i++) {
+       //const IFMEString* traitName = traitNames->elementAt(i);
+       std::string traitNameStr = traitNames->elementAt(i)->data();
+
+       // filter cityjson specific traits
+       if (traitNameStr.compare(0, 9, "cityjson_") != 0) {
+         //TODO: Check if the semantics type is allowed in a similar way as cityjsontypes
+         //      This needs the cityjson type to be known, pass cityjson type to constructor
+         FME_AttributeType type = face.getTraitType(*traitNames->elementAt(i));
+         FMECityJSONWriter::gLogFile->logMessageString(("Found traitName with value: " + traitNameStr + " and type: " + std::to_string(type)).c_str());
+
+         if (type == FME_ATTR_STRING) {
+           FMECityJSONWriter::gLogFile->logMessageString(std::string("string").c_str());
+           IFMEString *geometryTrait = fmeSession_->createString();
+           face.getTraitString(*traitNames->elementAt(i), *geometryTrait);
+           surface[traitNameStr] = geometryTrait->data();
+           fmeSession_->destroyString(geometryTrait);
+         }
+         else if (type == FME_ATTR_REAL64) {
+           FMECityJSONWriter::gLogFile->logMessageString(std::string("real").c_str());
+           FME_Real64 geometryTrait;
+           face.getTraitReal64(*traitNames->elementAt(i), geometryTrait);
+           surface[traitNameStr] = geometryTrait;
+         }
+         else if (type == FME_ATTR_INT64) {
+           FMECityJSONWriter::gLogFile->logMessageString(std::string("int").c_str());
+           FME_Int64 geometryTrait;
+           face.getTraitInt64(*traitNames->elementAt(i), geometryTrait);
+           surface[traitNameStr] = geometryTrait;
+         }
+         else if (type == FME_ATTR_BOOLEAN) {
+           FMECityJSONWriter::gLogFile->logMessageString(std::string("bool").c_str());
+           FME_Boolean geometryTrait;
+           face.getTraitBoolean(*traitNames->elementAt(i), geometryTrait);
+           surface[traitNameStr] = geometryTrait;
+         }
+         else {
+           FMECityJSONWriter::gLogFile->logMessageString(
+             ("Semantic Surface attribute type '" + std::to_string(type) + "' is not allowed.").c_str(),
+             FME_WARN);
+         }
+       }
+     }
+
+     semantics_["surfaces"].push_back(surface);
+     // TODO: De-duplicate surface semantics and keep correct number of semantic to store in values
+     //       Take into account not only semantics type since type can be same with different attribute values
+     //       Can use == to compare two json objects, comparison works on nested values of objects too
+     semantics_["values"].push_back(semantics_["surfaces"].size()-1);
+     fmeSession_->destroyStringArray(traitNames);
+   }
+
    const IFMEArea* area = face.getAsArea();
    if (area == nullptr)
    {
       // We require an area
       return FME_FAILURE;
    }
-   //IFMEString *semType = FMECityJSONWriter::getSemanticSurfaceType(face);
-   //FMECityJSONWriter::gLogFile->logMessageString(semType->data(), FME_WARN);
    
    // re-visit the boundary
    badNews = area->acceptGeometryVisitorConst(*this);
