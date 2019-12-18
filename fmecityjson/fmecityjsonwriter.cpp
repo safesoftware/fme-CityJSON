@@ -271,12 +271,13 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       gLogFile->logMessageString("CityJSON features must have an attribute named 'fid' to uniquely identify them.", FME_WARN );
       return FME_FAILURE;
    }
-   
 
-   gLogFile->logMessageString(*s1, FME_WARN);
+   //gLogFile->logMessageString(*s1, FME_WARN);
    outputJSON_["CityObjects"][s1->data()] = json::object();
 
    outputJSON_["CityObjects"][s1->data()]["type"] = ft;
+   //-- set FeatureType in visitor for surface semantics
+   visitor_->setFeatureType(ft);
 
    IFMEStringArray* allatt = gFMESession->createStringArray();
    outputJSON_["CityObjects"][s1->data()]["attributes"] = json::object();
@@ -317,7 +318,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    //-- update the offset (for writing vertices in the global list of CityJSON)
    //-- in the visitor.
-   (visitor_)->setVerticesOffset(vertices_.size());
+   visitor_->setVerticesOffset(vertices_.size());
 
    //-- extract the geometries from the feature
    const IFMEGeometry* geometry = (const_cast<IFMEFeature&>(feature)).getGeometry();
@@ -366,7 +367,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    }
 
    //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
-   json fgeomjson = (visitor_)->getGeomJSON();
+   json fgeomjson = visitor_->getGeomJSON();
    //-- TODO: write '2' or '2.0' is fine for the "lod"?
    fgeomjson["lod"] = atof(stmp->data());
 
@@ -383,12 +384,12 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    }
 
 
-   std::vector<std::vector<double>> vtmp = (visitor_)->getGeomVertices();
+   std::vector<std::vector<double>> vtmp = visitor_->getGeomVertices();
    vertices_.insert(vertices_.end(), vtmp.begin(), vtmp.end());
    // gLogFile->logMessageString("==> 3", FME_WARN);
 
    //-- reset the internal DS for one feature
-   (visitor_)->reset();
+   visitor_->reset();
 
    return FME_SUCCESS;
 }
