@@ -371,12 +371,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    //-- TODO: write '2' or '2.0' is fine for the "lod"?
    fgeomjson["lod"] = atof(stmp->data());
 
-   // get and store semantic surface information
-   json semantics = visitor_->getSemantics();
-   if (!semantics.empty()) {
-     fgeomjson["semantics"] = semantics;
-   }
-
    //-- write it to the JSON object
    outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
    if (!fgeomjson.empty()) {

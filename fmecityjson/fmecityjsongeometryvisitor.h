@@ -221,6 +221,14 @@ public:
    void setFeatureType(std::string type);
 
    //----------------------------------------------------------------------
+   // replace array with null values to single null value
+   json replaceSemanticValues(std::vector<json> semanticValues);
+
+   //----------------------------------------------------------------------
+   // replace empty array with null value
+   json replaceEmptySurface(std::vector<json> semanticSurface);
+
+   //----------------------------------------------------------------------
    // reset the variables vertices_ and onegeom_ so that a new geometry
    // can be written
    void reset();
@@ -267,9 +275,9 @@ private:
    std::vector< std::vector< double > > vertices_;
    json outputgeom_;
    std::vector< json > surfaces_;
-   std::vector< std::vector< json > > solidSurfaces_;
-   std::vector< std::vector< std::vector< json > > > multiSolidSurfaces_;
-   std::vector< int > semanticValues_;
+   std::vector< json > semanticValues_;
+   std::vector< json > solidSemanticValues_;
+   std::vector< json > multiSolidSemanticValues_;
 
    static const std::map< std::string, std::vector< std::string > > FMECityJSONGeometryVisitor::semancticsTypes_;
    
