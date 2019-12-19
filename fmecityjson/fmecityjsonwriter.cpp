@@ -139,43 +139,28 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    // Fetch all the schema features and add the DEF lines.
    fetchSchemaFeatures();
 
-   gLogFile->logMessageString("@@@@@@@@@@@", FME_WARN);
-   for (FME_UInt32 i = 0; i < schemaFeatures_->entries(); i++)
-   {
-      IFMEFeature* schemaFeature = (*schemaFeatures_)(i); 
-      IFMEStringArray* sa = gFMESession->createStringArray();  
-      schemaFeature->getSequencedAttributeList(*sa);
-      for (FME_UInt32 i = 0; i < sa->entries(); i++)
-      {
-         const char* t = sa->elementAt(i)->data();
-         gLogFile->logMessageString(t);
+   // gLogFile->logMessageString("@@@@@@@@@@@", FME_WARN);
+   // for (FME_UInt32 i = 0; i < schemaFeatures_->entries(); i++)
+   // {
+   //    IFMEFeature* schemaFeature = (*schemaFeatures_)(i); 
+   //    IFMEStringArray* sa = gFMESession->createStringArray();  
+   //    schemaFeature->getSequencedAttributeList(*sa);
+   //    for (FME_UInt32 i = 0; i < sa->entries(); i++)
+   //    {
+   //       const char* t = sa->elementAt(i)->data();
+   //       gLogFile->logMessageString(t);
 
-         // FME_Boolean a;
-         // FME_Boolean b;
-         // FME_AttributeType c;
-         // schemaFeature->getAttributeNullMissingAndType(t, a, b, c);
-         // if (c == FME_ATTR_STRING) {
-         //    gLogFile->logMessageString("===STRING===", FME_WARN);
-         // } else {
-         //    gLogFile->logMessageString("===SMTH-ELSE===", FME_WARN);
-         // }
-         
-         IFMEString* ty = gFMESession->createString();
-         FME_Boolean b = schemaFeature->getAttributeEncoding(t, *ty);
-         if (b == FME_FALSE)
-            gLogFile->logMessageString("NOT FOUND");
-         else
-            gLogFile->logMessageString(ty->data());
-
-         // FME_AttributeType type = schemaFeature->getAttribute(t);
-         // if (type == FME_ATTR_STRING) {
-         //    gLogFile->logMessageString("===STRING===", FME_WARN);
-         // } else {
-         //    gLogFile->logMessageString("===SMTH-ELSE===", FME_WARN);
-         // }
-      }
-   }
-   gLogFile->logMessageString("@@@@@@@@@@@", FME_WARN);
+   //       IFMEString* s1 = gFMESession->createString();
+   //       schemaFeature->getAttribute(t, *s1);
+   //       gLogFile->logMessageString(s1->data());
+   //       // if (type == FME_ATTR_STRING) {
+   //       //    gLogFile->logMessageString("===STRING===", FME_WARN);
+   //       // } else {
+   //       //    gLogFile->logMessageString("===SMTH-ELSE===", FME_WARN);
+   //       // }
+   //    }
+   // }
+   // gLogFile->logMessageString("@@@@@@@@@@@", FME_WARN);
 
 
    // Write the schema information to the file. In this template,
@@ -189,23 +174,15 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
     
       IFMEStringArray* allatt = gFMESession->createStringArray();
       schemaFeature->getAllAttributeNames(*allatt);
-      std::set<std::string> sa;
+      std::map<std::string, std::string> sa;
       for (FME_UInt32 i = 0; i < allatt->entries(); i++)
       {
          const char* t = allatt->elementAt(i)->data();
-         sa.insert(std::string(t));
-         gLogFile->logMessageString(t, FME_WARN);
-
-         std::string ts(t);
-         IFMEString* value = gFMESession->createString();
-         schemaFeature->getAttribute(t, *value);
-         FME_AttributeType type = schemaFeature->getAttributeType(t);
-         // gLogFile->logMessageString(type, FME_WARN);
-         if (type == FME_ATTR_INT32) {
-            gLogFile->logMessageString("===STRING===", FME_WARN);
-         } else {
-            gLogFile->logMessageString("===SMTH-ELSE===", FME_WARN);
-         }
+         IFMEString* s1 = gFMESession->createString();
+         schemaFeature->getAttribute(t, *s1);
+         std::string t2(s1->data());
+         sa[std::string(t)] = t2;
+         gFMESession->destroyString(s1);
       }
       std::string st(schemaFeature->getFeatureType());
       attrToWrite_[st] = sa;
@@ -341,10 +318,20 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       FME_AttributeType type = feature.getAttributeType(t);
       if ( (ts != "fid") &&
            (ts != "cityjson_parents") &&  
-           (ts != "cityjson_children") &&  
-           (attrToWrite_[ft].count(ts) != 0)
+           (ts != "cityjson_children") 
          )  
       {
+         // (attrToWrite_[ft].count(ts) != 0)
+         auto it = attrToWrite_[ft].find(ts);
+         std::string wtype = it->second;
+         // if (it != attrToWrite_[ft].end()) 
+         // {
+         //    gLogFile->logMessageString("4444----");
+         //    gLogFile->logMessageString((it->second).c_str());
+         // }
+
+
+
          // outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
          if ( (type == FME_ATTR_STRING) || 
               (type == FME_ATTR_ENCODED_STRING) 
@@ -578,6 +565,9 @@ void FMECityJSONWriter::addDefLineToSchema(const IFMEStringArray& parameters)
    // Set it on the schema feature.
    schemaFeature->setFeatureType(paramValue->data());
 
+   gLogFile->logMessageString("777---", FME_WARN);
+   gLogFile->logMessageString(paramValue->data(), FME_WARN);
+
    std::string attrName;
    std::string attrType;
    for (FME_UInt32 i = 1; i < parameters.entries(); i += 2)
@@ -590,6 +580,8 @@ void FMECityJSONWriter::addDefLineToSchema(const IFMEStringArray& parameters)
       attrType = paramValue->data();
       // Add the attribute name and type pair to the schema feature.
       schemaFeature->setSequencedAttribute(attrName.c_str(), attrType.c_str());
+      gLogFile->logMessageString(attrName.c_str());
+      gLogFile->logMessageString(attrType.c_str());
    }
    schemaFeatures_->append(schemaFeature);
 }

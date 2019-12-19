@@ -193,7 +193,7 @@ private:
    std::ofstream                                  outputFile_;
    json                                           outputJSON_;
    std::vector< std::vector< double > >           vertices_;
-   std::map<std::string, std::set<std::string> >  attrToWrite_;
+   std::map<std::string, std::map<std::string, std::string> >  attrToWrite_;
 
    static const std::vector<std::string>          cityjsonTypes_;
 
