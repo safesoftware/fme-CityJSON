@@ -149,12 +149,30 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
       {
          const char* t = sa->elementAt(i)->data();
          gLogFile->logMessageString(t);
-         FME_AttributeType type = schemaFeature->getAttributeType(t);
-         if (type == FME_ATTR_STRING) {
-            gLogFile->logMessageString("===STRING===", FME_WARN);
-         } else {
-            gLogFile->logMessageString("===SMTH-ELSE===", FME_WARN);
-         }
+
+         // FME_Boolean a;
+         // FME_Boolean b;
+         // FME_AttributeType c;
+         // schemaFeature->getAttributeNullMissingAndType(t, a, b, c);
+         // if (c == FME_ATTR_STRING) {
+         //    gLogFile->logMessageString("===STRING===", FME_WARN);
+         // } else {
+         //    gLogFile->logMessageString("===SMTH-ELSE===", FME_WARN);
+         // }
+         
+         IFMEString* ty = gFMESession->createString();
+         FME_Boolean b = schemaFeature->getAttributeEncoding(t, *ty);
+         if (b == FME_FALSE)
+            gLogFile->logMessageString("NOT FOUND");
+         else
+            gLogFile->logMessageString(ty->data());
+
+         // FME_AttributeType type = schemaFeature->getAttribute(t);
+         // if (type == FME_ATTR_STRING) {
+         //    gLogFile->logMessageString("===STRING===", FME_WARN);
+         // } else {
+         //    gLogFile->logMessageString("===SMTH-ELSE===", FME_WARN);
+         // }
       }
    }
    gLogFile->logMessageString("@@@@@@@@@@@", FME_WARN);
