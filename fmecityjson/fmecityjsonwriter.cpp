@@ -139,6 +139,27 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    // Fetch all the schema features and add the DEF lines.
    fetchSchemaFeatures();
 
+   gLogFile->logMessageString("@@@@@@@@@@@", FME_WARN);
+   for (FME_UInt32 i = 0; i < schemaFeatures_->entries(); i++)
+   {
+      IFMEFeature* schemaFeature = (*schemaFeatures_)(i); 
+      IFMEStringArray* sa = gFMESession->createStringArray();  
+      schemaFeature->getSequencedAttributeList(*sa);
+      for (FME_UInt32 i = 0; i < sa->entries(); i++)
+      {
+         const char* t = sa->elementAt(i)->data();
+         gLogFile->logMessageString(t);
+         FME_AttributeType type = schemaFeature->getAttributeType(t);
+         if (type == FME_ATTR_STRING) {
+            gLogFile->logMessageString("===STRING===", FME_WARN);
+         } else {
+            gLogFile->logMessageString("===SMTH-ELSE===", FME_WARN);
+         }
+      }
+   }
+   gLogFile->logMessageString("@@@@@@@@@@@", FME_WARN);
+
+
    // Write the schema information to the file. In this template,
    // since we are not writing to a file we will log the schema information
    // instead.
@@ -156,10 +177,22 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
          const char* t = allatt->elementAt(i)->data();
          sa.insert(std::string(t));
          gLogFile->logMessageString(t, FME_WARN);
+
+         std::string ts(t);
+         IFMEString* value = gFMESession->createString();
+         schemaFeature->getAttribute(t, *value);
+         FME_AttributeType type = schemaFeature->getAttributeType(t);
+         // gLogFile->logMessageString(type, FME_WARN);
+         if (type == FME_ATTR_INT32) {
+            gLogFile->logMessageString("===STRING===", FME_WARN);
+         } else {
+            gLogFile->logMessageString("===SMTH-ELSE===", FME_WARN);
+         }
       }
       std::string st(schemaFeature->getFeatureType());
       attrToWrite_[st] = sa;
       gLogFile->logFeature(*schemaFeature, FME_INFORM, 20);
+      gFMESession->destroyStringArray(allatt);
    }
 
    // -----------------------------------------------------------------------
@@ -435,7 +468,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 // Fetch Schema Features
 void FMECityJSONWriter::fetchSchemaFeatures()
 {
-   // gLogFile->logMessageString("$$$$ fetchSchemaFeatures()", FME_WARN );
    // Fetch all lines with the keyword "_DEF" from the mapping file because
    // those lines define the schema definition.
    IFMEStringArray* defLineList = gFMESession->createStringArray();
@@ -446,6 +478,7 @@ void FMECityJSONWriter::fetchSchemaFeatures()
       // [<FeatureType1>,<AttrName11>,<AttrType11>,...,<AttrName1N>,<AttrType1N>,
       // ...,
       // <FeatureTypeM>,<AttrNameM1>,<AttrTypeM1>,...,<AttrNameMN>,<AttrTypeMN>]
+      gLogFile->logMessageString("===", FME_WARN );
       logFMEStringArray(*defLineList);
       
       // We need to determine the feature type names for this writer.
@@ -455,6 +488,7 @@ void FMECityJSONWriter::fetchSchemaFeatures()
       if (gMappingFile->fetchFeatureTypes(writerKeyword_.c_str(), writerTypeName_.c_str(),
        *defLineList, *fetchDefsOnly , *featureTypes))
       {
+         gLogFile->logMessageString("---", FME_WARN );
          logFMEStringArray(*featureTypes);
          std::vector<int> potentialFeatureTypeIndices;
          
@@ -554,6 +588,8 @@ void FMECityJSONWriter::logFMEStringArray(IFMEStringArray& stringArray)
       sample.append(stringArray.elementAt(i)->data(), stringArray.elementAt(i)->length());
       sample.append("\' ");
    }
+   gLogFile->logMessageString("00000000", FME_WARN);
    gLogFile->logMessageString(sample.c_str(), FME_INFORM);
+   gLogFile->logMessageString("99999999", FME_WARN);
 }
 
