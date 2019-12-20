@@ -297,9 +297,20 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
            (ts != "cityjson_children") 
          )  
       {
-         // (attrToWrite_[ft].count(ts) != 0)
+         // gLogFile->logMessageString(ts.c_str());
+
          auto it = attrToWrite_[ft].find(ts);
          std::string wtype = it->second;
+         if (wtype.empty() == true)
+         {
+            // gLogFile->logMessageString("not found");
+            continue;
+         }
+         // else
+         // {
+         //    gLogFile->logMessageString("found");
+         // }
+
 
       //-- STRING writing -----   
          if ( (wtype == "string") || (wtype == "char") )
