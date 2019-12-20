@@ -456,7 +456,7 @@ FME_Status FMECityJSONGeometryVisitor::visitArcB3P(const IFMEArc& arc)
 //
 FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
 {
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("line")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("line")).c_str());
    tmpRing_.clear();
    for (int i = 0; i < line.numPoints()-1; i++) {
       FMECoord3D coords;
@@ -739,7 +739,7 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
 {
    tmpFace_.clear();
    FME_Status badNews;
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("Face")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("Face")).c_str());
 
    const IFMEArea* area = face.getAsArea();
    if (area == nullptr)
@@ -831,7 +831,7 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
    tmpSolid_.clear();
    FME_Status badNews;
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("Solid")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("Solid")).c_str());
 
    // Get the outer surface
    // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("outer surface")).c_str());
@@ -878,7 +878,7 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
    // Done with the iterator
    brepSolid.destroyIterator(iterator);
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("boundary representation solid")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("boundary representation solid")).c_str());
 
    return FME_SUCCESS;
 }
@@ -889,7 +889,7 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
 {
    tmpMultiFace_.clear();
    FME_Status badNews;
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("CompositeSurface")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("CompositeSurface")).c_str());
    // Create an iterator to loop through all the surfaces this multi surface contains
    IFMESurfaceIterator* iterator = compositeSurface.getIterator();
    while (iterator->next())
@@ -980,7 +980,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSolid(const IFMEMultiSolid& mul
    tmpMultiSolid_.clear();
 
    FME_Status badNews;
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("multi solid")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("multi solid")).c_str());
 
    // Create an iterator to loop through all the solids this multi solid contains
    IFMESolidIterator* iterator = multiSolid.getIterator();
@@ -1023,7 +1023,7 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSolid(const IFMECompositeSo
    tmpMultiSolid_.clear();
 
    FME_Status badNews;
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("CompositeSolid")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("CompositeSolid")).c_str());
 
    // Create an iterator to loop through all the solids this multi solid contains
    IFMESimpleSolidIterator* iterator = compositeSolid.getIterator();
