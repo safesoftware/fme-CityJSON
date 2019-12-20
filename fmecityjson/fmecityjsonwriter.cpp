@@ -315,7 +315,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       std::string ts(t);
       IFMEString* value = gFMESession->createString();
       feature.getAttribute(t, *value);
-      FME_AttributeType type = feature.getAttributeType(t);
+      FME_AttributeType ftype = feature.getAttributeType(t);
       if ( (ts != "fid") &&
            (ts != "cityjson_parents") &&  
            (ts != "cityjson_children") 
@@ -324,52 +324,137 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
          // (attrToWrite_[ft].count(ts) != 0)
          auto it = attrToWrite_[ft].find(ts);
          std::string wtype = it->second;
-         // if (it != attrToWrite_[ft].end()) 
-         // {
-         //    gLogFile->logMessageString("4444----");
-         //    gLogFile->logMessageString((it->second).c_str());
-         // }
 
-
-
-         // outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
-         if ( (type == FME_ATTR_STRING) || 
-              (type == FME_ATTR_ENCODED_STRING) 
-            ) {
-            outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
-          }
-          else if ( (type == FME_ATTR_INT8)  ||
-                    (type == FME_ATTR_INT16) ||                                  
-                    (type == FME_ATTR_INT32) ||                                  
-                    (type == FME_ATTR_INT64) ||                                  
-                    (type == FME_ATTR_UINT8)  ||                                  
-                    (type == FME_ATTR_UINT16) ||                                  
-                    (type == FME_ATTR_UINT32) ||                                  
-                    (type == FME_ATTR_UINT64)
-                  ) {
-            outputJSON_["CityObjects"][s1->data()]["attributes"][t] = std::stoi(value->data());
-          }
-          else if ( (type == FME_ATTR_REAL32) ||
-                    (type == FME_ATTR_REAL64) ||
-                    (type == FME_ATTR_REAL80)
-                  ) {
-            outputJSON_["CityObjects"][s1->data()]["attributes"][t] = std::stod(value->data());
-          }
-          else if (type == FME_ATTR_BOOLEAN) {
-            FME_Boolean b;
-            if (feature.getBooleanAttribute(t, b) == FME_TRUE) {
-               outputJSON_["CityObjects"][s1->data()]["attributes"][t] = true;
+      //-- STRING writing -----   
+         if ( (wtype == "string") || (wtype == "char") )
+         {
+            if ( (ftype == FME_ATTR_INT8)   ||
+                 (ftype == FME_ATTR_INT16)  ||                                  
+                 (ftype == FME_ATTR_INT32)  ||                                  
+                 (ftype == FME_ATTR_INT64)  ||                                  
+                 (ftype == FME_ATTR_UINT8)  ||                                  
+                 (ftype == FME_ATTR_UINT16) ||                                  
+                 (ftype == FME_ATTR_UINT32) ||                                  
+                 (ftype == FME_ATTR_UINT64) ||
+                 (ftype == FME_ATTR_REAL32) ||
+                 (ftype == FME_ATTR_REAL64) ||
+                 (ftype == FME_ATTR_REAL80) ) 
+            {
+               outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+            } 
+            else if ( (ftype == FME_ATTR_STRING) || 
+                      (ftype == FME_ATTR_ENCODED_STRING) 
+                      ) {
+               outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+            }
+            else if (ftype == FME_ATTR_BOOLEAN) {
+               FME_Boolean b;
+               if (feature.getBooleanAttribute(t, b) == FME_TRUE) {
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = "true";
+               }
+               else {
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = "false";
+               }
             }
             else {
-               outputJSON_["CityObjects"][s1->data()]["attributes"][t] = false;
+               std::string msg = "Attribute value type is not allowed, in '";
+               msg.append(t);
+               msg.append("'.");
+               gLogFile->logMessageString(msg.c_str(), FME_WARN);
             }
          }
-         else {
-            std::string msg = "Attribute value type is not allowed, in '";
-            msg.append(t);
-            msg.append("'.");
-            gLogFile->logMessageString(msg.c_str(), FME_WARN);
+      //-- INTEGER writing -----
+         else if ( (wtype == "int16")  || 
+                   (wtype == "int32")  ||
+                   (wtype == "int64")  ||
+                   (wtype == "uint8")  ||
+                   (wtype == "uint16") ||
+                   (wtype == "uint32") ||
+                   (wtype == "uint64") ) 
+         {
+            if ( (ftype == FME_ATTR_INT8)   ||
+                 (ftype == FME_ATTR_INT16)  ||                                  
+                 (ftype == FME_ATTR_INT32)  ||                                  
+                 (ftype == FME_ATTR_INT64)  ||                                  
+                 (ftype == FME_ATTR_UINT8)  ||                                  
+                 (ftype == FME_ATTR_UINT16) ||                                  
+                 (ftype == FME_ATTR_UINT32) ||                                  
+                 (ftype == FME_ATTR_UINT64) ||
+                 (ftype == FME_ATTR_REAL32) ||
+                 (ftype == FME_ATTR_REAL64) ||
+                 (ftype == FME_ATTR_REAL80) ) 
+            {
+               long tmp = std::stol(value->data());
+               outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmp;
+            } 
+            else if ( (ftype == FME_ATTR_STRING) || 
+                      (ftype == FME_ATTR_ENCODED_STRING) ) 
+            {
+               try {
+                  long tmp = std::stol(value->data());
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmp;
+               }
+               catch (const std::invalid_argument& ia) {
+                  gLogFile->logMessageString("Attribute value type cannot be converted to integer, writing string.'", FME_WARN);
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+               }
+
+            }
+            else if (ftype == FME_ATTR_BOOLEAN) {
+               FME_Boolean b;
+               if (feature.getBooleanAttribute(t, b) == FME_TRUE) {
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = 1;
+               }
+               else {
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = 0;
+               }
+            }
+            else {
+               std::string msg = "Attribute value type is not allowed, in '";
+               msg.append(t);
+               msg.append("'.");
+               gLogFile->logMessageString(msg.c_str(), FME_WARN);
+            }            
          }
+
+        
+         // if ( (ftype == FME_ATTR_STRING) || 
+         //      (ftype == FME_ATTR_ENCODED_STRING) 
+         //    ) {
+         //    outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+         //  }
+         //  else if ( (ftype == FME_ATTR_INT8)  ||
+         //            (ftype == FME_ATTR_INT16) ||                                  
+         //            (ftype == FME_ATTR_INT32) ||                                  
+         //            (ftype == FME_ATTR_INT64) ||                                  
+         //            (ftype == FME_ATTR_UINT8)  ||                                  
+         //            (ftype == FME_ATTR_UINT16) ||                                  
+         //            (ftype == FME_ATTR_UINT32) ||                                  
+         //            (ftype == FME_ATTR_UINT64)
+         //          ) {
+         //    outputJSON_["CityObjects"][s1->data()]["attributes"][t] = std::stoi(value->data());
+         //  }
+         //  else if ( (ftype == FME_ATTR_REAL32) ||
+         //            (ftype == FME_ATTR_REAL64) ||
+         //            (ftype == FME_ATTR_REAL80)
+         //          ) {
+         //    outputJSON_["CityObjects"][s1->data()]["attributes"][t] = std::stod(value->data());
+         //  }
+         //  else if (ftype == FME_ATTR_BOOLEAN) {
+         //    FME_Boolean b;
+         //    if (feature.getBooleanAttribute(t, b) == FME_TRUE) {
+         //       outputJSON_["CityObjects"][s1->data()]["attributes"][t] = true;
+         //    }
+         //    else {
+         //       outputJSON_["CityObjects"][s1->data()]["attributes"][t] = false;
+         //    }
+         // }
+         // else {
+         //    std::string msg = "Attribute value type is not allowed, in '";
+         //    msg.append(t);
+         //    msg.append("'.");
+         //    gLogFile->logMessageString(msg.c_str(), FME_WARN);
+         // }
       }
       gFMESession->destroyString(value);
    }
@@ -483,7 +568,7 @@ void FMECityJSONWriter::fetchSchemaFeatures()
       // [<FeatureType1>,<AttrName11>,<AttrType11>,...,<AttrName1N>,<AttrType1N>,
       // ...,
       // <FeatureTypeM>,<AttrNameM1>,<AttrTypeM1>,...,<AttrNameMN>,<AttrTypeMN>]
-      gLogFile->logMessageString("===", FME_WARN );
+      // gLogFile->logMessageString("===", FME_WARN );
       logFMEStringArray(*defLineList);
       
       // We need to determine the feature type names for this writer.
@@ -493,7 +578,7 @@ void FMECityJSONWriter::fetchSchemaFeatures()
       if (gMappingFile->fetchFeatureTypes(writerKeyword_.c_str(), writerTypeName_.c_str(),
        *defLineList, *fetchDefsOnly , *featureTypes))
       {
-         gLogFile->logMessageString("---", FME_WARN );
+         // gLogFile->logMessageString("---", FME_WARN );
          logFMEStringArray(*featureTypes);
          std::vector<int> potentialFeatureTypeIndices;
          
@@ -565,7 +650,7 @@ void FMECityJSONWriter::addDefLineToSchema(const IFMEStringArray& parameters)
    // Set it on the schema feature.
    schemaFeature->setFeatureType(paramValue->data());
 
-   gLogFile->logMessageString("777---", FME_WARN);
+   // gLogFile->logMessageString("777---", FME_WARN);
    gLogFile->logMessageString(paramValue->data(), FME_WARN);
 
    std::string attrName;
@@ -598,8 +683,8 @@ void FMECityJSONWriter::logFMEStringArray(IFMEStringArray& stringArray)
       sample.append(stringArray.elementAt(i)->data(), stringArray.elementAt(i)->length());
       sample.append("\' ");
    }
-   gLogFile->logMessageString("00000000", FME_WARN);
+   // gLogFile->logMessageString("00000000", FME_WARN);
    gLogFile->logMessageString(sample.c_str(), FME_INFORM);
-   gLogFile->logMessageString("99999999", FME_WARN);
+   // gLogFile->logMessageString("99999999", FME_WARN);
 }
 
