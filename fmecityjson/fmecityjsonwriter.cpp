@@ -395,7 +395,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
                   outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmp;
                }
                catch (const std::invalid_argument& ia) {
-                  gLogFile->logMessageString("Attribute value type cannot be converted to integer, writing string.'", FME_WARN);
+                  gLogFile->logMessageString("Attribute value type cannot be converted to integer, writing string.", FME_WARN);
                   outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
                }
 
@@ -416,7 +416,98 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
                gLogFile->logMessageString(msg.c_str(), FME_WARN);
             }            
          }
+      //-- FLOAT/DOUBLE/NUMBER writing -----
+         else if ( (wtype == "number")  || 
+                   (wtype == "real32")  ||
+                   (wtype == "real64")  )
+         {
+            if ( (ftype == FME_ATTR_INT8)   ||
+                 (ftype == FME_ATTR_INT16)  ||                                  
+                 (ftype == FME_ATTR_INT32)  ||                                  
+                 (ftype == FME_ATTR_INT64)  ||                                  
+                 (ftype == FME_ATTR_UINT8)  ||                                  
+                 (ftype == FME_ATTR_UINT16) ||                                  
+                 (ftype == FME_ATTR_UINT32) ||                                  
+                 (ftype == FME_ATTR_UINT64) ||
+                 (ftype == FME_ATTR_REAL32) ||
+                 (ftype == FME_ATTR_REAL64) ||
+                 (ftype == FME_ATTR_REAL80) ) 
+            {
+               double tmp = std::stod(value->data());
+               outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmp;
+            } 
+            else if ( (ftype == FME_ATTR_STRING) || 
+                      (ftype == FME_ATTR_ENCODED_STRING) ) 
+            {
+               try {
+                  double tmp = std::stod(value->data());
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmp;
+               }
+               catch (const std::invalid_argument& ia) {
+                  gLogFile->logMessageString("Attribute value type cannot be converted to integer, writing string.", FME_WARN);
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+               }
 
+            }
+            else if (ftype == FME_ATTR_BOOLEAN) {
+               FME_Boolean b;
+               if (feature.getBooleanAttribute(t, b) == FME_TRUE) {
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = 1.0;
+               }
+               else {
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = 0.0;
+               }
+            }
+            else {
+               std::string msg = "Attribute value type is not allowed, in '";
+               msg.append(t);
+               msg.append("'.");
+               gLogFile->logMessageString(msg.c_str(), FME_WARN);
+            }            
+         }
+      //-- BOOLEAN writing -----
+         else if (wtype == "logical") 
+         {
+            if ( (ftype == FME_ATTR_INT8)   ||
+                 (ftype == FME_ATTR_INT16)  ||                                  
+                 (ftype == FME_ATTR_INT32)  ||                                  
+                 (ftype == FME_ATTR_INT64)  ||                                  
+                 (ftype == FME_ATTR_UINT8)  ||                                  
+                 (ftype == FME_ATTR_UINT16) ||                                  
+                 (ftype == FME_ATTR_UINT32) ||                                  
+                 (ftype == FME_ATTR_UINT64) ||
+                 (ftype == FME_ATTR_REAL32) ||
+                 (ftype == FME_ATTR_REAL64) ||
+                 (ftype == FME_ATTR_REAL80) ) 
+            {
+               int tmp = std::stoi(value->data());
+               if (tmp == 1)
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = true;
+               else if (tmp == 0)
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = false;
+               else
+               {
+                  gLogFile->logMessageString("Attribute value type cannot be converted to Boolean, writing string.", FME_WARN);
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+               }
+
+            } 
+            else if (ftype == FME_ATTR_BOOLEAN) {
+               FME_Boolean b;
+               if (feature.getBooleanAttribute(t, b) == FME_TRUE) {
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = true;
+               }
+               else {
+                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = false;
+               }
+            }
+            else {
+               std::string msg = "Attribute value type is not allowed, in '";
+               msg.append(t);
+               msg.append("'.");
+               gLogFile->logMessageString(msg.c_str(), FME_WARN);
+            }            
+         }         
         
          // if ( (ftype == FME_ATTR_STRING) || 
          //      (ftype == FME_ATTR_ENCODED_STRING) 
