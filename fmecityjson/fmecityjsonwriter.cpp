@@ -283,7 +283,8 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    IFMEStringArray* allatt = gFMESession->createStringArray();
    outputJSON_["CityObjects"][s1->data()]["attributes"] = json::object();
-   feature.getAllAttributeNames(*allatt);
+   // feature.getAllAttributeNames(*allatt);
+   feature.getSequencedAttributeList (*allatt);
    for (FME_UInt32 i = 0; i < allatt->entries(); i++)
    {
       const char* t = allatt->elementAt(i)->data();
