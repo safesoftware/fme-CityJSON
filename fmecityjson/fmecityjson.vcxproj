@@ -64,10 +64,10 @@
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(FME_DEV_HOME)\plugins\</OutDir>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(FME_DEV_HOME)\plugins\</OutDir>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(FME_DEV_HOME)\plugins\</OutDir>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">fmecityjson</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">fmecityjson</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">fmecityjson</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">fmecityjson</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">cityjson</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">cityjson</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">cityjson</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">cityjson</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <IntDir>$(Platform)\$(Configuration)\$(PlatformToolset)\$(ProjectName)\</IntDir>

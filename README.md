@@ -75,23 +75,11 @@ from the menu. In the Error List pane, check that there
 are 0 errors.
 
 ## Installation Instructions
-The latest beta versions of FME now already ship with this included.
+The latest beta versions of FME now already ship with this included.  (FME 2020.0 and later)
 If you wish to update FME yourself, there are several steps necessary to extend FME to include this CityJSON Format support.
 
 * The Plugin:
 **Build the CityJSON plugin, using the instructions above.  This will produce a file `fmecityjson.so` file on Linux and macOS (a `.dylib` will be created under macOS, but the CMake will rename it to a `.so` otherwise FME won't work), or a `fmecityjson.dll` file on Windows.  Copy this file into the `plugins` subdirectory where FME is installed.
-* The Format Information File :
-** Copy the file `cityjson.db` into the `formatsinfo` subdirectory where FME is installed.
-(This file will supply the Reader and
-Writer Gallery with information about the format, including
-whether to display the format in the gallery, if it supports
-coordinate systems, and the default file extensions.
-For more information on the parameters in format files, see the file `formats.txt` in the directory where FME is installed.)
-* The Metafile:
-** Copy the file `cityjson.fmf` into the `metafile` subdirectory where FME is installed.
-(The metafile contains directives that inform FME of the
-details about a format such as default parameters, settings,
-schemas and so on.)
 * Restart FME
 
 ## How to debug

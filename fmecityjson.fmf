@@ -1,12 +1,12 @@
 ! --------------------------------------------------------------------------------
-! FMECITYJSON format metafile
+! CITYJSON format metafile
 ! --------------------------------------------------------------------------------
 ! --------------------------------------------------------------------------------
 ! Define the format name.
 ! --------------------------------------------------------------------------------
-DEFAULT_MACRO FORMAT_SHORT_NAME FMECITYJSON
-SOURCE_READER FMECITYJSON EXPOSED_ATTRS "$($(FORMAT_SHORT_NAME)_EXPOSE_FORMAT_ATTRS)"
-FORMAT_NAME   FMECITYJSON
+DEFAULT_MACRO FORMAT_SHORT_NAME CITYJSON
+SOURCE_READER CITYJSON EXPOSED_ATTRS "$($(FORMAT_SHORT_NAME)_EXPOSE_FORMAT_ATTRS)"
+FORMAT_NAME   CITYJSON
 FORMAT_TYPE DYNAMIC
 
 ! --------------------------------------------------------------------------------
