@@ -79,7 +79,7 @@ The latest beta versions of FME now already ship with this included.  (FME 2020.
 If you wish to update FME yourself, there are several steps necessary to extend FME to include this CityJSON Format support.
 
 * The Plugin:
-**Build the CityJSON plugin, using the instructions above.  This will produce a file `fmecityjson.so` file on Linux and macOS (a `.dylib` will be created under macOS, but the CMake will rename it to a `.so` otherwise FME won't work), or a `fmecityjson.dll` file on Windows.  Copy this file into the `plugins` subdirectory where FME is installed.
+**Build the CityJSON plugin, using the instructions above.  This will produce a file `cityjson.so` file on Linux and macOS (a `.dylib` will be created under macOS, but the CMake will rename it to a `.so` otherwise FME won't work), or a `cityjson.dll` file on Windows.  Copy this file into the `plugins` subdirectory where FME is installed.
 * Restart FME
 
 ## How to debug
