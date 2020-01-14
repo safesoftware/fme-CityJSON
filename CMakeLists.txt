@@ -3,7 +3,7 @@ project(fme_CityJSON)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_library(fmecityjson SHARED
+add_library(cityjson SHARED
         ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsonentrypoints.cpp
         ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsongeometryvisitor.cpp
         ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsongeometryvisitor.h
@@ -21,18 +21,18 @@ include_directories(${CMAKE_SOURCE_DIR}/fmecityjson
         ${FME_DEV_HOME}/pluginbuilder/cpp
         ${FME_DEV_HOME}/fmeobjects/cpp)
 
-set_target_properties(fmecityjson PROPERTIES PREFIX "")
+set_target_properties(cityjson PROPERTIES PREFIX "")
 
 if(APPLE)
-    # change fmecityjson.dylib to fmecityjson.so
-    set_target_properties(fmecityjson PROPERTIES SUFFIX ".so")
+    # change cityjson.dylib to cityjson.so
+    set_target_properties(cityjson PROPERTIES SUFFIX ".so")
 endif()
 
-install(TARGETS fmecityjson DESTINATION ${FME_DEV_HOME}/plugins
+install(TARGETS cityjson DESTINATION ${FME_DEV_HOME}/plugins
         PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE
                     GROUP_READ GROUP_EXECUTE
                     WORLD_READ WORLD_EXECUTE)
-install(FILES fmecityjson.db DESTINATION ${FME_DEV_HOME}/formatsinfo)
-install(FILES fmecityjson.fmf DESTINATION ${FME_DEV_HOME}/metafile)
+install(FILES cityjson.db DESTINATION ${FME_DEV_HOME}/formatsinfo)
+install(FILES cityjson.fmf DESTINATION ${FME_DEV_HOME}/metafile)
 
 #add_executable(test fmecityjson/test.cpp)
