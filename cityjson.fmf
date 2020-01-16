@@ -67,6 +67,17 @@ DESTINATION_SETTINGS
 ! Specify generic option for destination dataset type validation
 ! against format type. This file defaults to opting in.
 ! ------------------------------------------------------------------------------
+
+GUI GROUP USE_COMPRESSION%IMPORTANT_DIGITS CityGML File compression
+
+DEFAULT_VALUE USE_COMPRESSION No
+GUI LOOKUP_CHOICE USE_COMPRESSION Yes%No Compress/quantize the coordinates:
+
+DEFAULT_VALUE IMPORTANT_DIGITS 9
+GUI CHOICE IMPORTANT_DIGITS 1%2%3%4%5%6%7%8%9%10 Indent Size:
+
+
+
 INCLUDE destinationDatasetTypeValidation.fmi
 
 END_DESTINATION_SETTINGS
