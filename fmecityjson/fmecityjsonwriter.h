@@ -197,6 +197,9 @@ private:
 
    static const std::vector<std::string>          cityjsonTypes_;
 
+   bool                                           compress_; 
+   int                                            compress_num_digits_; 
+
 };
 
 #endif

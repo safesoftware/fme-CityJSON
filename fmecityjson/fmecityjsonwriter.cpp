@@ -116,6 +116,22 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
 {
    gLogFile->logMessageString("Thank you for using CityJSON, the better encoding for the CityGML data model.");
 
+
+   // get the .fmf parameters
+   IFMEString* pv = gFMESession->createString();
+   gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcCompressParamTag, *pv);
+   std::string s1 = pv->data();
+   if (s1.compare("Yes") == 0)
+   {
+      compress_ = true;
+      gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcCompressDigitsParamTag, *pv);
+      compress_num_digits_ = std::stoi(pv->data());
+
+   }
+   else {
+      compress_ = false;
+   }
+
    // Perform setup steps before opening file for writing
 
    // Get geometry tools
@@ -604,6 +620,14 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    //-- reset the internal DS for one feature
    (visitor_)->reset();
+
+   //-- check if the file needs to be compressed/quantized
+   if (compress_ == true)
+   {
+      gLogFile->logMessageString("YES let's compress!", FME_WARN );
+   } else{
+      gLogFile->logMessageString("NO compress!", FME_WARN );
+   }
 
    return FME_SUCCESS;
 }
