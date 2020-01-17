@@ -622,11 +622,14 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    (visitor_)->reset();
 
    //-- check if the file needs to be compressed/quantized
+   // TODO : implement the compression/quantization
    if (compress_ == true)
    {
-      gLogFile->logMessageString("YES let's compress!", FME_WARN );
+      gLogFile->logMessageString("YES let's compress!");
+      gLogFile->logMessageString(std::to_string(compress_num_digits_).c_str());
+
    } else{
-      gLogFile->logMessageString("NO compress!", FME_WARN );
+      gLogFile->logMessageString("NO compress!");
    }
 
    return FME_SUCCESS;
