@@ -224,16 +224,21 @@ FME_Status FMECityJSONWriter::close()
    // -----------------------------------------------------------------------
    // Perform any closing operations / cleanup here; e.g. close opened files
    // -----------------------------------------------------------------------
-   gLogFile->logMessageString("I AM CLOSING: close() !");
+   // gLogFile->logMessageString("close() !!!", FME_WARN);
 
-   outputJSON_["vertices"] = vertices_;
-   // vertices_.clear();
    
-   //-- remove duplicates (and potentially compress/quantize the file)
-   duplicate_vertices();
-   
-   //-- write to the file
-   outputFile_ << outputJSON_ << std::endl;
+   if (vertices_.empty() == false)
+   {
+      outputJSON_["vertices"] = vertices_;
+      //-- remove duplicates (and potentially compress/quantize the file)
+      duplicate_vertices();
+      vertices_.clear();
+      //-- write to the file
+      outputFile_ << outputJSON_ << std::endl;
+      // Log that the writer is done
+      gLogFile->logMessageString((kMsgClosingWriter + dataset_).c_str());
+   }
+      
 
    // Delete the visitor
    if (visitor_)
@@ -248,9 +253,6 @@ FME_Status FMECityJSONWriter::close()
    }
    schemaFeatures_ = nullptr;
    
-   // Log that the writer is done
-   gLogFile->logMessageString((kMsgClosingWriter + dataset_).c_str());
-
    // close the file
    outputFile_.close();
 
