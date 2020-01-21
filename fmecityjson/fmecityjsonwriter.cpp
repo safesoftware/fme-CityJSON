@@ -37,6 +37,7 @@
 #include "fmecityjsonwriter.h"
 #include "fmecityjsonpriv.h"
 #include "fmecityjsongeometryvisitor.h"
+#include "Point3.h"
 
 
 #include <ifeature.h>
@@ -765,4 +766,113 @@ void FMECityJSONWriter::logFMEStringArray(IFMEStringArray& stringArray)
    }
    gLogFile->logMessageString(sample.c_str(), FME_INFORM);
 }
+
+int FMECityJSONWriter::duplicate_vertices(json& j, int importantdigits) {
+  size_t inputsize = j["vertices"].size();
+  //-- find bbox
+  double minx = 1e9;
+  double miny = 1e9;
+  double minz = 1e9;
+  for (auto& v : j["vertices"]) {
+    if (v[0] < minx)
+      minx = v[0];
+    if (v[1] < miny)
+      miny = v[1];
+    if (v[2] < minz)
+      minz = v[2];
+  }
+  //-- read points and translate now (if int)
+  std::vector<Point3> vertices;
+  for (auto& v : j["vertices"]) {
+    std::vector<double> t = v;
+    Point3 tmp(t[0], t[1], t[2]);
+    tmp.translate(-minx, -miny, -minz);
+    vertices.push_back(tmp);
+  }
+  
+  std::map<std::string,unsigned long> hash;
+  std::vector<unsigned long> newids (vertices.size(), 0);
+  std::vector<std::string> newvertices;
+  unsigned long i = 0;
+  for (auto& v : vertices) {
+    std::string thekey = v.get_key(importantdigits);
+    auto it = hash.find(thekey);
+    if (it == hash.end()) {
+      unsigned long newid = (unsigned long)(hash.size());
+      newids[i] = newid;
+      hash[thekey] = newid;
+      newvertices.push_back(thekey);
+    }
+    else {
+      newids[i] = it->second;
+    }
+    i++;
+  }
+  //-- update IDs for the faces
+  update_to_new_ids(j, newids);
+  //-- replace the vertices
+  std::vector<std::array<int, 3>> vout;
+  for (std::string& s : newvertices) {
+    std::vector<std::string> ls;
+    tokenize(s, ls);
+    for (auto& each : ls) {
+      std::size_t found = each.find(".");
+      each.erase(found, 1);
+    }
+    // std::cout << ls[0] << std::endl;
+    std::array<int,3> t;
+    t[0] = std::stoi(ls[0]);
+    t[1] = std::stoi(ls[1]);
+    t[2] = std::stoi(ls[2]);
+    vout.push_back(t);
+  }
+  j["vertices"] = vout;
+  double scalefactor = 1 / (pow(10, importantdigits));
+  j["transform"]["scale"] = {scalefactor, scalefactor, scalefactor};
+  j["transform"]["translate"] = {minx, miny, minz};
+  return (inputsize - j["vertices"].size());
+}
+
+
+void FMECityJSONWriter::tokenize(const std::string& str, std::vector<std::string>& tokens) {
+  std::string::size_type lastPos = str.find_first_not_of(" ", 0);
+  std::string::size_type pos     = str.find_first_of(" ", lastPos);
+  while (std::string::npos != pos || std::string::npos != lastPos) {
+    tokens.push_back(str.substr(lastPos, pos - lastPos));
+    lastPos = str.find_first_not_of(" ", pos);
+    pos = str.find_first_of(" ", lastPos);
+  }
+}
+
+void FMECityJSONWriter::update_to_new_ids(json& j, std::vector<unsigned long> &newids) {
+  for (auto& co : j["CityObjects"]) {
+    for (auto& g : co["geometry"]) {
+      if (g["type"] == "GeometryInstance") {
+        g["boundaries"][0] = newids[g["boundaries"][0]];
+      }
+      else if (g["type"] == "Solid") {
+        for (auto& shell : g["boundaries"])
+          for (auto& surface : shell)
+            for (auto& ring : surface)
+              for (auto& v : ring)
+                v = newids[v];
+      }
+      else if ( (g["type"] == "MultiSurface") || (g["type"] == "CompositeSurface") ) {
+        for (auto& surface : g["boundaries"])
+          for (auto& ring : surface)
+            for (auto& v : ring)
+              v = newids[v];  
+      }
+      else if ( (g["type"] == "MultiSolid") || (g["type"] == "CompositeSolid") ) {
+        for (auto& solid : g["boundaries"])
+          for (auto& shell : solid)
+            for (auto& surface : shell)
+              for (auto& ring : surface)
+                for (auto& v : ring)
+                  v = newids[v];
+      }
+    }
+  }
+}
+
 

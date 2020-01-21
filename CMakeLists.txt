@@ -11,7 +11,9 @@ add_library(cityjson SHARED
         ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsonreader.cpp
         ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsonreader.h
         ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsonwriter.cpp
-        ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsonwriter.h)
+        ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsonwriter.h
+        ${CMAKE_SOURCE_DIR}/fmecityjson/Point3.cpp
+        ${CMAKE_SOURCE_DIR}/fmecityjson/Point3.h)
 
 include_directories( ${CMAKE_SOURCE_DIR}/include/ )
 
