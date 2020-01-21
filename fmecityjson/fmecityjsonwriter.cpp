@@ -224,8 +224,14 @@ FME_Status FMECityJSONWriter::close()
    // -----------------------------------------------------------------------
    // Perform any closing operations / cleanup here; e.g. close opened files
    // -----------------------------------------------------------------------
-  gLogFile->logMessageString("I AM CLOSING: close() !");
+   gLogFile->logMessageString("I AM CLOSING: close() !");
 
+   outputJSON_["vertices"] = vertices_;
+   // vertices_.clear();
+   
+   //-- remove duplicates (and potentially compress/quantize the file)
+   duplicate_vertices();
+   
    //-- write to the file
    outputFile_ << outputJSON_ << std::endl;
 
@@ -616,12 +622,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    std::vector<std::vector<double>> vtmp = (visitor_)->getGeomVertices();
    vertices_.insert(vertices_.end(), vtmp.begin(), vtmp.end());
    // gLogFile->logMessageString("==> 3", FME_WARN);
-
-   outputJSON_["vertices"] = vertices_;
-   vertices_.clear();
-   
-   //-- remove duplicates (and potentially compress/quantize the file)
-   duplicate_vertices();
 
    //-- reset the internal DS for one feature
    (visitor_)->reset();
