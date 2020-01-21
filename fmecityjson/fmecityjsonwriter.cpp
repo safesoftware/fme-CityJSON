@@ -620,18 +620,8 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    outputJSON_["vertices"] = vertices_;
    vertices_.clear();
    
-   //-- check if the file needs to be compressed/quantized
-   // TODO : implement the compression/quantization
-   if (compress_ == true)
-   {
-      gLogFile->logMessageString("YES let's compress!");
-      gLogFile->logMessageString(std::to_string(compress_num_digits_).c_str());
-
-      duplicate_vertices();
-
-   } else{
-      gLogFile->logMessageString("NO compress!");
-   }
+   //-- remove duplicates (and potentially compress/quantize the file)
+   duplicate_vertices();
 
    //-- reset the internal DS for one feature
    (visitor_)->reset();
@@ -771,6 +761,7 @@ void FMECityJSONWriter::logFMEStringArray(IFMEStringArray& stringArray)
 }
 
 int FMECityJSONWriter::duplicate_vertices() {
+  gLogFile->logMessageString("Removing the duplicate vertices in the CityJSON object.");
   size_t inputsize = outputJSON_["vertices"].size();
   //-- find bbox
   double minx = 1e9;
@@ -813,26 +804,43 @@ int FMECityJSONWriter::duplicate_vertices() {
   }
   //-- update IDs for the faces
   update_to_new_ids(newids);
-  //-- replace the vertices
-  std::vector<std::array<int, 3>> vout;
-  for (std::string& s : newvertices) {
-    std::vector<std::string> ls;
-    tokenize(s, ls);
-    for (auto& each : ls) {
-      std::size_t found = each.find(".");
-      each.erase(found, 1);
+  
+  if (compress_ == true) {
+    gLogFile->logMessageString("Compressing the CityJSON file");
+    //-- replace the vertices
+    std::vector<std::array<int, 3>> vout;
+    for (std::string& s : newvertices) {
+      std::vector<std::string> ls;
+      tokenize(s, ls);
+      for (auto& each : ls) {
+        std::size_t found = each.find(".");
+        each.erase(found, 1);
+      }
+      // std::cout << ls[0] << std::endl;
+      std::array<int,3> t;
+      t[0] = std::stoi(ls[0]);
+      t[1] = std::stoi(ls[1]);
+      t[2] = std::stoi(ls[2]);
+      vout.push_back(t);
     }
-    // std::cout << ls[0] << std::endl;
-    std::array<int,3> t;
-    t[0] = std::stoi(ls[0]);
-    t[1] = std::stoi(ls[1]);
-    t[2] = std::stoi(ls[2]);
-    vout.push_back(t);
+    outputJSON_["vertices"] = vout;
+    double scalefactor = 1 / (pow(10, compress_num_digits_));
+    outputJSON_["transform"]["scale"] = {scalefactor, scalefactor, scalefactor};
+    outputJSON_["transform"]["translate"] = {minx, miny, minz};
   }
-  outputJSON_["vertices"] = vout;
-  double scalefactor = 1 / (pow(10, compress_num_digits_));
-  outputJSON_["transform"]["scale"] = {scalefactor, scalefactor, scalefactor};
-  outputJSON_["transform"]["translate"] = {minx, miny, minz};
+  else {
+    std::vector<std::array<double, 3>> vout;
+    for (std::string& s : newvertices) {
+      std::vector<std::string> ls;
+      tokenize(s, ls);
+      std::array<double, 3> t;
+      t[0] = std::stod(ls[0]);
+      t[1] = std::stod(ls[1]);
+      t[2] = std::stod(ls[2]);
+      vout.push_back(t);
+    }  
+    outputJSON_["vertices"] = vout;
+  }
   return (inputsize - outputJSON_["vertices"].size());
 }
 
