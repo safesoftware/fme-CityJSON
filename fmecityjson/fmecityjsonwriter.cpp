@@ -224,11 +224,9 @@ FME_Status FMECityJSONWriter::close()
    // -----------------------------------------------------------------------
    // Perform any closing operations / cleanup here; e.g. close opened files
    // -----------------------------------------------------------------------
+  gLogFile->logMessageString("I AM CLOSING: close() !");
 
-   outputJSON_["vertices"] = vertices_;
-   // thepts.clear();
-   vertices_.clear();
-   
+   //-- write to the file
    outputFile_ << outputJSON_ << std::endl;
 
    // Delete the visitor
@@ -619,9 +617,9 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    vertices_.insert(vertices_.end(), vtmp.begin(), vtmp.end());
    // gLogFile->logMessageString("==> 3", FME_WARN);
 
-   //-- reset the internal DS for one feature
-   (visitor_)->reset();
-
+   outputJSON_["vertices"] = vertices_;
+   vertices_.clear();
+   
    //-- check if the file needs to be compressed/quantized
    // TODO : implement the compression/quantization
    if (compress_ == true)
@@ -629,9 +627,14 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       gLogFile->logMessageString("YES let's compress!");
       gLogFile->logMessageString(std::to_string(compress_num_digits_).c_str());
 
+      duplicate_vertices();
+
    } else{
       gLogFile->logMessageString("NO compress!");
    }
+
+   //-- reset the internal DS for one feature
+   (visitor_)->reset();
 
    return FME_SUCCESS;
 }
@@ -767,13 +770,13 @@ void FMECityJSONWriter::logFMEStringArray(IFMEStringArray& stringArray)
    gLogFile->logMessageString(sample.c_str(), FME_INFORM);
 }
 
-int FMECityJSONWriter::duplicate_vertices(json& j, int importantdigits) {
-  size_t inputsize = j["vertices"].size();
+int FMECityJSONWriter::duplicate_vertices() {
+  size_t inputsize = outputJSON_["vertices"].size();
   //-- find bbox
   double minx = 1e9;
   double miny = 1e9;
   double minz = 1e9;
-  for (auto& v : j["vertices"]) {
+  for (auto& v : outputJSON_["vertices"]) {
     if (v[0] < minx)
       minx = v[0];
     if (v[1] < miny)
@@ -783,7 +786,7 @@ int FMECityJSONWriter::duplicate_vertices(json& j, int importantdigits) {
   }
   //-- read points and translate now (if int)
   std::vector<Point3> vertices;
-  for (auto& v : j["vertices"]) {
+  for (auto& v : outputJSON_["vertices"]) {
     std::vector<double> t = v;
     Point3 tmp(t[0], t[1], t[2]);
     tmp.translate(-minx, -miny, -minz);
@@ -795,7 +798,7 @@ int FMECityJSONWriter::duplicate_vertices(json& j, int importantdigits) {
   std::vector<std::string> newvertices;
   unsigned long i = 0;
   for (auto& v : vertices) {
-    std::string thekey = v.get_key(importantdigits);
+    std::string thekey = v.get_key(compress_num_digits_);
     auto it = hash.find(thekey);
     if (it == hash.end()) {
       unsigned long newid = (unsigned long)(hash.size());
@@ -809,7 +812,7 @@ int FMECityJSONWriter::duplicate_vertices(json& j, int importantdigits) {
     i++;
   }
   //-- update IDs for the faces
-  update_to_new_ids(j, newids);
+  update_to_new_ids(newids);
   //-- replace the vertices
   std::vector<std::array<int, 3>> vout;
   for (std::string& s : newvertices) {
@@ -826,11 +829,11 @@ int FMECityJSONWriter::duplicate_vertices(json& j, int importantdigits) {
     t[2] = std::stoi(ls[2]);
     vout.push_back(t);
   }
-  j["vertices"] = vout;
-  double scalefactor = 1 / (pow(10, importantdigits));
-  j["transform"]["scale"] = {scalefactor, scalefactor, scalefactor};
-  j["transform"]["translate"] = {minx, miny, minz};
-  return (inputsize - j["vertices"].size());
+  outputJSON_["vertices"] = vout;
+  double scalefactor = 1 / (pow(10, compress_num_digits_));
+  outputJSON_["transform"]["scale"] = {scalefactor, scalefactor, scalefactor};
+  outputJSON_["transform"]["translate"] = {minx, miny, minz};
+  return (inputsize - outputJSON_["vertices"].size());
 }
 
 
@@ -844,8 +847,8 @@ void FMECityJSONWriter::tokenize(const std::string& str, std::vector<std::string
   }
 }
 
-void FMECityJSONWriter::update_to_new_ids(json& j, std::vector<unsigned long> &newids) {
-  for (auto& co : j["CityObjects"]) {
+void FMECityJSONWriter::update_to_new_ids(std::vector<unsigned long> &newids) {
+  for (auto& co : outputJSON_["CityObjects"]) {
     for (auto& g : co["geometry"]) {
       if (g["type"] == "GeometryInstance") {
         g["boundaries"][0] = newids[g["boundaries"][0]];
@@ -854,7 +857,7 @@ void FMECityJSONWriter::update_to_new_ids(json& j, std::vector<unsigned long> &n
         for (auto& shell : g["boundaries"])
           for (auto& surface : shell)
             for (auto& ring : surface)
-              for (auto& v : ring)
+              for (auto& v : ring) 
                 v = newids[v];
       }
       else if ( (g["type"] == "MultiSurface") || (g["type"] == "CompositeSurface") ) {
