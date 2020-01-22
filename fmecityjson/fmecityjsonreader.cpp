@@ -244,8 +244,7 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
             gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
             lodParam_ = lodInData_[0];
         }
-
-    } else {
+    } else if (lodInData_.size() == 1) {
         // In case there is only one LoD in the data, we ignore the Parameter
         // even if it is set.
         lodParam_ = lodInData_[0];
