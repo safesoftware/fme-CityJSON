@@ -27,6 +27,9 @@
     <ClCompile Include="fmecityjsongeometryvisitor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Point3.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fmecityjsonpriv.h">
@@ -39,6 +42,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="fmecityjsongeometryvisitor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Point3.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
