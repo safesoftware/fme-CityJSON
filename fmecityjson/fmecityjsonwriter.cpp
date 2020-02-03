@@ -133,6 +133,16 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
       compress_ = false;
    }
 
+   //-- remove duplicate vertices?
+   gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcRemoveDuplicates, *pv);
+   s1 = pv->data();
+   remove_duplicates_ = false;
+   if (s1.compare("Yes") == 0)
+   {
+    remove_duplicates_ = true;
+   }
+   gFMESession->destroyString(pv);
+
    // Perform setup steps before opening file for writing
 
    // Get geometry tools
@@ -231,8 +241,14 @@ FME_Status FMECityJSONWriter::close()
    {
       outputJSON_["vertices"] = vertices_;
       //-- remove duplicates (and potentially compress/quantize the file)
-      duplicate_vertices();
-      vertices_.clear();
+      if (remove_duplicates_ == true)
+      {
+        duplicate_vertices();
+        vertices_.clear();
+      }
+      else {
+        outputJSON_["vertices"] = vertices_;
+      }
       //-- write to the file
       outputFile_ << outputJSON_ << std::endl;
       // Log that the writer is done
