@@ -193,6 +193,8 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
       gFMESession->destroyStringArray(allatt);
    }
 
+
+
    // -----------------------------------------------------------------------
    // Open the dataset here
    // e.g. outputFile_.open(dataset_.c_str(), ios::out|ios::trunc);
@@ -314,45 +316,69 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       return FME_FAILURE;
    }
    
-
    gLogFile->logMessageString(*s1);
+   // gLogFile->logMessageString(*s1, FME_WARN);
 
    outputJSON_["CityObjects"][s1->data()] = json::object();
    outputJSON_["CityObjects"][s1->data()]["type"] = ft;
 
    IFMEStringArray* allatt = gFMESession->createStringArray();
    outputJSON_["CityObjects"][s1->data()]["attributes"] = json::object();
+   
+   // gLogFile->logMessageString("NON SequencedAttribute", FME_WARN);
    // feature.getAllAttributeNames(*allatt);
-   feature.getSequencedAttributeList (*allatt);
+   // for (FME_UInt32 i = 0; i < allatt->entries(); i++)
+   // {
+   //    const char* t = allatt->elementAt(i)->data();
+   //    std::string ts(t);
+   //    gLogFile->logMessageString(ts.c_str());
+   // }
+   
+   // gLogFile->logMessageString("SequencedAttribute", FME_WARN);
+   // feature.getSequencedAttributeList(*allatt);
+   // for (FME_UInt32 i = 0; i < allatt->entries(); i++)
+   // {
+   //    const char* t = allatt->elementAt(i)->data();
+   //    std::string ts(t);
+   //    gLogFile->logMessageString(ts.c_str());
+   // }
+   // gLogFile->logMessageString("=====", FME_WARN);
+
+   // for (auto& kv: attrToWrite_["Building"]) {
+   //    // std::cout << key << " has value " << value << std::endl;
+   //    gLogFile->logMessageString(kv.first.c_str());
+   // }
+   // gLogFile->logMessageString("=====", FME_WARN);
+
+   feature.getAllAttributeNames(*allatt);
+   // feature.getSequencedAttributeList(*allatt);
    for (FME_UInt32 i = 0; i < allatt->entries(); i++)
    {
       const char* t = allatt->elementAt(i)->data();
       std::string ts(t);
+      // gLogFile->logMessageString(ts.c_str());
       IFMEString* value = gFMESession->createString();
       feature.getAttribute(t, *value);
       FME_AttributeType ftype = feature.getAttributeType(t);
+      // gLogFile->logMessageString(ts.c_str(), FME_WARN);
       if ( (ts != "fid") &&
+           (ts != "cityjson_type") &&  
            (ts != "cityjson_parents") &&  
            (ts != "cityjson_children") 
          )  
       {
-         // gLogFile->logMessageString(ts.c_str());
 
          auto it = attrToWrite_[ft].find(ts);
-         std::string wtype = it->second;
-         if (wtype.empty() == true)
+         if (it == attrToWrite_[ft].end())
          {
             // gLogFile->logMessageString("not found");
             continue;
          }
-         // else
-         // {
-         //    gLogFile->logMessageString("found");
-         // }
+         std::string wtype = it->second;
 
 
-      //-- STRING writing -----   
-         if ( (wtype == "string") || (wtype == "char") )
+      //-- STRING & char & char(188) writing -----   
+         if ( (wtype == "string") || (wtype == "char") || (wtype.substr(0, 4) == "char") )
          {
             if ( (ftype == FME_ATTR_INT8)   ||
                  (ftype == FME_ATTR_INT16)  ||                                  
@@ -552,6 +578,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       gFMESession->destroyString(value);
    }
    gFMESession->destroyStringArray(allatt);
+   // gLogFile->logMessageString("Done with attributes", FME_WARN);
    
    //-- cityjson_children
    IFMEStringArray* childrenValues = gFMESession->createStringArray();
