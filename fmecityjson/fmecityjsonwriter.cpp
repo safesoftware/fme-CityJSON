@@ -325,31 +325,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    IFMEStringArray* allatt = gFMESession->createStringArray();
    outputJSON_["CityObjects"][s1->data()]["attributes"] = json::object();
    
-   // gLogFile->logMessageString("NON SequencedAttribute", FME_WARN);
-   // feature.getAllAttributeNames(*allatt);
-   // for (FME_UInt32 i = 0; i < allatt->entries(); i++)
-   // {
-   //    const char* t = allatt->elementAt(i)->data();
-   //    std::string ts(t);
-   //    gLogFile->logMessageString(ts.c_str());
-   // }
-   
-   // gLogFile->logMessageString("SequencedAttribute", FME_WARN);
-   // feature.getSequencedAttributeList(*allatt);
-   // for (FME_UInt32 i = 0; i < allatt->entries(); i++)
-   // {
-   //    const char* t = allatt->elementAt(i)->data();
-   //    std::string ts(t);
-   //    gLogFile->logMessageString(ts.c_str());
-   // }
-   // gLogFile->logMessageString("=====", FME_WARN);
-
-   // for (auto& kv: attrToWrite_["Building"]) {
-   //    // std::cout << key << " has value " << value << std::endl;
-   //    gLogFile->logMessageString(kv.first.c_str());
-   // }
-   // gLogFile->logMessageString("=====", FME_WARN);
-
    feature.getAllAttributeNames(*allatt);
    // feature.getSequencedAttributeList(*allatt);
    for (FME_UInt32 i = 0; i < allatt->entries(); i++)
