@@ -205,7 +205,7 @@ private:
    std::string                                    cityjson_version_; 
    bool                                           remove_duplicates_; 
    bool                                           compress_; 
-   int                                            compress_num_digits_; 
+   int                                            important_digits_; 
 
 };
 

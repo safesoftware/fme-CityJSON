@@ -55,10 +55,10 @@ const static char* const kLodParamTag      = "'CityJSON Level of Detail' paramet
 const static char* const kSrcLodParamTag   = "_LOD";
 const static char* const kMsgNoLodParam    = "'CityJSON Level of Detail' parameter value is not set";
 
-const static char* const kSrcCityjsonVersion        = "_CITYJSON_VERSION";
-const static char* const kSrcRemoveDuplicates       = "_REMOVE_DUPLICATES";
-const static char* const kSrcCompressParamTag       = "_USE_COMPRESSION";
-const static char* const kSrcCompressDigitsParamTag = "_IMPORTANT_DIGITS";
+const static char* const kSrcCityjsonVersion  = "_CITYJSON_VERSION";
+const static char* const kSrcRemoveDuplicates = "_REMOVE_DUPLICATES";
+const static char* const kSrcCompress         = "_USE_COMPRESSION";
+const static char* const kSrcImportantDigits  = "_IMPORTANT_DIGITS";
 
 
 #endif

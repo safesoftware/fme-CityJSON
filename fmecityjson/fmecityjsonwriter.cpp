@@ -120,18 +120,15 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
 
    // get the .fmf parameters
    IFMEString* pv = gFMESession->createString();
-   gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcCompressParamTag, *pv);
+   gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcCompress, *pv);
    std::string s1 = pv->data();
    if (s1.compare("Yes") == 0)
-   {
       compress_ = true;
-      gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcCompressDigitsParamTag, *pv);
-      compress_num_digits_ = std::stoi(pv->data());
-
-   }
-   else {
+   else 
       compress_ = false;
-   }
+   
+   gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcImportantDigits, *pv);
+   important_digits_ = std::stoi(pv->data());
 
    //-- remove duplicate vertices?
    gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcRemoveDuplicates, *pv);
@@ -844,13 +841,14 @@ int FMECityJSONWriter::duplicate_vertices() {
       vout.push_back(t);
     }
     outputJSON_["vertices"] = vout;
-    double scalefactor = 1 / (pow(10, compress_num_digits_));
+    double scalefactor = 1 / (pow(10, important_digits_));
     outputJSON_["transform"]["scale"] = {scalefactor, scalefactor, scalefactor};
     outputJSON_["transform"]["translate"] = {minx, miny, minz};
   }
   else {
     std::vector<std::array<double, 3>> vout;
     for (std::string& s : newvertices) {
+      gLogFile->logMessageString(s.c_str());
       std::vector<std::string> ls;
       tokenize(s, ls);
       std::array<double, 3> t;
