@@ -11,11 +11,12 @@ Point3::Point3(double x, double y, double z) {
 }
 
 std::string Point3::get_key(int precision) {
-  char* buf = new char[100];
+  char* buf = new char[200];
   std::stringstream ss;
   ss << "%." << precision << "f " << "%." << precision << "f " << "%." << precision << "f";
   std::sprintf(buf, ss.str().c_str(), _x, _y, _z);
-  return buf;
+  std::string r(buf);
+  return r;
 }
 
 void Point3::translate(double x, double y, double z) {

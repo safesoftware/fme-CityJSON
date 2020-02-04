@@ -806,7 +806,7 @@ int FMECityJSONWriter::duplicate_vertices() {
   std::vector<std::string> newvertices;
   unsigned long i = 0;
   for (auto& v : vertices) {
-    std::string thekey = v.get_key(compress_num_digits_);
+    std::string thekey = v.get_key(important_digits_);
     auto it = hash.find(thekey);
     if (it == hash.end()) {
       unsigned long newid = (unsigned long)(hash.size());
