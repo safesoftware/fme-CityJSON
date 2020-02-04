@@ -845,16 +845,16 @@ int FMECityJSONWriter::duplicate_vertices() {
     outputJSON_["transform"]["scale"] = {scalefactor, scalefactor, scalefactor};
     outputJSON_["transform"]["translate"] = {minx, miny, minz};
   }
-  else {
+  else {  //-- do not compress
     std::vector<std::array<double, 3>> vout;
     for (std::string& s : newvertices) {
-      gLogFile->logMessageString(s.c_str());
+      // gLogFile->logMessageString(s.c_str());
       std::vector<std::string> ls;
       tokenize(s, ls);
       std::array<double, 3> t;
-      t[0] = std::stod(ls[0]);
-      t[1] = std::stod(ls[1]);
-      t[2] = std::stod(ls[2]);
+      t[0] = minx + std::stod(ls[0]);
+      t[1] = miny + std::stod(ls[1]);
+      t[2] = minz + std::stod(ls[2]);
       vout.push_back(t);
     }  
     outputJSON_["vertices"] = vout;
