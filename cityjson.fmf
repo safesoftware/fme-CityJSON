@@ -94,6 +94,22 @@ PREAMBLE
 END_PREAMBLE
 
 ! --------------------------------------------------------------------------------
+! Directive to allow dynamic reader driven fixed schemas
+! --------------------------------------------------------------------------------
+WORKBENCH_CANNED_SCHEMA cityjson/cityjson.sch
+
+! ----------------------------------------------------------------------
+! PR#48429 - make "User Attributes" tab uneditable for writer
+!FORMAT_PARAMETER WRITER_FEATURE_TYPE_EDITING NO
+
+! --------------------------------------------------------------------------------
+! must be specified after "WORKBENCH_CANNED_SCHEMA" as fan-out does not 
+! make sense in a fixed schema format.
+! --------------------------------------------------------------------------------
+WORKBENCH_NO_FEATURE_TYPE_FANOUT
+
+
+! --------------------------------------------------------------------------------
 ! Map different CityJSON types to their FME types using GEOM_MAP table entries.
 ! --------------------------------------------------------------------------------
 GEOM_MAP cityjson_multipoint                fme_point
