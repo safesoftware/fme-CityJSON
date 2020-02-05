@@ -55,6 +55,7 @@
 #include <isurfaceiterator.h>
 #include <imultisurface.h>
 #include <imultiarea.h>
+#include <inull.h>
 #include <igeometryiterator.h>
 
 #include <typeinfo>
@@ -575,73 +576,59 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
 //-- GEOMETRIES -----
 
-   //-- update the offset (for writing vertices in the global list of CityJSON)
-   //-- in the visitor.
-   (visitor_)->setVerticesOffset(vertices_.size());
-
    //-- extract the geometries from the feature
    const IFMEGeometry* geometry = (const_cast<IFMEFeature&>(feature)).getGeometry();
 
-//======================================================
-   // FME_GeometryType fmegeomtype = (const_cast<IFMEFeature&>(feature)).getGeometryType();
-   // if fmegeomtype == 
-   // std::string s = typeid(*geometry).name();
-   // gLogFile->logMessageString(s.c_str(), FME_WARN);
 
-   // if (dynamic_cast<const IFMEBRepSolid*>(geometry))
-   // {
-   //    gLogFile->logMessageString("I am a IFMEBRepSolid", FME_WARN);
-   //    const IFMEBRepSolid* g = dynamic_cast<const IFMEBRepSolid*>(geometry);
-   //    const IFMESurface* outerSurface = g->getOuterSurface();
-   //    const IFMECompositeSurface* cs = dynamic_cast<const IFMECompositeSurface*>(outerSurface);
-   //    IFMESurfaceIterator* iterator = cs->getIterator();
-   //    while (iterator->next())
-   //    {
-   //       // Get the next surface
-   //       const IFMESurface* surface = iterator->getPart();
-   //       gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("surface LEDOUX")).c_str());
-   //    }
-
-   // }
-//======================================================
-
-   FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
-   if (badNews) {
-      // There was an error in writing the geometry
-      gLogFile->logMessageString(kMsgWriteError);
-      return FME_FAILURE;
-   }
-
-   //-- fetch the LoD of the geometry
-   IFMEString* slod = gFMESession->createString();
-   slod->set("cityjson_lod", 12);
-   IFMEString* stmp = gFMESession->createString();
-   if (geometry->getTraitString(*slod, *stmp) == FME_FALSE)
-   {
-      std::stringstream ss;
-      ss << "The '" << feature.getFeatureType() << "' feature will not be written because the geometry does not have a 'cityjson_lod' trait.";
-      gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
-      // The 'Building' feature with geometry type 'IFMEBRepSolid' will not be written because the geometry does not have a citygml_lod_name.
-      return FME_FAILURE;
-   }
-
-   //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
-   json fgeomjson = (visitor_)->getGeomJSON();
-   //-- TODO: write '2' or '2.0' is fine for the "lod"?
-   fgeomjson["lod"] = atof(stmp->data());
-
-   //-- write it to the JSON object
+   //-- do no process geometry if none, this is allowed in CityJSON
+   //-- a CO without geometry still has to have an empty array "geomtry": []
    outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
-   if (!fgeomjson.empty()) {
-      outputJSON_["CityObjects"][s1->data()]["geometry"].push_back(fgeomjson);
+   FME_Boolean isgeomnull = geometry->canCastAs<IFMENull*>();
+   if (isgeomnull == false)
+   {
+
+      //-- update the offset (for writing vertices in the global list of CityJSON)
+      //-- in the visitor.
+      (visitor_)->setVerticesOffset(vertices_.size());
+
+      FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
+      if (badNews) {
+         // There was an error in writing the geometry
+         gLogFile->logMessageString(kMsgWriteError);
+         return FME_FAILURE;
+      }
+
+      //-- fetch the LoD of the geometry
+      IFMEString* slod = gFMESession->createString();
+      slod->set("cityjson_lod", 12);
+      IFMEString* stmp = gFMESession->createString();
+      if (geometry->getTraitString(*slod, *stmp) == FME_FALSE)
+      {
+         std::stringstream ss;
+         ss << "The '" << feature.getFeatureType() << "' feature will not be written because the geometry does not have a 'cityjson_lod' trait.";
+         gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
+         // The 'Building' feature with geometry type 'IFMEBRepSolid' will not be written because the geometry does not have a citygml_lod_name.
+         return FME_FAILURE;
+      }
+
+      //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
+      json fgeomjson = (visitor_)->getGeomJSON();
+      //-- TODO: write '2' or '2.0' is fine for the "lod"?
+      fgeomjson["lod"] = atof(stmp->data());
+
+      //-- write it to the JSON object
+      // outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
+      if (!fgeomjson.empty()) {
+         outputJSON_["CityObjects"][s1->data()]["geometry"].push_back(fgeomjson);
+      }
+
+      std::vector<std::vector<double>> vtmp = (visitor_)->getGeomVertices();
+      vertices_.insert(vertices_.end(), vtmp.begin(), vtmp.end());
+      // gLogFile->logMessageString("==> 3", FME_WARN);
+
+      //-- reset the internal DS for one feature
+      (visitor_)->reset();
    }
-
-   std::vector<std::vector<double>> vtmp = (visitor_)->getGeomVertices();
-   vertices_.insert(vertices_.end(), vtmp.begin(), vtmp.end());
-   // gLogFile->logMessageString("==> 3", FME_WARN);
-
-   //-- reset the internal DS for one feature
-   (visitor_)->reset();
 
    return FME_SUCCESS;
 }
