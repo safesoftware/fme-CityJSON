@@ -13,7 +13,7 @@ FORMAT_TYPE DYNAMIC
 ! Specify the def line and correlation line templates.
 ! --------------------------------------------------------------------------------
 DEF_LINE_TEMPLATE {FME_GEN_GROUP_NAME}
-CORR_LINE_TEMPLATE {FME_GEN_GROUP_NAME} cityjson_type {FME_GEN_GEOMETRY}
+CORR_LINE_TEMPLATE {FME_GEN_GROUP_NAME}
 DEF_LINE_BREAK ATTRIB_CHANGE
 
 
@@ -94,83 +94,83 @@ PREAMBLE
 END_PREAMBLE
 
 ! --------------------------------------------------------------------------------
-! Map different CityJSON types to their FME types using GEOM_MAP table entries.
+! Directive to allow dynamic reader driven fixed schemas
 ! --------------------------------------------------------------------------------
-GEOM_MAP cityjson_multipoint                fme_point
+!WORKBENCH_CANNED_SCHEMA cityjson/cityjson.sch
 
-GEOM_MAP cityjson_multilinestring           fme_line
+! ----------------------------------------------------------------------
+! make "User Attributes" tab uneditable for writer?
+!FORMAT_PARAMETER WRITER_FEATURE_TYPE_EDITING NO
 
 ! --------------------------------------------------------------------------------
-! NOTE: If your format does not support arcs, then fme_arc should
-! be mapped to the same <format>_type to which fme_line has been
-! mapped. For example, the GEOM_MAP line would be:
-!  GEOM_MAP cityjson_line            fme_arc                \
-!           fme_primary_axis         fme_primary_axis       \
-!           fme_secondary_axis       fme_secondary_axis     \
-!           fme_rotation             fme_rotation           \
-!           fme_start_angle          fme_start_angle        \
-!           fme_sweep_angle          fme_sweep_angle        \
-!           @Arc(&fme_primary_axis,&fme_secondary_axis,0, &fme_rotation,&fme_start_angle,&fme_sweep_angle)
-! The last line containing the function @Arc() strokes the arc
-! into a line; it is very important and must be present.
+! must be specified after "WORKBENCH_CANNED_SCHEMA" as fan-out does not 
+! make sense in a fixed schema format.
 ! --------------------------------------------------------------------------------
+!WORKBENCH_NO_FEATURE_TYPE_FANOUT
 
-GEOM_MAP cityjson_multilinestring   fme_arc                \
-         fme_primary_axis           fme_primary_axis       \
-         fme_secondary_axis         fme_secondary_axis     \
-         fme_rotation               fme_rotation           \
-         fme_start_angle            fme_start_angle        \
-         fme_sweep_angle            fme_sweep_angle         \
-         @Arc(&fme_primary_axis,&fme_secondary_axis,0, &fme_rotation,&fme_start_angle,&fme_sweep_angle)
-         
-GEOM_MAP cityjson_text            fme_text               \
-         fme_text_string          fme_text_string        \
-         fme_text_size            fme_text_size          \
-         fme_rotation             fme_rotation           
+! ----------------------------------------------------------------------
+! Note that because later on we define GEOMETRY_TYPE_FIELD fme_type
+! all the left hand sides below MUST be valid fme_types.  We know
+! that the right hand sides are transfer types, which are sort of like
+! fme_types, but not quite.
+! Note: Order is important in this list below.
+GEOM_MAP fme_point            fme_point                 \
+         fme_rotation         fme_rotation              \
+         fme_color            fme_color
 
-GEOM_MAP cityjson_multi_text      fme_text               \
-         fme_text_string          fme_text_string        \
-         fme_rotation             fme_rotation           \
-         fme_text_size            fme_text_size          
-         
-! --------------------------------------------------------------------------------
-! NOTE: If your format does not support ellipses, then fme_ellipse should
-! be mapped to the same <format>_type to which fme_polygon has been
-! mapped. For example, the GEOM_MAP line would be:
-!  GEOM_MAP cityjson_polygon         fme_ellipse            \
-!           fme_primary_axis         fme_primary_axis       \
-!           fme_secondary_axis       fme_secondary_axis     \
-!           fme_rotation             fme_rotation           \
-!           @Arc(0, MAKEPOLY_FOR_360ARC)
-! The last line containing the function @Arc() strokes the ellipse
-! into a polygon; it is very important and must be present.
-! --------------------------------------------------------------------------------
+GEOM_MAP fme_line             fme_line                  \
+         fme_color            fme_color
 
-GEOM_MAP cityjson_multisurface    fme_ellipse            \
-         fme_primary_axis         fme_primary_axis       \
-         fme_secondary_axis       fme_secondary_axis     \
-         fme_rotation             fme_rotation           \
-         @Arc(0, MAKEPOLY_FOR_360ARC)
-         
-GEOM_MAP cityjson_multisurface          fme_polygon
+GEOM_MAP fme_area             fme_polygon               \
+         fme_color            fme_color                 \
+         fme_fill_color       fme_fill_color
 
-GEOM_MAP cityjson_multisurface          fme_rectangle
-         
-GEOM_MAP cityjson_multisurface          fme_rounded_rectangle
+GEOM_MAP fme_text             fme_text                  \
+         fme_rotation         fme_rotation              \
+         fme_text_size        fme_text_size             \
+         fme_text_string      fme_text_string           \
+         fme_color            fme_color
 
-GEOM_MAP cityjson_multisurface          fme_surface
+GEOM_MAP fme_ellipse          fme_ellipse               \
+         fme_rotation         fme_rotation              \
+         fme_primary_axis     fme_primary_axis          \
+         fme_secondary_axis   fme_secondary_axis        \
+         fme_color            fme_color                 \
+         fme_fill_color       fme_fill_color
 
-GEOM_MAP cityjson_compositesurface      fme_surface
+GEOM_MAP fme_arc              fme_arc                   \
+         fme_rotation         fme_rotation              \
+         fme_primary_axis     fme_primary_axis          \
+         fme_secondary_axis   fme_secondary_axis        \
+         fme_start_angle      fme_start_angle           \
+         fme_sweep_angle      fme_sweep_angle           \
+         fme_color            fme_color
 
-GEOM_MAP cityjson_solid                 fme_solid
+GEOM_MAP fme_rectangle        fme_rectangle             \
+         fme_color            fme_color                 \
+         fme_fill_color       fme_fill_color
 
-GEOM_MAP cityjson_multisolid            fme_solid
+GEOM_MAP fme_rounded_rectangle fme_rounded_rectangle    \
+         fme_color            fme_color                 \
+         fme_fill_color       fme_fill_color
 
-GEOM_MAP cityjson_compositesolid        fme_solid
+GEOM_MAP fme_raster           fme_raster
 
-GEOM_MAP cityjson_null                  fme_no_geom
-         
-GEOM_MAP fme_no_map                     fme_no_geom
+GEOM_MAP fme_collection       fme_collection
+
+GEOM_MAP fme_surface          fme_surface
+
+GEOM_MAP fme_solid            fme_solid
+
+GEOM_MAP fme_point_cloud      fme_point_cloud
+
+GEOM_MAP fme_feature_table    fme_feature_table
+
+GEOM_MAP fme_no_geom          fme_no_geom
+
+GEOM_MAP ""                   fme_no_geom
+
+GEOM_MAP fme_no_map           fme_no_geom
 
 
 ! --------------------------------------------------------------------------------
@@ -218,7 +218,11 @@ ATTRIBUTE_LENGTH 600
 ! For genericization support, we must identify which attribute holds the
 ! 'geometry type' of the feature since the CORR_LINE_TEMPLATE does not.
 ! --------------------------------------------------------------------------------
-GENERICIZE_GEOMTYPE_ATTR_NAME cityjson_type
+GENERICIZE_GEOMTYPE_ATTR_NAME fme_type
+
+! ----------------------------------------------------------------------
+! Set the geometry TYPE
+GEOMETRY_TYPE_FIELD fme_type
 
 ! ------------------------------------------------------------------------------
 ! Setting the INVALID characters which cannot be used for file names

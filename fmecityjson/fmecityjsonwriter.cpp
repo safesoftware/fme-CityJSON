@@ -67,6 +67,8 @@ IFMEMappingFile* FMECityJSONWriter::gMappingFile = nullptr;
 IFMECoordSysManager* FMECityJSONWriter::gCoordSysMan = nullptr;
 extern IFMESession* gFMESession;
 
+// TODO: These should probably be populated from the shipped schema files, not hardcoded.
+//       Maybe "Metadata" is added to this list because it is specific to the FME reader/writer
 const std::vector<std::string> FMECityJSONWriter::cityjsonTypes_ = std::vector<std::string>(
    {
       "Building", 
@@ -79,6 +81,7 @@ const std::vector<std::string> FMECityJSONWriter::cityjsonTypes_ = std::vector<s
       "CityFurniture",
       "GenericCityObject",
       "LandUse",
+      "Metadata",
       "PlantCover",
       "Railway",
       "Road",
@@ -305,6 +308,20 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       }
    }
 
+   // Handle Metadata features specially.
+   // For now, we are basically ignoring it.
+   if (ft == "Metadata")
+   {
+      IFMEString* rs = gFMESession->createString();
+      // Look for whatever metadata is interesting
+      feature.getAttribute("referenceSystem", *rs);
+      // Use metadata as required
+      // outputJSON_["metadata"] = "is awesome";
+      gFMESession->destroyString(rs); rs = nullptr;
+
+      return FME_SUCCESS;
+   }
+
    //-- write fid for CityObject
    //-- FAILURE if not one of these
    IFMEString* s1 = gFMESession->createString();
@@ -335,7 +352,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       FME_AttributeType ftype = feature.getAttributeType(t);
       // gLogFile->logMessageString(ts.c_str(), FME_WARN);
       if ( (ts != "fid") &&
-           (ts != "cityjson_type") &&  
            (ts != "cityjson_parents") &&  
            (ts != "cityjson_children") 
          )  
