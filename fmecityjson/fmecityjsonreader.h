@@ -168,6 +168,7 @@ private:
    // Please refer to the IFMEMappingFile documentation for more information in
    // FME_DEV_HOME/pluginbuilder/cpp/apidoc/classIFMEMappingFile.html
    void readParametersDialog();
+   bool fetchWriterDirectives(const IFMEStringArray& parameters);
 
    // -----------------------------------------------------------------------
    // Insert additional private methods here
@@ -219,6 +220,18 @@ private:
    // Because strings are easier to compare than floats (in case of extended LoD).
    static std::string lodToString(json currentGeometry);
 
+   // -----------------------------------------------------------------------
+   // If the reader is being used as a "helper" to the writer, to gather
+   // schema feature definitions, this will look in the official CityJSON specs
+   // and pull out the correct schema information.
+   FME_Status scrapeSchemaFeaturesForWriter();
+
+   // -----------------------------------------------------------------------
+   // Helper function to recursively add nested attribute types to a schema feature.
+   void addAttributeNamesAndTypes(IFMEFeature& schemaFeature,
+                                  const std::string& attributeName,
+                                  json attributeValue) const;
+
    // Data members
 
    // The value specified for the READER_TYPE in the mapping file.
@@ -261,11 +274,15 @@ private:
    std::vector<std::string> lodInData_;
 
    bool schemaScanDone_;
-   bool schemaScaneDoneMeta_;
+   bool schemaScanDoneMeta_;
    std::map<std::string, IFMEFeature*> schemaFeatures_;
 
    IFMEString* textureCoordUName_;
    IFMEString* textureCoordVName_;
+
+   // These are when the reader is used as a "helper" to the writer
+   bool writerHelperMode_;
+   std::string writerSchemaVersion_;
 };
 
 #endif

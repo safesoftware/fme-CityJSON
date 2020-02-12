@@ -5,7 +5,8 @@
 ! Define the format name.
 ! --------------------------------------------------------------------------------
 DEFAULT_MACRO FORMAT_SHORT_NAME CITYJSON
-SOURCE_READER CITYJSON EXPOSED_ATTRS "$($(FORMAT_SHORT_NAME)_EXPOSE_FORMAT_ATTRS)"
+SOURCE_READER CITYJSON EXPOSED_ATTRS "$($(FORMAT_SHORT_NAME)_EXPOSE_FORMAT_ATTRS)" \
+		       -CITYJSON_VERSION "$(CITYJSON_VERSION)"
 FORMAT_NAME   CITYJSON
 FORMAT_TYPE DYNAMIC
 
@@ -96,7 +97,7 @@ END_PREAMBLE
 ! --------------------------------------------------------------------------------
 ! Directive to allow dynamic reader driven fixed schemas
 ! --------------------------------------------------------------------------------
-!WORKBENCH_CANNED_SCHEMA cityjson/cityjson.sch
+WORKBENCH_CANNED_SCHEMA READ_AS_SOURCE
 
 ! ----------------------------------------------------------------------
 ! make "User Attributes" tab uneditable for writer?
@@ -106,7 +107,7 @@ END_PREAMBLE
 ! must be specified after "WORKBENCH_CANNED_SCHEMA" as fan-out does not 
 ! make sense in a fixed schema format.
 ! --------------------------------------------------------------------------------
-!WORKBENCH_NO_FEATURE_TYPE_FANOUT
+WORKBENCH_NO_FEATURE_TYPE_FANOUT
 
 ! ----------------------------------------------------------------------
 ! Note that because later on we define GEOMETRY_TYPE_FIELD fme_type
