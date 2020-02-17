@@ -271,13 +271,16 @@ private:
    std::string featureType_;
    std::vector< std::vector< double > > vertices_;
    json outputgeom_;
-   std::vector< json > surfaces_;
-   std::vector< json > semanticValues_;
+
+   //-- semantics of surfaces
+   std::vector< json > surfaces_; //-- all the surfaces (which are json object; same ones are merged)
+   std::vector< json > semanticValues_; //-- values for MultiSurfaces and CompositeSurfaces
    std::vector< json > solidSemanticValues_;
    std::vector< json > multiSolidSemanticValues_;
+   //-- possible types; always possible to have '+MySemantics' with the '+'
+   static const std::map< std::string, std::vector< std::string > > semancticsTypes_; 
 
-   static const std::map< std::string, std::vector< std::string > > FMECityJSONGeometryVisitor::semancticsTypes_;
-   
+   //-- geometry of surfaces   
    std::vector< unsigned long > tmpRing_;                                                                   //-- level 1
    std::vector< std::vector< unsigned long> > tmpFace_;                                                     //-- level 2
    std::vector< std::vector< std::vector< unsigned long > > > tmpMultiFace_;                                //-- level 3
