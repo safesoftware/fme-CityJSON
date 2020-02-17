@@ -204,12 +204,29 @@ public:
    std::vector< std::vector< double > > getGeomVertices();
 
    //----------------------------------------------------------------------
+   // get the array of semantics for the geometry
+   json getSemantics();
+
+   //----------------------------------------------------------------------
    // set an offset for the indices used by the geometry, since in CityJSON
    // all the indices are global
    void setVerticesOffset(long unsigned offset);
 
    //----------------------------------------------------------------------
-   void setOutputGeometryType(int level);
+   // check if the surface semantics type is allowed for this CityObjectType
+   bool semanticTypeAllowed(std::string trait);
+
+   //----------------------------------------------------------------------
+   // set the CityObjectType of the feature
+   void setFeatureType(std::string type);
+
+   //----------------------------------------------------------------------
+   // replace array with null values to single null value
+   json replaceSemanticValues(std::vector<json> semanticValues);
+
+   //----------------------------------------------------------------------
+   // replace empty array with null value
+   json replaceEmptySurface(std::vector<json> semanticSurface);
 
    //----------------------------------------------------------------------
    // reset the variables vertices_ and onegeom_ so that a new geometry
@@ -226,7 +243,6 @@ private:
    //---------------------------------------------------------------
    // Assignment operator
    FMECityJSONGeometryVisitor& operator=(const FMECityJSONGeometryVisitor&);
-
 
    //---------------------------------------------------------------------
    // The IFMEArc geometry object passed in here is an arc by center point.
@@ -255,16 +271,21 @@ private:
    //---------- private data members
 
    long unsigned offset_;
-
+   std::string featureType_;
    std::vector< std::vector< double > > vertices_;
-   
    json outputgeom_;
+   std::vector< json > surfaces_;
+   std::vector< json > semanticValues_;
+   std::vector< json > solidSemanticValues_;
+   std::vector< json > multiSolidSemanticValues_;
+
+   static const std::map< std::string, std::vector< std::string > > FMECityJSONGeometryVisitor::semancticsTypes_;
    
-   std::vector<unsigned long> tmpRing_;                                                            //-- level 1
-   std::vector<std::vector<unsigned long>> tmpFace_;                                               //-- level 2
-   std::vector<std::vector<std::vector<unsigned long>>> tmpMultiFace_;                             //-- level 3
-   std::vector<std::vector<std::vector<std::vector<unsigned long>>>> tmpSolid_;                    //-- level 4
-   std::vector<std::vector<std::vector<std::vector<std::vector<unsigned long>>>>> tmpMultiSolid_;  //-- level 5
+   std::vector< unsigned long > tmpRing_;                                                                   //-- level 1
+   std::vector< std::vector< unsigned long> > tmpFace_;                                                     //-- level 2
+   std::vector< std::vector< std::vector< unsigned long > > > tmpMultiFace_;                                //-- level 3
+   std::vector< std::vector< std::vector< std::vector< unsigned long > > > > tmpSolid_;                     //-- level 4
+   std::vector< std::vector< std::vector< std::vector< std::vector< unsigned long> > > > > tmpMultiSolid_;  //-- level 5
 
 };
 

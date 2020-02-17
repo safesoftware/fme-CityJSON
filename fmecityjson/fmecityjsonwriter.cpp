@@ -319,6 +319,8 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    outputJSON_["CityObjects"][s1->data()] = json::object();
    outputJSON_["CityObjects"][s1->data()]["type"] = ft;
+   //-- set FeatureType in visitor for surface semantics
+   visitor_->setFeatureType(ft);
 
    IFMEStringArray* allatt = gFMESession->createStringArray();
    outputJSON_["CityObjects"][s1->data()]["attributes"] = json::object();
