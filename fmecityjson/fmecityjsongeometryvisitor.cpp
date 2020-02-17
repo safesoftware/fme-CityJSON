@@ -160,24 +160,6 @@ std::vector< std::vector< double > > FMECityJSONGeometryVisitor::getGeomVertices
    return vertices_;
 }
 
-json FMECityJSONGeometryVisitor::getSemantics() 
-{
-   json sem = json::object();
-   // write semantic surface descriptions
-   for (int i = 0; i < surfaces_.size(); i++) {
-      sem["surfaces"].push_back(surfaces_[i]);
-   }
-   // write semantic surface values
-   for (int i = 0; i < semanticValues_.size(); i++) {
-      if (semanticValues_[i] == -1) {
-         sem["values"].push_back(nullptr);
-      }
-      else {
-         sem["values"].push_back(semanticValues_[i]);
-      }
-   }
-   return sem;
-}
 
 void FMECityJSONGeometryVisitor::setVerticesOffset(long unsigned offset)
 {

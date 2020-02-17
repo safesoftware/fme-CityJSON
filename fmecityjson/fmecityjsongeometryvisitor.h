@@ -203,10 +203,7 @@ public:
    // get the array of vertices for the geometry
    std::vector< std::vector< double > > getGeomVertices();
 
-   //----------------------------------------------------------------------
-   // get the array of semantics for the geometry
-   json getSemantics();
-
+   
    //----------------------------------------------------------------------
    // set an offset for the indices used by the geometry, since in CityJSON
    // all the indices are global
