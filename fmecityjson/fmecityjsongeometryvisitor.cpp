@@ -255,6 +255,19 @@ FME_Status FMECityJSONGeometryVisitor::visitPoint(const IFMEPoint& point)
 {
    FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("point")).c_str());
 
+   tmpRing_.clear();
+   std::vector<double> v;
+   v.push_back(point.getX());
+   v.push_back(point.getY());
+   v.push_back(point.getZ());
+   unsigned long a = vertices_.size();
+   tmpRing_.push_back(a + offset_);
+   vertices_.push_back(v);
+
+   outputgeom_ = json::object();
+   outputgeom_["type"] = "MultiPoint";
+   outputgeom_["boundaries"] = tmpRing_;
+
    return FME_SUCCESS;
 }
 
@@ -266,24 +279,27 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiPoint(const IFMEMultiPoint& mul
 
    FME_Status badNews;
 
-   // Create a point iterator
+   tmpRing_.clear();
+   
    IFMEPointIterator* iterator = multipoint.getIterator();
    while (iterator->next())
    {
-      FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("point")).c_str());
-
-      // re-visit the next geometry
-      badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
-      if (badNews)
-      {
-         multipoint.destroyIterator(iterator);
-         return FME_FAILURE;
-      }
+      const IFMEPoint* point = iterator->getPart();
+      std::vector<double> v;
+      v.push_back(point->getX());
+      v.push_back(point->getY());
+      v.push_back(point->getZ());
+      unsigned long a = vertices_.size();
+      tmpRing_.push_back(a + offset_);
+      vertices_.push_back(v);
    }
    // We are done with the iterator, so destroy it
    multipoint.destroyIterator(iterator);
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("multi point")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("multi point")).c_str());
+   outputgeom_ = json::object();
+   outputgeom_["type"] = "MultiPoint";
+   outputgeom_["boundaries"] = tmpRing_;
 
    return FME_SUCCESS;
 }
