@@ -226,6 +226,10 @@ public:
    json replaceEmptySurface(std::vector<json> semanticSurface);
 
    //----------------------------------------------------------------------
+   // 
+   void setGeomType(std::string geomtype);
+
+   //----------------------------------------------------------------------
    // reset the variables vertices_ and onegeom_ so that a new geometry
    // can be written
    void reset();
@@ -269,6 +273,7 @@ private:
 
    long unsigned offset_;
    std::string featureType_;
+   std::string geomType_;
    std::vector< std::vector< double > > vertices_;
    json outputgeom_;
 

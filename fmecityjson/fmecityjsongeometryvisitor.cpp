@@ -186,6 +186,10 @@ void FMECityJSONGeometryVisitor::setFeatureType(std::string type) {
   featureType_ = type;
 }
 
+void FMECityJSONGeometryVisitor::setGeomType(std::string geomtype) {
+  geomType_ = geomtype;
+}
+
 json FMECityJSONGeometryVisitor::replaceSemanticValues(std::vector<json> semanticValues) {
    // replace array with only null values with a single null value
    for (int i = 0; i < semanticValues.size(); i++) {
@@ -210,6 +214,11 @@ void FMECityJSONGeometryVisitor::reset()
    vertices_.clear();
    surfaces_.clear();
    semanticValues_.clear();
+   tmpRing_.clear();
+   tmpFace_.clear();
+   tmpMultiFace_.clear();
+   tmpSolid_.clear();
+   tmpMultiSolid_.clear();
 }
 
 //=====================================================================
@@ -556,18 +565,42 @@ FME_Status FMECityJSONGeometryVisitor::visitArcB3P(const IFMEArc& arc)
 //
 FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
 {
-   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("line")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("line")).c_str(), FME_WARN);
+   // FMECityJSONWriter::gLogFile->logMessageString(geomType_.c_str());
+
    tmpRing_.clear();
-   for (int i = 0; i < line.numPoints()-1; i++) {
-      FMECoord3D coords;
-      line.getPointAt3D(i, coords);
-      std::vector< double > v;
-      v.push_back(coords.x);
-      v.push_back(coords.y);
-      v.push_back(coords.z);
-      unsigned long a = vertices_.size();
-      tmpRing_.push_back(a + offset_);
-      vertices_.push_back(v);
+   //-- special case for line, otherwise needs to be called each time this 
+   //-- function is called, ie for each suface of a solid for instance...
+   if (geomType_ == "line") {
+      for (int i = 0; i < line.numPoints(); i++) {
+         FMECoord3D coords;
+         line.getPointAt3D(i, coords);
+         std::vector< double > v;
+         v.push_back(coords.x);
+         v.push_back(coords.y);
+         v.push_back(coords.z);
+         unsigned long a = vertices_.size();
+         tmpRing_.push_back(a + offset_);
+         vertices_.push_back(v);
+      }
+      tmpFace_.clear();
+      tmpFace_.push_back(tmpRing_);
+      outputgeom_ = json::object();
+      outputgeom_["type"] = "MultiLineString";
+      outputgeom_["boundaries"] = tmpFace_;
+   } 
+   else {
+      for (int i = 0; i < line.numPoints()-1; i++) {
+         FMECoord3D coords;
+         line.getPointAt3D(i, coords);
+         std::vector< double > v;
+         v.push_back(coords.x);
+         v.push_back(coords.y);
+         v.push_back(coords.z);
+         unsigned long a = vertices_.size();
+         tmpRing_.push_back(a + offset_);
+         vertices_.push_back(v);
+      }
    }
    return FME_SUCCESS;
 }
