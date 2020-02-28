@@ -63,7 +63,7 @@ const static char* const kSrcImportantDigits  = "_IMPORTANT_DIGITS";
 // Used when the writer is looking for schema features from the reader
 const static char* const kCityJSON_FME_DIRECTION    = "FME_DIRECTION";
 const static char* const kCityJSON_FME_DESTINATION  = "DESTINATION";
-const static char* const kCityJSON_CITYJSON_VERSION = "CITYJSON_VERSION";
+const static char* const kCityJSON_CITYJSON_STARTING_SCHEMA = "CITYJSON_STARTING_SCHEMA";
 
 
 #endif
