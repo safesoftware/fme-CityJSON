@@ -222,15 +222,18 @@ private:
 
    // -----------------------------------------------------------------------
    // If the reader is being used as a "helper" to the writer, to gather
-   // schema feature definitions, this will look in the official CityJSON specs
+   // schema feature definitions, these will look in the official CityJSON specs
    // and pull out the correct schema information.
-   FME_Status scrapeSchemaFeaturesForWriter();
+   FME_Status fetchSchemaFeaturesForWriter();
 
    // -----------------------------------------------------------------------
-   // Helper function to recursively add nested attribute types to a schema feature.
+   // Helper functions to recursively add nested attribute types to a schema feature.
    void addAttributeNamesAndTypes(IFMEFeature& schemaFeature,
                                   const std::string& attributeName,
                                   json attributeValue) const;
+   void addObjectProperties(json::value_type& itemPart,
+                            IFMEFeature& schemaFeature,
+                            std::string& featureType);
 
    // Data members
 
@@ -282,7 +285,7 @@ private:
 
    // These are when the reader is used as a "helper" to the writer
    bool writerHelperMode_;
-   std::string writerSchemaVersion_;
+   std::string writerStartingSchema_;
 };
 
 #endif

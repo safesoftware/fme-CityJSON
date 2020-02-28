@@ -844,7 +844,7 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature &feature, FME_Boolean &endO
        schemaScanDoneMeta_ = true; // don't need to do this
        schemaScanDone_ = true; // don't need to do this
 
-       FME_Status badLuck = scrapeSchemaFeaturesForWriter();
+       FME_Status badLuck = fetchSchemaFeaturesForWriter();
        if (FME_SUCCESS != badLuck) return badLuck;
     }
 
@@ -1094,33 +1094,64 @@ void FMECityJSONReader::addAttributeNamesAndTypes(IFMEFeature& schemaFeature,
 }
 
 //===========================================================================
-FME_Status FMECityJSONReader::scrapeSchemaFeaturesForWriter()
+void FMECityJSONReader::addObjectProperties(json::value_type& itemPart,
+                                            IFMEFeature& schemaFeature,
+                                            std::string& featureType)
+{
+   json::iterator propIt        = itemPart.at("properties").begin();
+   const json::iterator propEnd = itemPart.at("properties").end();
+   while (propIt != propEnd)
+   {
+      if (propIt.key() == "attributes")
+      {
+         json::iterator propIt3 = itemPart.at("properties").at("attributes").at("properties").begin();
+         const json::iterator propEnd3 =
+            itemPart.at("properties").at("attributes").at("properties").end();
+
+         while (propIt3 != propEnd3)
+         {
+            addAttributeNamesAndTypes(schemaFeature, propIt3.key(), propIt3.value());
+            propIt3++;
+         }
+      }
+      else if (propIt.key() == "type" && propIt.value()["enum"].is_array())
+      {
+         // Let's pick out what I *think* should be the Feature Type?
+         featureType = propIt.value()["enum"][0].get<std::string>();
+      }
+      else
+      {
+         addAttributeNamesAndTypes(schemaFeature, propIt.key(), propIt.value());
+      }
+      propIt++;
+   }
+}
+
+//===========================================================================
+FME_Status FMECityJSONReader::fetchSchemaFeaturesForWriter()
 {
    // The reader is being used as a "helper" to the writer, to gather
    // schema feature definitions, this will look in the official CityJSON specs
    // and pull out the correct schema information.
 
-   // We know which major/minor version of the schemas we want, but we we may not know
-   // the full version.  For instance, we may want version "1.0", so we will match to "1.0.1"
-   // if we can find it.
+   // We know which setting they have for requesting the starting schemas.
+   if (writerStartingSchema_ == "none")
+{
+      // OK, they just want to start off blank.  I guess they will build their own in Workbench.
+      return FME_SUCCESS;
+   }
+   // We know which major/minor version of the schemas we want.
+   // Let's see if we can find it.
 
    std::string schemaDir = gFMESession->fmeHome();
-   schemaDir += "/plugins/cityjson";
-   schemaDir += "/" + writerSchemaVersion_;
-   // TODO: somehow we need to take the version number like "1.0" and find
-   // the latest schema version in this directory, like "1.0.1".
-   schemaDir += ".1";
-   schemaDir += "/schemas";
+   schemaDir += "/plugins/cityjson/" + writerStartingSchema_ + "/schemas/";
 
-   // Here we would look in the FME install directory for all the schema 
+   // Here we would look in the FME install directory for all the schema
    // definitions, and create a schema feature for each FeatureType.
    //
-   // I'm just going to do a very rough example of the "Metatdata" FeatureType,
-   // but really this should probably be a loop over the relevant files it
-   // finds in that directory.
-   {
-      // For an example, let's just do one feature - the Metadata one.
-      std::string schemafile = schemaDir + "/metadata.schema.json";
+   // In this case we know we are just looking for the minimized schema file only
+
+   std::string schemafile = schemaDir + "cityjson.min.schema.json";
 
       // Open up the data file.
       inputFile_.open(schemafile, std::ios::in);
@@ -1128,6 +1159,7 @@ FME_Status FMECityJSONReader::scrapeSchemaFeaturesForWriter()
       // Check that the file exists.
       if (!inputFile_.good())
       {
+      gLogFile->logMessageString("Unknown setting for CityJSON writer's starting schema.", FME_ERROR);
          gLogFile->logMessageString("Schema file does not exist", FME_ERROR);
          return FME_FAILURE;
       }
@@ -1135,8 +1167,9 @@ FME_Status FMECityJSONReader::scrapeSchemaFeaturesForWriter()
       // Reset the file stream and start reading.
       inputFile_.seekg(0, std::ios::beg);
       inputFile_.clear();
+   inputJSON_ = json::parse(inputFile_);
 
-      inputJSON_ = json::parse(inputFile_);
+   // Let's first read the metadata schema separately, as it is a bit different.
 
       // Create the schema feature
       IFMEFeature* schemaFeature(nullptr);
@@ -1148,8 +1181,8 @@ FME_Status FMECityJSONReader::scrapeSchemaFeaturesForWriter()
 
       // Note: I don't know the best way to parse these json files, so forgive the
       // hacky way I pull out information.  Feel free to clean up this kind of code!
-      json::iterator propIt = inputJSON_.at("metadata").at("properties").begin();
-      const json::iterator propEnd = inputJSON_.at("metadata").at("properties").end();
+      json::iterator propIt = inputJSON_.at("properties").at("metadata").at("properties").begin();
+      const json::iterator propEnd = inputJSON_.at("properties").at("metadata").at("properties").end();
       while (propIt != propEnd)
       {
          addAttributeNamesAndTypes(*schemaFeature, propIt.key(), propIt.value());
@@ -1161,7 +1194,55 @@ FME_Status FMECityJSONReader::scrapeSchemaFeaturesForWriter()
 
       // Drop the completed schema feature into the bucket for future use
       schemaFeatures_["Metadata"] = schemaFeature; // gives up ownership
+   schemaFeature = nullptr;
+
+
+   // Now, let's loop through all the CityObjects
+   for (auto oneItem : inputJSON_.at("properties").at("CityObjects").at("additionalProperties")["oneOf"])
+      {
+         // Create the schema feature
+         schemaFeature = gFMESession->createFeature();
+
+         // Start off as blank.  We'll fill it in as we scrape info.
+         std::string featureType;
+
+         // Add the expected attribute names and types
+
+         for (auto itemPart : oneItem["allOf"])
+         {
+            if (itemPart["allOf"].is_array())
+            {
+               for (auto itemSubPart : itemPart["allOf"])
+               {
+                  addObjectProperties(itemSubPart, *schemaFeature, featureType);
+               }
+            }
+            else
+            {
+               addObjectProperties(itemPart, *schemaFeature, featureType);
+            }
+         }
+
+         // Maybe we didn't really read a FeatureType...
+         if (featureType.empty())
+         {
+            gFMESession->destroyFeature(schemaFeature);
+         schemaFeature = nullptr;
+         }
+         else
+         {
+            // set the Feature Type
+            schemaFeature->setFeatureType(featureType.c_str());
+
+            // set the expected Geometry types.  You can have more than one
+            schemaFeature->setAttribute("fme_geometry{0}", "fme_no_geom");
+
+            // Drop the completed schema feature into the bucket for future use
+         schemaFeatures_[featureType] = schemaFeature; // gives up ownership
+         schemaFeature                = nullptr;
+      }
    }
+
    return FME_SUCCESS;
 }
 
@@ -1240,14 +1321,14 @@ bool FMECityJSONReader::fetchWriterDirectives(const IFMEStringArray& parameters)
    */
 
    if (gMappingFile->fetchWithPrefix(
-          readerKeyword_.c_str(), readerTypeName_.c_str(), kCityJSON_CITYJSON_VERSION, *paramValue))
+          readerKeyword_.c_str(), readerTypeName_.c_str(), kCityJSON_CITYJSON_STARTING_SCHEMA, *paramValue))
    {
       // A parameter value has been found, so set the values.
-      writerSchemaVersion_ = paramValue->data();
+      writerStartingSchema_ = paramValue->data();
 
       // Let's log to the user that a parameter value has been specified.
       // TODO: this could be cleaned up.
-      std::string paramMsg = (kCityJSON_CITYJSON_VERSION + std::string(" ") + writerSchemaVersion_).c_str();
+      std::string paramMsg = (kCityJSON_CITYJSON_STARTING_SCHEMA + std::string(" ") + writerStartingSchema_).c_str();
       gLogFile->logMessageString(paramMsg.c_str(), FME_INFORM);
    }
    else
