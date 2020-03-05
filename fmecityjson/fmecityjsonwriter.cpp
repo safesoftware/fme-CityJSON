@@ -612,7 +612,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
       //-- fetch geom type to simplify the geomvisitor
       FME_Boolean isgeomline = geometry->canCastAs<IFMELine*>();
-      if (isgeomline == true) {
+      if (isgeomline == FME_TRUE) {
          (visitor_)->setGeomType("line");
       } else {
          (visitor_)->setGeomType("other");

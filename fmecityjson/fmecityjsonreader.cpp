@@ -1296,11 +1296,9 @@ bool FMECityJSONReader::fetchWriterDirectives(const IFMEStringArray& parameters)
    // See if we are just in the regular reader mode
    if (!foundSpecialWriterFlag)
    {
+      writerHelperMode_ = false;
       return false;
    }
-
-   // Now we know we are in the special writer-helper-mode
-   writerHelperMode_ = true;
 
    // Need to read in the writer settings relevant to reading schemas.
    IFMEString* paramValue = gFMESession->createString();
@@ -1330,16 +1328,20 @@ bool FMECityJSONReader::fetchWriterDirectives(const IFMEStringArray& parameters)
       // TODO: this could be cleaned up.
       std::string paramMsg = (kCityJSON_CITYJSON_STARTING_SCHEMA + std::string(" ") + writerStartingSchema_).c_str();
       gLogFile->logMessageString(paramMsg.c_str(), FME_INFORM);
+
+      // Now we know we are in the special writer-helper-mode
+      writerHelperMode_ = true;
    }
    else
    {
       // Log that no parameter value was entered.
       // TODO: this could be cleaned up.
       gLogFile->logMessageString(kMsgNoLodParam, FME_INFORM);
+      writerHelperMode_ = false;
    }
    gFMESession->destroyString(paramValue);
 
-      return true;
+   return writerHelperMode_;
 }
 
 FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse)
