@@ -238,3 +238,13 @@ MACRO _InvalidCharacters \\/\":?*<>|&
 
 FEATURE_TYPE_INVALID_CHARS "$(_InvalidCharacters)"
 
+WORKBENCH_EXPOSABLE_ATTRIBUTES              \
+   cityjson_parents{}            fme_buffer \
+   cityjson_children{}           fme_buffer
+
+
+
+MACRO _extra_reserved_words_                \
+   cityjson_parents{}            fme_buffer \
+   cityjson_children{}           fme_buffer
+
