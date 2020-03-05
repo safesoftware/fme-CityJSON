@@ -171,14 +171,24 @@ bool FMECityJSONGeometryVisitor::semanticTypeAllowed(std::string trait)
    if (trait.compare(0, 1, "+") == 0) {
       return true;
    }
-   std::vector<std::string> traits = semancticsTypes_.at(featureType_);
-   for (int i = 0; i < traits.size(); i++) {
-      //FMECityJSONWriter::gLogFile->logMessageString(("comparing traits[i]: " + traits[i] + " & trait: " + trait).c_str());
-      if (traits[i] == trait) {
-         return true;
+   auto iter = semancticsTypes_.find(featureType_);
+   if (iter != semancticsTypes_.end())
+   {
+      std::vector<std::string> traits = iter->second;
+      for (int i = 0; i < traits.size(); i++)
+      {
+         // FMECityJSONWriter::gLogFile->logMessageString(("comparing traits[i]: " + traits[i] + " &
+         // trait: " + trait).c_str());
+         if (traits[i] == trait)
+         {
+            return true;
+         }
       }
    }
-   FMECityJSONWriter::gLogFile->logMessageString("CityJSON Semantic Surface Type is not one of the CityJSON types (https://www.cityjson.org/specs/#semantic-surface-object) or an Extension ('+').", FME_WARN);
+   std::string message("CityJSON Semantic Surface Type '");
+   message += featureType_;
+   message += "' is not one of the CityJSON types(https://www.cityjson.org/specs/#semantic-surface-object) or an Extension ('+').";
+   FMECityJSONWriter::gLogFile->logMessageString(message.c_str(), FME_WARN);
    return false;
 }
 
