@@ -56,6 +56,7 @@
 #include <imultisurface.h>
 #include <imultiarea.h>
 #include <inull.h>
+#include <iline.h>
 #include <igeometryiterator.h>
 
 #include <typeinfo>
@@ -336,6 +337,8 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    outputJSON_["CityObjects"][s1->data()] = json::object();
    outputJSON_["CityObjects"][s1->data()]["type"] = ft;
+   //-- set FeatureType in visitor for surface semantics
+   visitor_->setFeatureType(ft);
 
    IFMEStringArray* allatt = gFMESession->createStringArray();
    outputJSON_["CityObjects"][s1->data()]["attributes"] = json::object();
@@ -606,6 +609,15 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       //-- update the offset (for writing vertices in the global list of CityJSON)
       //-- in the visitor.
       (visitor_)->setVerticesOffset(vertices_.size());
+
+      //-- fetch geom type to simplify the geomvisitor
+      FME_Boolean isgeomline = geometry->canCastAs<IFMELine*>();
+      if (isgeomline == true) {
+         (visitor_)->setGeomType("line");
+      } else {
+         (visitor_)->setGeomType("other");
+      }
+
 
       FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
       if (badNews) {

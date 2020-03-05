@@ -82,7 +82,54 @@
 
 #include <string>
 
-
+const std::map< std::string, std::vector< std::string > > FMECityJSONGeometryVisitor::semancticsTypes_ = std::map< std::string, std::vector< std::string > >(
+   {
+      {"Building", {
+         "RoofSurface",
+         "GroundSurface",
+         "WallSurface",
+         "ClosureSurface",
+         "OuterCeilingSurface",
+         "OuterFloorSurface",
+         "Window",
+         "Door"}},
+      {"BuildingPart", {
+         "RoofSurface",
+         "GroundSurface",
+         "WallSurface",
+         "ClosureSurface",
+         "OuterCeilingSurface",
+         "OuterFloorSurface",
+         "Window",
+         "Door"}},
+      {"BuildingInstallation", {
+         "RoofSurface",
+         "GroundSurface",
+         "WallSurface",
+         "ClosureSurface",
+         "OuterCeilingSurface",
+         "OuterFloorSurface",
+         "Window",
+         "Door"}},
+      {"Railway", {
+         "TrafficArea",
+         "AuxiliaryTrafficArea"
+      }},
+      {"Road", {
+         "TrafficArea",
+         "AuxiliaryTrafficArea"
+      }},
+      {"TransportationSquare", {
+         "TrafficArea",
+         "AuxiliaryTrafficArea"
+      }},
+      {"WaterBody", {
+         "WaterSurface",
+         "WaterGroundSurface",
+         "WaterClosureSurface"
+      }}
+   }
+);
 
 //===========================================================================
 // Constructor.
@@ -103,7 +150,6 @@ FMECityJSONGeometryVisitor::~FMECityJSONGeometryVisitor()
    //------------------------------------------------------------------------
 }
 
-
 json FMECityJSONGeometryVisitor::getGeomJSON()
 {
    return outputgeom_;
@@ -114,19 +160,66 @@ std::vector< std::vector< double > > FMECityJSONGeometryVisitor::getGeomVertices
    return vertices_;
 }
 
-void FMECityJSONGeometryVisitor::reset()
-{
-   outputgeom_.clear();
-   vertices_.clear();
-}
-
 
 void FMECityJSONGeometryVisitor::setVerticesOffset(long unsigned offset)
 {
    offset_ = offset;
 }
 
+bool FMECityJSONGeometryVisitor::semanticTypeAllowed(std::string trait)
+{
+   if (trait.compare(0, 1, "+") == 0) {
+      return true;
+   }
+   std::vector<std::string> traits = semancticsTypes_.at(featureType_);
+   for (int i = 0; i < traits.size(); i++) {
+      //FMECityJSONWriter::gLogFile->logMessageString(("comparing traits[i]: " + traits[i] + " & trait: " + trait).c_str());
+      if (traits[i] == trait) {
+         return true;
+      }
+   }
+   FMECityJSONWriter::gLogFile->logMessageString("CityJSON Semantic Surface Type is not one of the CityJSON types (https://www.cityjson.org/specs/#semantic-surface-object) or an Extension ('+').", FME_WARN);
+   return false;
+}
 
+void FMECityJSONGeometryVisitor::setFeatureType(std::string type) {
+  featureType_ = type;
+}
+
+void FMECityJSONGeometryVisitor::setGeomType(std::string geomtype) {
+  geomType_ = geomtype;
+}
+
+json FMECityJSONGeometryVisitor::replaceSemanticValues(std::vector<json> semanticValues) {
+   // replace array with only null values with a single null value
+   for (int i = 0; i < semanticValues.size(); i++) {
+      if (!semanticValues[i].is_null()) {
+         return semanticValues;
+      }
+   }
+   return nullptr;
+}
+
+json FMECityJSONGeometryVisitor::replaceEmptySurface(std::vector<json> semanticSurface) {
+   // replace array with only null values with a single null value
+   if (semanticSurface.size() > 0) {
+      return semanticSurface;
+   }
+   return std::vector<json>{nullptr};
+}
+
+void FMECityJSONGeometryVisitor::reset()
+{
+   outputgeom_.clear();
+   vertices_.clear();
+   surfaces_.clear();
+   semanticValues_.clear();
+   tmpRing_.clear();
+   tmpFace_.clear();
+   tmpMultiFace_.clear();
+   tmpSolid_.clear();
+   tmpMultiSolid_.clear();
+}
 
 //=====================================================================
 //
@@ -171,6 +264,19 @@ FME_Status FMECityJSONGeometryVisitor::visitPoint(const IFMEPoint& point)
 {
    FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("point")).c_str());
 
+   tmpRing_.clear();
+   std::vector<double> v;
+   v.push_back(point.getX());
+   v.push_back(point.getY());
+   v.push_back(point.getZ());
+   unsigned long a = vertices_.size();
+   tmpRing_.push_back(a + offset_);
+   vertices_.push_back(v);
+
+   outputgeom_ = json::object();
+   outputgeom_["type"] = "MultiPoint";
+   outputgeom_["boundaries"] = tmpRing_;
+
    return FME_SUCCESS;
 }
 
@@ -182,24 +288,27 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiPoint(const IFMEMultiPoint& mul
 
    FME_Status badNews;
 
-   // Create a point iterator
+   tmpRing_.clear();
+   
    IFMEPointIterator* iterator = multipoint.getIterator();
    while (iterator->next())
    {
-      FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("point")).c_str());
-
-      // re-visit the next geometry
-      badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
-      if (badNews)
-      {
-         multipoint.destroyIterator(iterator);
-         return FME_FAILURE;
-      }
+      const IFMEPoint* point = iterator->getPart();
+      std::vector<double> v;
+      v.push_back(point->getX());
+      v.push_back(point->getY());
+      v.push_back(point->getZ());
+      unsigned long a = vertices_.size();
+      tmpRing_.push_back(a + offset_);
+      vertices_.push_back(v);
    }
    // We are done with the iterator, so destroy it
    multipoint.destroyIterator(iterator);
 
-   FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("multi point")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgEndVisiting) + std::string("multi point")).c_str());
+   outputgeom_ = json::object();
+   outputgeom_["type"] = "MultiPoint";
+   outputgeom_["boundaries"] = tmpRing_;
 
    return FME_SUCCESS;
 }
@@ -456,18 +565,42 @@ FME_Status FMECityJSONGeometryVisitor::visitArcB3P(const IFMEArc& arc)
 //
 FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
 {
-   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("line")).c_str());
+   // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgVisiting) + std::string("line")).c_str(), FME_WARN);
+   // FMECityJSONWriter::gLogFile->logMessageString(geomType_.c_str());
+
    tmpRing_.clear();
-   for (int i = 0; i < line.numPoints()-1; i++) {
-      FMECoord3D coords;
-      line.getPointAt3D(i, coords);
-      std::vector< double > v;
-      v.push_back(coords.x);
-      v.push_back(coords.y);
-      v.push_back(coords.z);
-      unsigned long a = vertices_.size();
-      tmpRing_.push_back(a + offset_);
-      vertices_.push_back(v);
+   //-- special case for line, otherwise needs to be called each time this 
+   //-- function is called, ie for each suface of a solid for instance...
+   if (geomType_ == "line") {
+      for (int i = 0; i < line.numPoints(); i++) {
+         FMECoord3D coords;
+         line.getPointAt3D(i, coords);
+         std::vector< double > v;
+         v.push_back(coords.x);
+         v.push_back(coords.y);
+         v.push_back(coords.z);
+         unsigned long a = vertices_.size();
+         tmpRing_.push_back(a + offset_);
+         vertices_.push_back(v);
+      }
+      tmpFace_.clear();
+      tmpFace_.push_back(tmpRing_);
+      outputgeom_ = json::object();
+      outputgeom_["type"] = "MultiLineString";
+      outputgeom_["boundaries"] = tmpFace_;
+   } 
+   else {
+      for (int i = 0; i < line.numPoints()-1; i++) {
+         FMECoord3D coords;
+         line.getPointAt3D(i, coords);
+         std::vector< double > v;
+         v.push_back(coords.x);
+         v.push_back(coords.y);
+         v.push_back(coords.z);
+         unsigned long a = vertices_.size();
+         tmpRing_.push_back(a + offset_);
+         vertices_.push_back(v);
+      }
    }
    return FME_SUCCESS;
 }
@@ -747,8 +880,6 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
       // We require an area
       return FME_FAILURE;
    }
-   //IFMEString *semType = FMECityJSONWriter::getSemanticSurfaceType(face);
-   //FMECityJSONWriter::gLogFile->logMessageString(semType->data(), FME_WARN);
    
    // re-visit the boundary
    badNews = area->acceptGeometryVisitorConst(*this);
@@ -759,6 +890,93 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
    if (tmpRing_.size() > 0) {
      tmpFace_.push_back(tmpRing_);
      // tmpRing_.clear();
+   }
+
+   //-- fetch the semantic surface type of the geometry
+   // Check if the semantics type is allowed
+   // this needs the cityjson type to be known, pass cityjson type to constructor
+   // and allow string to start with a '+'
+   if (face.hasName()) {
+      IFMEString* type = fmeSession_->createString();
+      face.getName(*type, nullptr);
+
+      if (semanticTypeAllowed(type->data())) {
+         json surfaceSemantics;
+         surfaceSemantics["type"] = type->data();
+         fmeSession_->destroyString(type);
+
+         //-- fetch the semantic surface traits of the geometry
+         IFMEStringArray* traitNames = fmeSession_->createStringArray();
+         face.getTraitNames(*traitNames);
+         //FMECityJSONWriter::gLogFile->logMessageString(std::to_string(traitNames->entries()).c_str());
+         for (int i = 0; i < traitNames->entries(); i++) {
+            //const IFMEString* traitName = traitNames->elementAt(i);
+            std::string traitNameStr = traitNames->elementAt(i)->data();
+
+            // filter cityjson specific traits
+            if (traitNameStr.compare(0, 9, "cityjson_") != 0) {
+               FME_AttributeType type = face.getTraitType(*traitNames->elementAt(i));
+               //FMECityJSONWriter::gLogFile->logMessageString(("Found traitName with value: " + traitNameStr + " and type: " + std::to_string(type)).c_str());
+
+               if (type == FME_ATTR_STRING) {
+                  IFMEString *geometryTrait = fmeSession_->createString();
+                  face.getTraitString(*traitNames->elementAt(i), *geometryTrait);
+                  surfaceSemantics[traitNameStr] = geometryTrait->data();
+                  fmeSession_->destroyString(geometryTrait);
+               }
+               else if (type == FME_ATTR_REAL64) {
+                  FME_Real64 geometryTrait;
+                  face.getTraitReal64(*traitNames->elementAt(i), geometryTrait);
+                  surfaceSemantics[traitNameStr] = geometryTrait;
+               }
+               else if (type == FME_ATTR_INT64) {
+                  FME_Int64 geometryTrait;
+                  face.getTraitInt64(*traitNames->elementAt(i), geometryTrait);
+                  surfaceSemantics[traitNameStr] = geometryTrait;
+               }
+               else if (type == FME_ATTR_BOOLEAN) {
+                  FME_Boolean geometryTrait;
+                  face.getTraitBoolean(*traitNames->elementAt(i), geometryTrait);
+                  if (geometryTrait == FME_FALSE) {
+                     surfaceSemantics[traitNameStr] = false;
+                  }
+                  else {
+                     surfaceSemantics[traitNameStr] = true;
+                  }
+               }
+               else {
+                  FMECityJSONWriter::gLogFile->logMessageString(
+                     ("Semantic Surface attribute type '" + std::to_string(type) + "' is not allowed.").c_str(),
+                     FME_WARN);
+               }
+            }
+         }
+
+         //-- De-duplicate surface semantics and keep correct number of semantic to store in values
+         //-- Take into account not only semantics type since type can be same with different attribute values
+         //-- Can use == to compare two json objects, comparison works on nested values of objects
+         //-- check if semantic surface description exists
+         int surfaceIdx = -1;
+         for (int i = 0; i < surfaces_.size(); i++) {
+            if (surfaces_[i] == surfaceSemantics) {
+               surfaceIdx = i;
+            }
+         }
+         if (surfaceIdx != -1) { // store value for existing semantic surface
+            semanticValues_.push_back(surfaceIdx);
+         }
+         else { // store new semantic surface and its value 
+            surfaces_.push_back(surfaceSemantics);
+            semanticValues_.push_back(surfaces_.size() - 1);
+         }
+         fmeSession_->destroyStringArray(traitNames);
+      }
+      else {
+         semanticValues_.push_back(nullptr);
+      }
+   }
+   else {
+      semanticValues_.push_back(nullptr);
    }
 
    return FME_SUCCESS;
@@ -829,6 +1047,7 @@ FME_Status FMECityJSONGeometryVisitor::visitExtrusion(const IFMEExtrusion& extru
 FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepSolid)
 {
    tmpSolid_.clear();
+   solidSemanticValues_.clear();
    FME_Status badNews;
 
    // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("Solid")).c_str());
@@ -848,6 +1067,7 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
       return FME_FAILURE;
    }
    tmpSolid_.push_back(tmpMultiFace_);
+   solidSemanticValues_.push_back(replaceSemanticValues(semanticValues_));
    // tmpMultiFace_.clear();
 
 
@@ -867,6 +1087,7 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
          return FME_FAILURE;
       }
       tmpSolid_.push_back(tmpMultiFace_);
+      solidSemanticValues_.push_back(replaceSemanticValues(semanticValues_));
       // tmpMultiFace_.clear();
 
    }
@@ -874,6 +1095,12 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
    outputgeom_ = json::object();
    outputgeom_["type"] = "Solid";
    outputgeom_["boundaries"] = tmpSolid_;
+
+   //-- store semantic surface information
+   if (!semanticValues_.empty()) {
+     outputgeom_["semantics"]["surfaces"] = replaceEmptySurface(surfaces_);
+     outputgeom_["semantics"]["values"] = solidSemanticValues_;
+   }
 
    // Done with the iterator
    brepSolid.destroyIterator(iterator);
@@ -888,6 +1115,8 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
 FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMECompositeSurface& compositeSurface)
 {
    tmpMultiFace_.clear();
+   semanticValues_.clear();
+
    FME_Status badNews;
    // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("CompositeSurface")).c_str());
    // Create an iterator to loop through all the surfaces this multi surface contains
@@ -916,6 +1145,12 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
    outputgeom_["type"] = "CompositeSurface";
    outputgeom_["boundaries"] = tmpMultiFace_;
 
+   //-- store semantic surface information
+   if (!semanticValues_.empty()) {
+      outputgeom_["semantics"]["surfaces"] = surfaces_;
+      outputgeom_["semantics"]["values"] = semanticValues_;
+   }
+
    // Done with the iterator
    compositeSurface.destroyIterator(iterator);
 
@@ -936,6 +1171,7 @@ FME_Status FMECityJSONGeometryVisitor::visitRectangleFace(const IFMERectangleFac
 FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface& multiSurface)
 {
    tmpMultiFace_.clear();
+   semanticValues_.clear();
    FME_Status badNews;
    //FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("multi surface")).c_str());
       
@@ -957,13 +1193,19 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
          return FME_FAILURE;
       }
       if (tmpFace_.size() > 0) {
-        tmpMultiFace_.push_back(tmpFace_);
+         tmpMultiFace_.push_back(tmpFace_);
       }
    }
 
    outputgeom_ = json::object();
    outputgeom_["type"] = "MultiSurface";
    outputgeom_["boundaries"] = tmpMultiFace_;
+
+   //-- store semantic surface information
+   if (!semanticValues_.empty()) {
+     outputgeom_["semantics"]["surfaces"] = surfaces_;
+     outputgeom_["semantics"]["values"] = semanticValues_;
+   }
 
    // Done with the iterator
    multiSurface.destroyIterator(iterator);
@@ -978,6 +1220,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
 FME_Status FMECityJSONGeometryVisitor::visitMultiSolid(const IFMEMultiSolid& multiSolid)
 {
    tmpMultiSolid_.clear();
+   multiSolidSemanticValues_.clear();
 
    FME_Status badNews;
    // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("multi solid")).c_str());
@@ -1001,12 +1244,19 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSolid(const IFMEMultiSolid& mul
       }
       if (tmpSolid_.size() > 0) {
         tmpMultiSolid_.push_back(tmpSolid_);
+        multiSolidSemanticValues_.push_back(solidSemanticValues_);
       }
    }
 
    outputgeom_ = json::object();
    outputgeom_["type"] = "MultiSolid";
    outputgeom_["boundaries"] = tmpMultiSolid_;
+
+   //-- store semantic surface information
+   if (!semanticValues_.empty()) {
+      outputgeom_["semantics"]["surfaces"] = replaceEmptySurface(surfaces_);
+      outputgeom_["semantics"]["values"] = multiSolidSemanticValues_;
+   }
 
    // Done with the iterator
    multiSolid.destroyIterator(iterator);
@@ -1021,6 +1271,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSolid(const IFMEMultiSolid& mul
 FME_Status FMECityJSONGeometryVisitor::visitCompositeSolid(const IFMECompositeSolid& compositeSolid)
 {
    tmpMultiSolid_.clear();
+   multiSolidSemanticValues_.clear();
 
    FME_Status badNews;
    // FMECityJSONWriter::gLogFile->logMessageString((std::string(kMsgStartVisiting) + std::string("CompositeSolid")).c_str());
@@ -1044,12 +1295,19 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSolid(const IFMECompositeSo
       }
       if (tmpSolid_.size() > 0) {
         tmpMultiSolid_.push_back(tmpSolid_);
+        multiSolidSemanticValues_.push_back(solidSemanticValues_);
       }
    }
 
    outputgeom_ = json::object();
    outputgeom_["type"] = "CompositeSolid";
    outputgeom_["boundaries"] = tmpMultiSolid_;
+
+   //-- store semantic surface information
+   if (!semanticValues_.empty()) {
+      outputgeom_["semantics"]["surfaces"] = replaceEmptySurface(surfaces_);
+      outputgeom_["semantics"]["values"] = multiSolidSemanticValues_;
+   }
 
    // Done with the iterator
    compositeSolid.destroyIterator(iterator);
