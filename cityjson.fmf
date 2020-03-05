@@ -182,29 +182,29 @@ GEOM_MAP fme_no_map           fme_no_geom
 ! Define the mappings of the attribute types.
 ! --------------------------------------------------------------------------------
  ATTR_TYPE_MAP                                                     \
-                char(width)             fme_varchar(width)         \
-                char(width)             fme_varbinary(width)       \
-                char(width)             fme_char(width)            \
-                char(width)             fme_binary(width)          \
                 string                  fme_buffer                 \
+                string-                 fme_varchar(width)         \
+                string-                 fme_varbinary(width)       \
+                string-                 fme_char(width)            \
+                string-                 fme_binary(width)          \
                 string                  fme_binarybuffer           \
                 string                  fme_xml                    \
                 string                  fme_json                   \
-                datetime                fme_datetime               \
-                time                    fme_time                   \
-                date                    fme_date                   \
+                string                  fme_datetime               \
+                string                  fme_time                   \
+                string                  fme_date                   \
                 real64                  fme_real64                 \
-                real32                  fme_real32                 \
-                char                    fme_int8                   \
-                uint8                   fme_uint8                  \
-                int16                   fme_int16                  \
-                uint16                  fme_uint16                 \
+                real64                  fme_real32                 \
                 int32                   fme_int32                  \
-                uint32                  fme_uint32                 \
-                int64                   fme_int64                  \
-                uint64                  fme_uint64                 \
+                int32                   fme_int8                   \
+                int32                   fme_uint8                  \
+                int32                   fme_int16                  \
+                int32                   fme_uint16                 \
+                real64                  fme_uint32                 \
+                real64                  fme_int64                  \
+                real64-                 fme_uint64                 \
                 logical                 fme_boolean                \
-                number(width,decimal)   fme_decimal(width,decimal) 
+                real64-                 fme_decimal(width,decimal) 
 
 
 ! --------------------------------------------------------------------------------
@@ -237,4 +237,14 @@ GEOMETRY_TYPE_FIELD fme_type
 MACRO _InvalidCharacters \\/\":?*<>|&
 
 FEATURE_TYPE_INVALID_CHARS "$(_InvalidCharacters)"
+
+WORKBENCH_EXPOSABLE_ATTRIBUTES              \
+   cityjson_parents{}            fme_buffer \
+   cityjson_children{}           fme_buffer
+
+
+
+MACRO _extra_reserved_words_                \
+   cityjson_parents{}            fme_buffer \
+   cityjson_children{}           fme_buffer
 

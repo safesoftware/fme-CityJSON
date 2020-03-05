@@ -1084,8 +1084,13 @@ void FMECityJSONReader::addAttributeNamesAndTypes(IFMEFeature& schemaFeature,
    }
    else if (std::string("\"array\"") == attributeType)
    {
-      // This is an array of values, so we typically use "list attributes" in FME to pass these around.
-      addAttributeNamesAndTypes(schemaFeature, attributeName + "{}", attributeValue["items"]);
+      // We want to ignore the parent and children attributes, as they are already reserved as 
+      // special format attributes "cityjson_children" and "cityjson_parents"
+      if ((std::string("children") != attributeName) && (std::string("parents") != attributeName))
+      {
+         // This is an array of values, so we typically use "list attributes" in FME to pass these around.
+         addAttributeNamesAndTypes(schemaFeature, attributeName + "{}", attributeValue["items"]);
+      }
    }
    else // we don't handle it yet
    {
@@ -1153,91 +1158,93 @@ FME_Status FMECityJSONReader::fetchSchemaFeaturesForWriter()
 
    std::string schemafile = schemaDir + "cityjson.min.schema.json";
 
-      // Open up the data file.
-      inputFile_.open(schemafile, std::ios::in);
+   // Open up the data file.
+   inputFile_.open(schemafile, std::ios::in);
 
-      // Check that the file exists.
-      if (!inputFile_.good())
-      {
+   // Check that the file exists.
+   if (!inputFile_.good())
+   {
       gLogFile->logMessageString("Unknown setting for CityJSON writer's starting schema.", FME_ERROR);
-         gLogFile->logMessageString("Schema file does not exist", FME_ERROR);
-         return FME_FAILURE;
-      }
+      gLogFile->logMessageString("Schema file does not exist", FME_ERROR);
+      return FME_FAILURE;
+   }
 
-      // Reset the file stream and start reading.
-      inputFile_.seekg(0, std::ios::beg);
-      inputFile_.clear();
+   // Reset the file stream and start reading.
+   inputFile_.seekg(0, std::ios::beg);
+   inputFile_.clear();
    inputJSON_ = json::parse(inputFile_);
 
    // Let's first read the metadata schema separately, as it is a bit different.
 
-      // Create the schema feature
-      IFMEFeature* schemaFeature(nullptr);
-      schemaFeature = gFMESession->createFeature();
-      // set the Feature Type
-      schemaFeature->setFeatureType("Metadata");
+   // Create the schema feature
+   IFMEFeature* schemaFeature(nullptr);
+   schemaFeature = gFMESession->createFeature();
+   // set the Feature Type
+   schemaFeature->setFeatureType("Metadata");
 
-      // Add the expected attribute names and types
+   // Add the expected attribute names and types
 
-      // Note: I don't know the best way to parse these json files, so forgive the
-      // hacky way I pull out information.  Feel free to clean up this kind of code!
-      json::iterator propIt = inputJSON_.at("properties").at("metadata").at("properties").begin();
-      const json::iterator propEnd = inputJSON_.at("properties").at("metadata").at("properties").end();
-      while (propIt != propEnd)
-      {
-         addAttributeNamesAndTypes(*schemaFeature, propIt.key(), propIt.value());
-         propIt++;
-      }
+   // Note: I don't know the best way to parse these json files, so forgive the
+   // hacky way I pull out information.  Feel free to clean up this kind of code!
+   json::iterator propIt = inputJSON_.at("properties").at("metadata").at("properties").begin();
+   const json::iterator propEnd = inputJSON_.at("properties").at("metadata").at("properties").end();
+   while (propIt != propEnd)
+   {
+      addAttributeNamesAndTypes(*schemaFeature, propIt.key(), propIt.value());
+      propIt++;
+   }
 
-      // set the expected Geometry types.  You can have more than one
-      schemaFeature->setAttribute("fme_geometry{0}", "fme_no_geom");
+   // set the expected Geometry types.  You can have more than one
+   schemaFeature->setAttribute("fme_geometry{0}", "fme_no_geom");
 
-      // Drop the completed schema feature into the bucket for future use
-      schemaFeatures_["Metadata"] = schemaFeature; // gives up ownership
-   schemaFeature = nullptr;
-
+   // Drop the completed schema feature into the bucket for future use
+   schemaFeatures_["Metadata"] = schemaFeature; // gives up ownership
+   schemaFeature               = nullptr;
 
    // Now, let's loop through all the CityObjects
    for (auto oneItem : inputJSON_.at("properties").at("CityObjects").at("additionalProperties")["oneOf"])
+   {
+      // Create the schema feature
+      schemaFeature = gFMESession->createFeature();
+
+      // Make sure they all have a field for their Feature ID.
+      schemaFeature->setSequencedAttribute("fid", "string");
+
+      // Start off as blank.  We'll fill it in as we scrape info.
+      std::string featureType;
+
+      // Add the expected attribute names and types
+
+      for (auto itemPart : oneItem["allOf"])
       {
-         // Create the schema feature
-         schemaFeature = gFMESession->createFeature();
-
-         // Start off as blank.  We'll fill it in as we scrape info.
-         std::string featureType;
-
-         // Add the expected attribute names and types
-
-         for (auto itemPart : oneItem["allOf"])
+         if (itemPart["allOf"].is_array())
          {
-            if (itemPart["allOf"].is_array())
+            for (auto itemSubPart : itemPart["allOf"])
             {
-               for (auto itemSubPart : itemPart["allOf"])
-               {
-                  addObjectProperties(itemSubPart, *schemaFeature, featureType);
-               }
+               addObjectProperties(itemSubPart, *schemaFeature, featureType);
             }
-            else
-            {
-               addObjectProperties(itemPart, *schemaFeature, featureType);
-            }
-         }
-
-         // Maybe we didn't really read a FeatureType...
-         if (featureType.empty())
-         {
-            gFMESession->destroyFeature(schemaFeature);
-         schemaFeature = nullptr;
          }
          else
          {
-            // set the Feature Type
-            schemaFeature->setFeatureType(featureType.c_str());
+            addObjectProperties(itemPart, *schemaFeature, featureType);
+         }
+      }
 
-            // set the expected Geometry types.  You can have more than one
-            schemaFeature->setAttribute("fme_geometry{0}", "fme_no_geom");
+      // Maybe we didn't really read a FeatureType...
+      if (featureType.empty())
+      {
+         gFMESession->destroyFeature(schemaFeature);
+         schemaFeature = nullptr;
+      }
+      else
+      {
+         // set the Feature Type
+         schemaFeature->setFeatureType(featureType.c_str());
 
-            // Drop the completed schema feature into the bucket for future use
+         // set the expected Geometry types.  You can have more than one
+         schemaFeature->setAttribute("fme_geometry{0}", "fme_no_geom");
+
+         // Drop the completed schema feature into the bucket for future use
          schemaFeatures_[featureType] = schemaFeature; // gives up ownership
          schemaFeature                = nullptr;
       }
