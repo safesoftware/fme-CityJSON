@@ -30,7 +30,7 @@ END_SOURCE_PREAMBLE
 
 SOURCE_SETTINGS
 
-GUI GROUP LOD Parameters
+GUI GROUP LOD_GROUP Parameters
 
 !----------------------------------------------------------------------
 ! Specify the fields.
