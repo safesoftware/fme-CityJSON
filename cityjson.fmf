@@ -6,7 +6,8 @@
 ! --------------------------------------------------------------------------------
 DEFAULT_MACRO FORMAT_SHORT_NAME CITYJSON
 SOURCE_READER CITYJSON EXPOSED_ATTRS "$($(FORMAT_SHORT_NAME)_EXPOSE_FORMAT_ATTRS)" \
-		       -CITYJSON_STARTING_SCHEMA "$(CITYJSON_STARTING_SCHEMA)"
+		       -CITYJSON_STARTING_SCHEMA "$(CITYJSON_STARTING_SCHEMA)" \
+		       -LOD "$(LOD)"
 FORMAT_NAME   CITYJSON
 FORMAT_TYPE DYNAMIC
 
@@ -29,7 +30,7 @@ END_SOURCE_PREAMBLE
 
 SOURCE_SETTINGS
 
-GUI GROUP LOD Parameters
+GUI GROUP LOD_GROUP Parameters
 
 !----------------------------------------------------------------------
 ! Specify the fields.
