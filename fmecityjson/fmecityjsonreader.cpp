@@ -796,26 +796,42 @@ void FMECityJSONReader::setTraitString(IFMEGeometry *geometry,
     gFMESession->destroyString(value);
 }
 
-std::string FMECityJSONReader::lodToString(json currentGeometry) {
-    json::value_type lod;
-    try {
-        lod = currentGeometry.at("lod");
-    }
-    catch (json::out_of_range &e) {
-        return "";
-    }
-    if (lod.is_number_integer())
-        return std::to_string(int(lod));
-    else if (lod.is_number_float()) {
-        // We want the LoD as string, even though CityJSON specs currently
-        // prescribe a number
-        std::stringstream stream;
-        stream << std::fixed << std::setprecision(1)
-               << float(lod);
-        return stream.str();
-    } else {
-        return lod.get<std::string>();
-    }
+std::string FMECityJSONReader::lodToString(json currentGeometry)
+{
+   json::value_type lod;
+   try
+   {
+      lod = currentGeometry.at("lod");
+   }
+   catch (json::out_of_range& e)
+   {
+      return "";
+   }
+   if (lod.is_number_integer()) return lod.get<std::string>();
+   else if (lod.is_number_float())
+   {
+      // We want the LoD as string, even though CityJSON specs currently
+      // prescribe a number
+      std::stringstream stream;
+      stream << std::fixed << std::setprecision(1) << lod.get<float>();
+      return stream.str();
+   }
+   else if (lod.is_null())
+   {
+      return "";
+   }
+   else if (lod.is_string())
+   {
+      std::string lod_ = lod.get<std::string>();
+      transform(lod_.begin(), lod_.end(), lod_.begin(), ::tolower);
+      if (lod_ == "null") return "";
+      else return lod_;
+   }
+   else
+   {
+      gLogFile->logMessageString("Unknown type for 'lod'", FME_ERROR);
+      return "";
+   }
 }
 
 //===========================================================================

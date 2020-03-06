@@ -9,7 +9,14 @@
 				"bron_tex": "UltraCAM-X 10cm juni 2008",
 				"voll_tex": "complete",
 				"bron_geo": "Lidar 15-30 punten - nov. 2008",
-				"status": "1"
+				"status": "1",
+				"not_allowed_object" : {"key1" : 1},
+				"not_allowed_array" : [1,2,3],
+				"attr_string" : "some string",
+				"attr_bool": true,
+				"attr_number": 1.234,
+				"attr_int": 1,
+				"attr_null": null
 			},
 			"geometry": [
 				{
@@ -195,7 +202,8 @@
 								"attr_string" : "some string",
 								"attr_bool": true,
 								"attr_number": 1.234,
-								"attr_int": 1
+								"attr_int": 1,
+								"attr_null": null
 							},
 							{
 								"type": "GroundSurface"
