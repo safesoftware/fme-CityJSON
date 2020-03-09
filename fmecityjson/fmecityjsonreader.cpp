@@ -807,13 +807,13 @@ std::string FMECityJSONReader::lodToString(json currentGeometry)
    {
       return "";
    }
-   if (lod.is_number_integer()) return lod.get<std::string>();
+   if (lod.is_number_integer()) return std::to_string(int(lod));
    else if (lod.is_number_float())
    {
       // We want the LoD as string, even though CityJSON specs currently
       // prescribe a number
       std::stringstream stream;
-      stream << std::fixed << std::setprecision(1) << lod.get<float>();
+      stream << std::fixed << std::setprecision(1) << float(lod);
       return stream.str();
    }
    else if (lod.is_null())
