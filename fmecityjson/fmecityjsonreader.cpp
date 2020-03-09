@@ -228,12 +228,9 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
         }
     }
 
-    // Read the mapping file parameters if there is one specified.
-    if (parameters.entries() < 1)
-    {
-        // We are in "open to read data features" mode.
-        readParametersDialog();
-    }
+    // Read the mapping file parameters. Always do this, otherwise the parameters are not
+    // recognized when the Reader is created in the Workspace, only when its executed.
+    readParametersDialog();
 
     if (lodInData_.size() > 1) {
         std::stringstream lodMsg;
