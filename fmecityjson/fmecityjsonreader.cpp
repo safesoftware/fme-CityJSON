@@ -197,6 +197,7 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
             //      validated for the schema before it goes into FME, so we can omit these checks.
             // Check which LoD is present in the data
             std::string lod;
+            bool key_missing(false);
             try
             {
                 geometry.at("lod");
@@ -211,8 +212,8 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
                 }
                 catch (json::out_of_range &e)
                 {
-                    gLogFile->logMessageString(("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
-                    return FME_FAILURE;
+                    lod = "";
+                    key_missing = true;
                 }
             }
 
@@ -222,8 +223,11 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
                     lodInData_.push_back(lod);
                 }
             }
-            else {
+            else if (not key_missing) {
                 gLogFile->logMessageString(("The 'lod' attibute is empty in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
+            }
+            else {
+                gLogFile->logMessageString(("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
             }
         }
     }
