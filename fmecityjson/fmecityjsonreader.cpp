@@ -397,22 +397,29 @@ FME_Status FMECityJSONReader::read(IFMEFeature &feature, FME_Boolean &endOfFile)
         endOfFile = FME_FALSE;
         return FME_SUCCESS;
     } else {
-       // Only ignore the feature if it is certain that the required LoD (parmeter) != the LoD in
-       // the data. All other cases (null, missing etc.) should be read.
+       // Skipping CityObjects depending on their LoD
        {
           std::vector<bool> ignore_lod;
           std::string geometryLodValue;
+
+          // CityObjects with empty geometries are always read
+          if (nextObject_.value()["geometry"].empty()) ignore_lod.push_back(false);
+
           for (auto& geometry : nextObject_.value()["geometry"])
           {
              // Check if the whole feature should be ignored
              if (geometry.is_object())
              {
                 geometryLodValue = lodToString(geometry);
+                // Only ignore the feature if it is certain that the
+                // required LoD (parmeter) != the LoD in the data.
+                // All other cases (null, missing etc.) should be read.
                 ignore_lod.push_back(not geometryLodValue.empty() and geometryLodValue != lodParam_);
              }
              else
                 ignore_lod.push_back(false);
           }
+
           if (std::all_of(ignore_lod.begin(), ignore_lod.end(), [](bool i) { return i; }))
           {
              // We skip this object, because none of its geometries have the required LoD
@@ -422,7 +429,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature &feature, FME_Boolean &endOfFile)
           }
        }
 
-        // reading CityObjects into features
+       // reading CityObjects into features
         std::string objectId = nextObject_.key();
 
         // Set the feature type
