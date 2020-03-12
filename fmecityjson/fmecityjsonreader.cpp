@@ -197,6 +197,7 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
             //      validated for the schema before it goes into FME, so we can omit these checks.
             // Check which LoD is present in the data
             std::string lod;
+            bool key_missing(false);
             try
             {
                 geometry.at("lod");
@@ -211,8 +212,8 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
                 }
                 catch (json::out_of_range &e)
                 {
-                    gLogFile->logMessageString(("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
-                    return FME_FAILURE;
+                    lod = "";
+                    key_missing = true;
                 }
             }
 
@@ -222,18 +223,18 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
                     lodInData_.push_back(lod);
                 }
             }
-            else {
+            else if (not key_missing) {
                 gLogFile->logMessageString(("The 'lod' attibute is empty in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
+            }
+            else {
+                gLogFile->logMessageString(("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
             }
         }
     }
 
-    // Read the mapping file parameters if there is one specified.
-    if (parameters.entries() < 1)
-    {
-        // We are in "open to read data features" mode.
-        readParametersDialog();
-    }
+    // Read the mapping file parameters. Always do this, otherwise the parameters are not
+    // recognized when the Reader is created in the Workspace, only when its executed.
+    readParametersDialog();
 
     if (lodInData_.size() > 1) {
         std::stringstream lodMsg;
@@ -329,6 +330,7 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
 
     // Start by pointing to the first CityObject to read
     nextObject_ = inputJSON_.at("CityObjects").begin();
+    skippedObjects_ = 0;
 
     return FME_SUCCESS;
 }
@@ -368,6 +370,9 @@ FME_Status FMECityJSONReader::close()
 
    // Log that the reader is done
    gLogFile->logMessageString((kMsgClosingReader + dataset_).c_str());
+   gLogFile->logMessageString(("Skipped reading " + std::to_string(skippedObjects_) +
+                               " features due to 'CityJSON Level of Detail' parameter setting")
+                                 .c_str());
 
    return FME_SUCCESS;
 }
@@ -396,7 +401,40 @@ FME_Status FMECityJSONReader::read(IFMEFeature &feature, FME_Boolean &endOfFile)
         endOfFile = FME_FALSE;
         return FME_SUCCESS;
     } else {
-        // reading CityObjects into features
+       // Skipping CityObjects depending on their LoD
+       {
+          std::vector<bool> ignore_lod;
+          std::string geometryLodValue;
+
+          // CityObjects with empty geometries are always read
+          if (nextObject_.value()["geometry"].empty()) ignore_lod.push_back(false);
+
+          for (auto& geometry : nextObject_.value()["geometry"])
+          {
+             // Check if the whole feature should be ignored
+             if (geometry.is_object())
+             {
+                geometryLodValue = lodToString(geometry);
+                // Only ignore the feature if it is certain that the
+                // required LoD (parmeter) != the LoD in the data.
+                // All other cases (null, missing etc.) should be read.
+                ignore_lod.push_back(not geometryLodValue.empty() and geometryLodValue != lodParam_);
+             }
+             else
+                ignore_lod.push_back(false);
+          }
+
+          if (std::all_of(ignore_lod.begin(), ignore_lod.end(), [](bool i) { return i; }))
+          {
+             // We skip this object, because none of its geometries have the required LoD
+             ++nextObject_;
+             skippedObjects_++;
+             endOfFile = FME_FALSE;
+             return read(feature, endOfFile);
+          }
+       }
+
+       // reading CityObjects into features
         std::string objectId = nextObject_.key();
 
         // Set the feature type
@@ -796,26 +834,42 @@ void FMECityJSONReader::setTraitString(IFMEGeometry *geometry,
     gFMESession->destroyString(value);
 }
 
-std::string FMECityJSONReader::lodToString(json currentGeometry) {
-    json::value_type lod;
-    try {
-        lod = currentGeometry.at("lod");
-    }
-    catch (json::out_of_range &e) {
-        return "";
-    }
-    if (lod.is_number_integer())
-        return std::to_string(int(lod));
-    else if (lod.is_number_float()) {
-        // We want the LoD as string, even though CityJSON specs currently
-        // prescribe a number
-        std::stringstream stream;
-        stream << std::fixed << std::setprecision(1)
-               << float(lod);
-        return stream.str();
-    } else {
-        return lod.get<std::string>();
-    }
+std::string FMECityJSONReader::lodToString(json currentGeometry)
+{
+   json::value_type lod;
+   try
+   {
+      lod = currentGeometry.at("lod");
+   }
+   catch (json::out_of_range& e)
+   {
+      return "";
+   }
+   if (lod.is_number_integer()) return std::to_string(int(lod));
+   else if (lod.is_number_float())
+   {
+      // We want the LoD as string, even though CityJSON specs currently
+      // prescribe a number
+      std::stringstream stream;
+      stream << std::fixed << std::setprecision(1) << float(lod);
+      return stream.str();
+   }
+   else if (lod.is_null())
+   {
+      return "";
+   }
+   else if (lod.is_string())
+   {
+      std::string lod_ = lod.get<std::string>();
+      transform(lod_.begin(), lod_.end(), lod_.begin(), ::tolower);
+      if (lod_ == "null") return "";
+      else return lod_;
+   }
+   else
+   {
+      gLogFile->logMessageString("Unknown type for 'lod'", FME_ERROR);
+      return "";
+   }
 }
 
 //===========================================================================
