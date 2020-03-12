@@ -330,6 +330,7 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
 
     // Start by pointing to the first CityObject to read
     nextObject_ = inputJSON_.at("CityObjects").begin();
+    skippedObjects_ = 0;
 
     return FME_SUCCESS;
 }
@@ -369,6 +370,9 @@ FME_Status FMECityJSONReader::close()
 
    // Log that the reader is done
    gLogFile->logMessageString((kMsgClosingReader + dataset_).c_str());
+   gLogFile->logMessageString(("Skipped reading " + std::to_string(skippedObjects_) +
+                               " features due to 'CityJSON Level of Detail' parameter setting")
+                                 .c_str());
 
    return FME_SUCCESS;
 }
@@ -424,8 +428,9 @@ FME_Status FMECityJSONReader::read(IFMEFeature &feature, FME_Boolean &endOfFile)
           {
              // We skip this object, because none of its geometries have the required LoD
              ++nextObject_;
+             skippedObjects_++;
              endOfFile = FME_FALSE;
-             return FME_SUCCESS;
+             return read(feature, endOfFile);
           }
        }
 

@@ -272,6 +272,7 @@ private:
    json inputJSON_;
    json metaObject_; // for storing the metadata object
    json::iterator nextObject_;
+   int skippedObjects_;
    std::vector<std::tuple<double, double, double>> vertices_;
    std::map<int, FME_UInt32> geomTemplateMap_;
    std::vector<std::string> lodInData_;
