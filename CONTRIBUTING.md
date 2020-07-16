@@ -2,7 +2,7 @@
 
 ## Q & A and Reporting Bugs
 
-Please visit our [Knowledge Center](https://knowledge.safe.com/index.html). If you encouter a bug, defect, or any issues related the FME CityJSON Format, please feel free to [submit a support case](https://www.safe.com/support/report-a-problem/).
+Please visit our [Knowledge Center](https://knowledge.safe.com/index.html). If you encounter a bug, defect, or any issues related the FME CityJSON Format, please feel free to [submit a support case](https://www.safe.com/support/report-a-problem/).
 
 ## Pull Request
 
