@@ -53,7 +53,7 @@ We have tested the reader on the file in the [example data directory](https://gi
 Do the usual CMake build setup in the source dir.
 ```
 mkdir build && cd build
-cmake -DFME_DEV_HOME=/path/to/fme/installation/dir ..
+cmake -DFME_DEV_HOME=/path/to/fme/installation/dir ../
 make && make install
 ```
 The option `-DFME_DEV_HOME` is required for both linking the FME libraries and installing the plugin. See the *Installation Instructions* below for the details, and the `CMakeLists.txt`.
