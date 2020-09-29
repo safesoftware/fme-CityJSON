@@ -63,6 +63,219 @@ IFMECoordSysManager* FMECityJSONReader::gCoordSysMan = nullptr;
 IFMESession* gFMESession = nullptr;
 
 //===========================================================================
+FME_Status fetchSchemaFeatures(IFMELogFile& logFile,
+                               const std::string& schemaVersion,
+                               std::map<std::string, IFMEFeature*>& schemaFeatures)
+{
+   // This will look in the official CityJSON specs
+   // and pull out the correct schema information.
+
+   // We know which major/minor version of the schemas we want.
+   // Let's see if we can find it.
+
+   std::string schemaDir = gFMESession->fmeHome();
+   schemaDir += "/plugins/cityjson/" + schemaVersion + "/schemas/";
+
+   // Here we would look in the FME install directory for all the schema
+   // definitions, and create a schema feature for each FeatureType.
+   //
+   // In this case we know we are just looking for the minimized schema file only
+
+   std::string schemafile = schemaDir + "cityjson.min.schema.json";
+
+   // Open up the schema file.
+   std::ifstream inputFile;
+   inputFile.open(schemafile, std::ios::in);
+
+   // Check that the file exists.
+   if (!inputFile.good())
+   {
+      logFile.logMessageString("Unknown setting for CityJSON writer's starting schema.", FME_ERROR);
+      logFile.logMessageString("Schema file does not exist", FME_ERROR);
+      return FME_FAILURE;
+   }
+
+   // Reset the file stream and start reading.
+   inputFile.seekg(0, std::ios::beg);
+   inputFile.clear();
+   json inputJSON;
+   inputJSON = json::parse(inputFile);
+
+   // Let's first read the metadata schema separately, as it is a bit different.
+
+   // Create the schema feature
+   IFMEFeature* schemaFeature(nullptr);
+   schemaFeature = gFMESession->createFeature();
+   // set the Feature Type
+   schemaFeature->setFeatureType("Metadata");
+
+   // Add the expected attribute names and types
+
+   // Note: I don't know the best way to parse these json files, so forgive the
+   // hacky way I pull out information.  Feel free to clean up this kind of code!
+   json::iterator propIt = inputJSON.at("properties").at("metadata").at("properties").begin();
+   const json::iterator propEnd = inputJSON.at("properties").at("metadata").at("properties").end();
+   while (propIt != propEnd)
+   {
+      addAttributeNamesAndTypes(*schemaFeature, propIt.key(), propIt.value());
+      propIt++;
+   }
+
+   // set the expected Geometry types.  You can have more than one
+   schemaFeature->setAttribute("fme_geometry{0}", "fme_no_geom");
+
+   // Drop the completed schema feature into the bucket for future use
+   schemaFeatures["Metadata"] = schemaFeature; // gives up ownership
+   schemaFeature               = nullptr;
+
+   // Now, let's loop through all the CityObjects
+   for (auto oneItem :
+        inputJSON.at("properties").at("CityObjects").at("additionalProperties")["oneOf"])
+   {
+      // Create the schema feature
+      schemaFeature = gFMESession->createFeature();
+
+      // Make sure they all have a field for their Feature ID.
+      schemaFeature->setSequencedAttribute("fid", "string");
+
+      // Start off as blank.  We'll fill it in as we scrape info.
+      std::string featureType;
+
+      // Add the expected attribute names and types
+
+      for (auto itemPart : oneItem["allOf"])
+      {
+         if (itemPart["allOf"].is_array())
+         {
+            for (auto itemSubPart : itemPart["allOf"])
+            {
+               addObjectProperties(itemSubPart, *schemaFeature, featureType);
+            }
+         }
+         else
+         {
+            addObjectProperties(itemPart, *schemaFeature, featureType);
+         }
+      }
+
+      // Maybe we didn't really read a FeatureType...
+      if (featureType.empty())
+      {
+         gFMESession->destroyFeature(schemaFeature);
+         schemaFeature = nullptr;
+      }
+      else
+      {
+         // set the Feature Type
+         schemaFeature->setFeatureType(featureType.c_str());
+
+         // set the expected Geometry types.  You can have more than one
+         schemaFeature->setAttribute("fme_geometry{0}", "fme_no_geom");
+
+         // Drop the completed schema feature into the bucket for future use
+         schemaFeatures[featureType] = schemaFeature; // gives up ownership
+         schemaFeature               = nullptr;
+      }
+   }
+
+   return FME_SUCCESS;
+}
+
+void addAttributeNamesAndTypes(IFMEFeature& schemaFeature,
+                               const std::string& attributeName,
+                               json attributeValue)
+{
+   std::string attributeType = attributeValue["type"].dump();
+   if (std::string("\"string\"") == attributeType)
+   {
+      // Simple string attribute case
+      schemaFeature.setSequencedAttribute(attributeName.c_str(), "string");
+   }
+   else if (std::string("\"number\"") == attributeType)
+   {
+      // Simple number attribute case - but I'm just guessing at real64.  What should it map to?
+      schemaFeature.setSequencedAttribute(attributeName.c_str(), "real64");
+   }
+   else if (std::string("\"integer\"") == attributeType)
+   {
+      // Simple integer attribute case - but I'm just guessing at int32.  What should it map to?
+      schemaFeature.setSequencedAttribute(attributeName.c_str(), "int32");
+   }
+   else if (std::string("\"object\"") == attributeType)
+   {
+      // This is an attribute with sub-parts, so we typically mark this as separated by a "."
+      json::iterator propIt        = attributeValue.at("properties").begin();
+      const json::iterator propEnd = attributeValue.at("properties").end();
+
+      while (propIt != propEnd)
+      {
+         addAttributeNamesAndTypes(schemaFeature, attributeName + "." + propIt.key(), propIt.value());
+         propIt++;
+      }
+   }
+   else if (std::string("null") == attributeType)
+   {
+      // This does not have an explicit type.  I'm not sure what to do.
+      // I am kind of treating this as an "object" and doing the same case as above...
+      for (auto const& entry : attributeValue.items())
+      {
+         if (entry.value().is_object())
+         {
+            addAttributeNamesAndTypes(schemaFeature, attributeName + "." + entry.key(), entry.value());
+         }
+      }
+   }
+   else if (std::string("\"array\"") == attributeType)
+   {
+      // We want to ignore the parent and children attributes, as they are already reserved as
+      // special format attributes "cityjson_children" and "cityjson_parents"
+      if ((std::string("children") != attributeName) && (std::string("parents") != attributeName))
+      {
+         // This is an array of values, so we typically use "list attributes" in FME to pass these around.
+         addAttributeNamesAndTypes(schemaFeature, attributeName + "{}", attributeValue["items"]);
+      }
+   }
+   else // we don't handle it yet
+   {
+      // do nothing?  Not sure what other cases may need to be handled.
+   }
+}
+
+//===========================================================================
+void addObjectProperties(json::value_type& itemPart,
+                         IFMEFeature& schemaFeature,
+                         std::string& featureType)
+{
+   json::iterator propIt        = itemPart.at("properties").begin();
+   const json::iterator propEnd = itemPart.at("properties").end();
+   while (propIt != propEnd)
+   {
+      if (propIt.key() == "attributes")
+      {
+         json::iterator propIt3 = itemPart.at("properties").at("attributes").at("properties").begin();
+         const json::iterator propEnd3 =
+            itemPart.at("properties").at("attributes").at("properties").end();
+
+         while (propIt3 != propEnd3)
+         {
+            addAttributeNamesAndTypes(schemaFeature, propIt3.key(), propIt3.value());
+            propIt3++;
+         }
+      }
+      else if (propIt.key() == "type" && propIt.value()["enum"].is_array())
+      {
+         // Let's pick out what I *think* should be the Feature Type?
+         featureType = propIt.value()["enum"][0].get<std::string>();
+      }
+      else
+      {
+         addAttributeNamesAndTypes(schemaFeature, propIt.key(), propIt.value());
+      }
+      propIt++;
+   }
+}
+
+//===========================================================================
 // Constructor
 FMECityJSONReader::FMECityJSONReader(const char* readerTypeName, const char* readerKeyword)
    :
@@ -1092,100 +1305,6 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature &feature, FME_Boolean &endO
     return FME_SUCCESS;
 }
 
-void FMECityJSONReader::addAttributeNamesAndTypes(IFMEFeature& schemaFeature,
-                                                  const std::string& attributeName,
-                                                  json attributeValue) const
-{
-   std::string attributeType = attributeValue["type"].dump();
-   if (std::string("\"string\"") == attributeType)
-   {
-      // Simple string attribute case
-      schemaFeature.setSequencedAttribute(attributeName.c_str(), "string");
-   }
-   else if (std::string("\"number\"") == attributeType)
-   {
-      // Simple number attribute case - but I'm just guessing at real64.  What should it map to?
-      schemaFeature.setSequencedAttribute(attributeName.c_str(), "real64");
-   }
-   else if (std::string("\"integer\"") == attributeType)
-   {
-      // Simple integer attribute case - but I'm just guessing at int32.  What should it map to?
-      schemaFeature.setSequencedAttribute(attributeName.c_str(), "int32");
-   }
-   else if (std::string("\"object\"") == attributeType)
-   {
-      // This is an attribute with sub-parts, so we typically mark this as separated by a "."
-      json::iterator propIt        = attributeValue.at("properties").begin();
-      const json::iterator propEnd = attributeValue.at("properties").end();
-
-      while (propIt != propEnd)
-      {
-         addAttributeNamesAndTypes(schemaFeature, attributeName + "." + propIt.key(), propIt.value());
-         propIt++;
-      }
-   }
-   else if (std::string("null") == attributeType)
-   {
-      // This does not have an explicit type.  I'm not sure what to do.
-      // I am kind of treating this as an "object" and doing the same case as above...
-      for (auto const& entry : attributeValue.items())
-      {
-         if (entry.value().is_object())
-         {
-            addAttributeNamesAndTypes(schemaFeature, attributeName + "." + entry.key(), entry.value());
-         }
-      }
-   }
-   else if (std::string("\"array\"") == attributeType)
-   {
-      // We want to ignore the parent and children attributes, as they are already reserved as 
-      // special format attributes "cityjson_children" and "cityjson_parents"
-      if ((std::string("children") != attributeName) && (std::string("parents") != attributeName))
-      {
-         // This is an array of values, so we typically use "list attributes" in FME to pass these around.
-         addAttributeNamesAndTypes(schemaFeature, attributeName + "{}", attributeValue["items"]);
-      }
-   }
-   else // we don't handle it yet
-   {
-      // do nothing?  Not sure what other cases may need to be handled.
-   }
-}
-
-//===========================================================================
-void FMECityJSONReader::addObjectProperties(json::value_type& itemPart,
-                                            IFMEFeature& schemaFeature,
-                                            std::string& featureType)
-{
-   json::iterator propIt        = itemPart.at("properties").begin();
-   const json::iterator propEnd = itemPart.at("properties").end();
-   while (propIt != propEnd)
-   {
-      if (propIt.key() == "attributes")
-      {
-         json::iterator propIt3 = itemPart.at("properties").at("attributes").at("properties").begin();
-         const json::iterator propEnd3 =
-            itemPart.at("properties").at("attributes").at("properties").end();
-
-         while (propIt3 != propEnd3)
-         {
-            addAttributeNamesAndTypes(schemaFeature, propIt3.key(), propIt3.value());
-            propIt3++;
-         }
-      }
-      else if (propIt.key() == "type" && propIt.value()["enum"].is_array())
-      {
-         // Let's pick out what I *think* should be the Feature Type?
-         featureType = propIt.value()["enum"][0].get<std::string>();
-      }
-      else
-      {
-         addAttributeNamesAndTypes(schemaFeature, propIt.key(), propIt.value());
-      }
-      propIt++;
-   }
-}
-
 //===========================================================================
 FME_Status FMECityJSONReader::fetchSchemaFeaturesForWriter()
 {
@@ -1199,112 +1318,8 @@ FME_Status FMECityJSONReader::fetchSchemaFeaturesForWriter()
       // OK, they just want to start off blank.  I guess they will build their own in Workbench.
       return FME_SUCCESS;
    }
-   // We know which major/minor version of the schemas we want.
-   // Let's see if we can find it.
-
-   std::string schemaDir = gFMESession->fmeHome();
-   schemaDir += "/plugins/cityjson/" + writerStartingSchema_ + "/schemas/";
-
-   // Here we would look in the FME install directory for all the schema
-   // definitions, and create a schema feature for each FeatureType.
-   //
-   // In this case we know we are just looking for the minimized schema file only
-
-   std::string schemafile = schemaDir + "cityjson.min.schema.json";
-
-   // Open up the data file.
-   inputFile_.open(schemafile, std::ios::in);
-
-   // Check that the file exists.
-   if (!inputFile_.good())
-   {
-      gLogFile->logMessageString("Unknown setting for CityJSON writer's starting schema.", FME_ERROR);
-      gLogFile->logMessageString("Schema file does not exist", FME_ERROR);
-      return FME_FAILURE;
-   }
-
-   // Reset the file stream and start reading.
-   inputFile_.seekg(0, std::ios::beg);
-   inputFile_.clear();
-   inputJSON_ = json::parse(inputFile_);
-
-   // Let's first read the metadata schema separately, as it is a bit different.
-
-   // Create the schema feature
-   IFMEFeature* schemaFeature(nullptr);
-   schemaFeature = gFMESession->createFeature();
-   // set the Feature Type
-   schemaFeature->setFeatureType("Metadata");
-
-   // Add the expected attribute names and types
-
-   // Note: I don't know the best way to parse these json files, so forgive the
-   // hacky way I pull out information.  Feel free to clean up this kind of code!
-   json::iterator propIt = inputJSON_.at("properties").at("metadata").at("properties").begin();
-   const json::iterator propEnd = inputJSON_.at("properties").at("metadata").at("properties").end();
-   while (propIt != propEnd)
-   {
-      addAttributeNamesAndTypes(*schemaFeature, propIt.key(), propIt.value());
-      propIt++;
-   }
-
-   // set the expected Geometry types.  You can have more than one
-   schemaFeature->setAttribute("fme_geometry{0}", "fme_no_geom");
-
-   // Drop the completed schema feature into the bucket for future use
-   schemaFeatures_["Metadata"] = schemaFeature; // gives up ownership
-   schemaFeature               = nullptr;
-
-   // Now, let's loop through all the CityObjects
-   for (auto oneItem : inputJSON_.at("properties").at("CityObjects").at("additionalProperties")["oneOf"])
-   {
-      // Create the schema feature
-      schemaFeature = gFMESession->createFeature();
-
-      // Make sure they all have a field for their Feature ID.
-      schemaFeature->setSequencedAttribute("fid", "string");
-
-      // Start off as blank.  We'll fill it in as we scrape info.
-      std::string featureType;
-
-      // Add the expected attribute names and types
-
-      for (auto itemPart : oneItem["allOf"])
-      {
-         if (itemPart["allOf"].is_array())
-         {
-            for (auto itemSubPart : itemPart["allOf"])
-            {
-               addObjectProperties(itemSubPart, *schemaFeature, featureType);
-            }
-         }
-         else
-         {
-            addObjectProperties(itemPart, *schemaFeature, featureType);
-         }
-      }
-
-      // Maybe we didn't really read a FeatureType...
-      if (featureType.empty())
-      {
-         gFMESession->destroyFeature(schemaFeature);
-         schemaFeature = nullptr;
-      }
-      else
-      {
-         // set the Feature Type
-         schemaFeature->setFeatureType(featureType.c_str());
-
-         // set the expected Geometry types.  You can have more than one
-         schemaFeature->setAttribute("fme_geometry{0}", "fme_no_geom");
-
-         // Drop the completed schema feature into the bucket for future use
-         schemaFeatures_[featureType] = schemaFeature; // gives up ownership
-         schemaFeature                = nullptr;
-      }
-   }
-
-   return FME_SUCCESS;
+   
+   return fetchSchemaFeatures(*gLogFile, writerStartingSchema_, schemaFeatures_);
 }
 
 //===========================================================================
