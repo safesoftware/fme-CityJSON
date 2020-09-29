@@ -200,7 +200,7 @@ private:
    std::vector< std::vector< double > >           vertices_;
    std::map<std::string, std::map<std::string, std::string> >  attrToWrite_;
 
-   static const std::vector<std::string>          cityjsonTypes_;
+   std::vector<std::string>                       cityjsonTypes_;
 
    std::string                                    cityjson_version_; 
    bool                                           remove_duplicates_; 

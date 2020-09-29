@@ -66,6 +66,21 @@ class IFMEFeature;
 class IFMELogFile;
 class IFMEGeometryTools;
 
+// -----------------------------------------------------------------------
+// Gather schema feature definitions, by looking in the official CityJSON specs
+// and pull out the correct schema information.
+FME_Status fetchSchemaFeatures(IFMELogFile& logFile,
+                               const std::string& schemaVersion,
+                               std::map<std::string, IFMEFeature*>& schemaFeatures);
+
+// -----------------------------------------------------------------------
+// Helper functions to recursively add nested attribute types to a schema feature.
+void addAttributeNamesAndTypes(IFMEFeature& schemaFeature,
+                               const std::string& attributeName,
+                               json attributeValue);
+void addObjectProperties(json::value_type& itemPart, IFMEFeature& schemaFeature, std::string& featureType);
+
+
 class FMECityJSONReader : public IFMEReader
 {
 
@@ -225,15 +240,6 @@ private:
    // schema feature definitions, these will look in the official CityJSON specs
    // and pull out the correct schema information.
    FME_Status fetchSchemaFeaturesForWriter();
-
-   // -----------------------------------------------------------------------
-   // Helper functions to recursively add nested attribute types to a schema feature.
-   void addAttributeNamesAndTypes(IFMEFeature& schemaFeature,
-                                  const std::string& attributeName,
-                                  json attributeValue) const;
-   void addObjectProperties(json::value_type& itemPart,
-                            IFMEFeature& schemaFeature,
-                            std::string& featureType);
 
    // Data members
 

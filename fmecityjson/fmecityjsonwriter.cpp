@@ -38,6 +38,7 @@
 #include "fmecityjsonpriv.h"
 #include "fmecityjsongeometryvisitor.h"
 #include "Point3.h"
+#include "fmecityjsonreader.h"
 
 
 #include <ifeature.h>
@@ -68,33 +69,37 @@ IFMEMappingFile* FMECityJSONWriter::gMappingFile = nullptr;
 IFMECoordSysManager* FMECityJSONWriter::gCoordSysMan = nullptr;
 extern IFMESession* gFMESession;
 
-// TODO: These should probably be populated from the shipped schema files, not hardcoded.
-//       Maybe "Metadata" is added to this list because it is specific to the FME reader/writer
-const std::vector<std::string> FMECityJSONWriter::cityjsonTypes_ = std::vector<std::string>(
+//===========================================================================
+FME_Status fetchCityJSONTypes(IFMELogFile& logFile,
+                              IFMEMappingFile& mappingFile,
+                              const std::string& schemaVersion,
+                              std::vector<std::string>& cityjsonTypes)
+{
+   // This will look in the official CityJSON specs
+   // and pull out the correct "types" information.
+
+   // We know which major/minor version of the schemas we want.
+   // Let's see if we can find it.
+   std::map<std::string, IFMEFeature*> schemaFeatures;
+   FME_Status badLuck = fetchSchemaFeatures(logFile, schemaVersion, schemaFeatures);
+   if (badLuck)
    {
-      "Building", 
-      "BuildingPart",
-      "BuildingInstallation",
-      "Bridge",
-      "BridgePart",
-      "BridgeInstallation",
-      "CityObjectGroup",
-      "CityFurniture",
-      "GenericCityObject",
-      "LandUse",
-      "Metadata",
-      "PlantCover",
-      "Railway",
-      "Road",
-      "SolitaryVegetationObject",
-      "TINRelief",
-      "TransportationSquare",
-      "Tunnel",
-      "TunnelPart",
-      "TunnelInstallation",
-      "WaterBody"
+      // TODO: Log some error message
+      return FME_FAILURE;
    }
-);
+
+   // loop through the schema features and get the types only.
+   // Maybe in the future we might want to keep the other information around,
+   // but for now we can just toss it.
+   for (auto& entry : schemaFeatures)
+   {
+      cityjsonTypes.push_back(entry.first);
+      gFMESession->destroyFeature(entry.second); 
+   }
+   schemaFeatures.clear(); // we already deleted all the Features.
+
+   return FME_SUCCESS;
+}
 
 //===========================================================================
 // Constructor
@@ -125,6 +130,8 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
 
    // get the .fmf parameters
    IFMEString* pv = gFMESession->createString();
+
+   //-- compress?
    gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcCompress, *pv);
    std::string s1 = pv->data();
    if (s1.compare("Yes") == 0)
@@ -132,6 +139,7 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    else 
       compress_ = false;
    
+   //-- important decimal degits?
    gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcImportantDigits, *pv);
    important_digits_ = std::stoi(pv->data());
 
@@ -143,6 +151,17 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    {
     remove_duplicates_ = true;
    }
+
+   //-- output version?
+   gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcCityjsonVersion, *pv);
+   cityjson_version_ = pv->data();
+   // Fixing a bug we had in early workspaces where users set this wrong and
+   // we really know what they meant.
+   if (cityjson_version_ == "1.0")
+   {
+      cityjson_version_ = "1.0.1";
+   }
+   
    gFMESession->destroyString(pv);
 
    // Perform setup steps before opening file for writing
@@ -195,7 +214,17 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
       gFMESession->destroyStringArray(allatt);
    }
 
-
+   // Let's populate the possible feature types that are valid for our version
+   // of CityJSON
+   FME_Status badLuck = fetchCityJSONTypes(*gLogFile,
+                                           *gMappingFile,
+                                           cityjson_version_,
+                                           cityjsonTypes_);
+   if (badLuck)
+   {
+      // TODO: Log some error message
+      return FME_FAILURE;
+   }
 
    // -----------------------------------------------------------------------
    // Open the dataset here
