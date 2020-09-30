@@ -339,17 +339,9 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    }
 
    // Handle Metadata features specially.
-   // For now, we are basically ignoring it.
    if (ft == "Metadata")
    {
-      IFMEString* rs = gFMESession->createString();
-      // Look for whatever metadata is interesting
-      feature.getAttribute("referenceSystem", *rs);
-      // Use metadata as required
-      // outputJSON_["metadata"] = "is awesome";
-      gFMESession->destroyString(rs); rs = nullptr;
-
-      return FME_SUCCESS;
+      return handleMetadataFeature(feature);
    }
 
    //-- write fid for CityObject
@@ -808,6 +800,62 @@ void FMECityJSONWriter::addDefLineToSchema(const IFMEStringArray& parameters)
       // gLogFile->logMessageString(attrType.c_str());
    }
    schemaFeatures_->append(schemaFeature);
+}
+
+//===========================================================================
+FME_Status FMECityJSONWriter::handleMetadataFeature(const IFMEFeature& feature)
+{
+   // TODO:  Right now we will consume as many metadata features as are
+   // passed in.  Each one will take their values and overwrite the last.
+   // I'm not sure if this is good policy, or if we should reject more than
+   // one coming in, or give warning or error messages if we get more than one.
+
+   IFMEString* tempAttr = gFMESession->createString();
+
+   // Look for whatever metadata is interesting
+   // https://www.cityjson.org/specs/1.0.1/#metadata
+
+   // TODO: we should probably scrape off metadata based on the
+   // version number we are writing.
+   //if (cityjson_version_ == "1.0.1")
+   {
+      // Let's ignore the reference system for now.
+      // We take this off of the clues given to the writer, 
+      // not from the metadata features.
+      //feature.getAttribute("referenceSystem", *tempAttr);
+
+      // Let's ignore the geographicalExtent, as we will
+      // use the data's true bounding box as we calculate from
+      // the input features instead.
+      //feature.getAttribute("geographicalExtent", *tempAttr);
+
+      // This is a simple string, and we do no checking
+      if (FME_TRUE == feature.getAttribute("geographicLocation", *tempAttr))
+      {
+         std::string glval(tempAttr->data(), tempAttr->length());
+         outputJSON_["metadata"]["geographicLocation"] = json::object();
+         outputJSON_["CityObjects"]["geographicLocation"]["type"] = glval;
+
+      }
+
+      // This is a simple string, and we do no checking
+      if (FME_TRUE == feature.getAttribute("datasetTopicCategory", *tempAttr))
+      {
+         std::string glval(tempAttr->data(), tempAttr->length());
+         outputJSON_["metadata"]["datasetTopicCategory"] = json::object();
+         outputJSON_["CityObjects"]["datasetTopicCategory"]["type"] = glval;
+      }
+
+      // TODO: this has not yet been implemented.  I have not seen an example
+      // of this in data, so it is hard to test currently without it.
+      //feature.getAttribute("lineage", *tempAttr);
+   }
+
+   // clean up
+   gFMESession->destroyString(tempAttr);
+   tempAttr = nullptr;
+
+   return FME_SUCCESS;
 }
 
 //===========================================================================
