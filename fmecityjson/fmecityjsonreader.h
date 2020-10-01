@@ -259,7 +259,7 @@ private:
    std::string dataset_;
 
    // Stores the coordinate system of all the features in the file being read.
-   // Initialized to an empty string. Not used in this implementation.
+   // Initialized to an empty string.
    std::string coordSys_;
 
    // A pointer to an IFMEGeometryTools object which is used to create and

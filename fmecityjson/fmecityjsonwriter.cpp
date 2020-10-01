@@ -382,6 +382,19 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       }
    }
 
+   // Coordinate system of all the features in the file being written.
+   // (We assume all features passed in share the same
+   // coordinate system.)
+   IFMEString* csFME = gFMESession->createString();
+   feature.getCoordSys(*csFME);
+   if (csFME->length() > 0)
+   {
+      std::string csval(csFME->data(), csFME->length());
+      outputJSON_["metadata"]["referenceSystem"] = csval;
+   }
+   gFMESession->destroyString(csFME);
+   csFME = nullptr;
+
    // Handle Metadata features specially.
    if (ft == "Metadata")
    {
@@ -882,14 +895,13 @@ FME_Status FMECityJSONWriter::handleMetadataFeature(const IFMEFeature& feature)
       {
          std::string glval(tempAttr->data(), tempAttr->length());
          outputJSON_["metadata"]["geographicLocation"] = glval;
-
       }
 
       // This is a simple string, and we do no checking
       if (FME_TRUE == feature.getAttribute("datasetTopicCategory", *tempAttr))
       {
-         std::string glval(tempAttr->data(), tempAttr->length());
-         outputJSON_["metadata"]["datasetTopicCategory"] = glval;
+         std::string dtcval(tempAttr->data(), tempAttr->length());
+         outputJSON_["metadata"]["datasetTopicCategory"] = dtcval;
       }
 
       // TODO: this has not yet been implemented.  I have not seen an example
