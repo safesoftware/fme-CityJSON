@@ -396,7 +396,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       gLogFile->logMessageString("CityJSON features must have an attribute named 'fid' to uniquely identify them.", FME_WARN );
       return FME_FAILURE;
    }
-   std::string fids(feature.getFeatureType());
+   std::string fids(fidsFME->data(), fidsFME->length());
 
    if (!outputJSON_["CityObjects"].is_object())
    {
