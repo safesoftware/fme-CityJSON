@@ -61,6 +61,7 @@
 #include <igeometryiterator.h>
 
 #include <typeinfo>
+#include <optional>
 
 // These are initialized externally when a writer object is created so all
 // methods in this file can assume they are ready to use.
@@ -237,10 +238,8 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
       return FME_FAILURE;
    }
    outputJSON_["type"] = "CityJSON";
-   outputJSON_["version"] = "1.0";
+   outputJSON_["version"] = cityjson_version_;
    // outputJSON_["metadata"] = "is awesome";
-   outputJSON_["CityObjects"] = json::object();
-   outputJSON_["vertices"] = json::array();
    // -----------------------------------------------------------------------
 
    return FME_SUCCESS;
@@ -272,6 +271,50 @@ FME_Status FMECityJSONWriter::close()
    
    if (vertices_.empty() == false)
    {
+      // Let's update the metadata for the bounds of the actual data.
+      // We may have no vertices or it may all be 2D.  Cover those odd cases.
+      std::optional<double> minx, miny, minz, maxx, maxy, maxz;
+      for (auto& coord : vertices_)
+      {
+         if (!minx || coord[0] < minx) minx = coord[0];
+         if (!maxx || coord[0] > maxx) maxx = coord[0];
+         if (!miny || coord[1] < miny) miny = coord[1];
+         if (!maxy || coord[1] > maxy) maxy = coord[1];
+         if (coord.size() == 3) // have z
+         {
+            if (!minz || coord[2] < minz) minz = coord[2];
+            if (!maxz || coord[2] > maxz) maxz = coord[2];
+         }
+      }
+
+      if (minx && miny && maxx && maxy)
+      {
+         std::vector<double> bounds;
+
+         // not sure if data can be 2D, but let's code it up like it is possible.
+         if (!minz || !maxz)
+         {
+            bounds.push_back(*minx);
+            bounds.push_back(*miny);
+            bounds.push_back(*maxx);
+            bounds.push_back(*maxy);
+         }
+         else
+         {
+            bounds.push_back(*minx);
+            bounds.push_back(*miny);
+            bounds.push_back(*minz);
+            bounds.push_back(*maxx);
+            bounds.push_back(*maxy);
+            bounds.push_back(*maxz);
+         }
+
+         outputJSON_["metadata"]["geographicalExtent"] = json::array();
+         outputJSON_["metadata"]["geographicalExtent"] = bounds;
+      }
+
+      // Output the actual vertices
+      outputJSON_["vertices"] = json::array();
       outputJSON_["vertices"] = vertices_;
       //-- remove duplicates (and potentially compress/quantize the file)
       if (remove_duplicates_ == true)
@@ -282,12 +325,13 @@ FME_Status FMECityJSONWriter::close()
       else {
         outputJSON_["vertices"] = vertices_;
       }
-      //-- write to the file
-      outputFile_ << outputJSON_ << std::endl;
-      // Log that the writer is done
-      gLogFile->logMessageString((kMsgClosingWriter + dataset_).c_str());
    }
-      
+
+   //-- write to the file
+   outputFile_ << outputJSON_ << std::endl;
+   // Log that the writer is done
+   gLogFile->logMessageString((kMsgClosingWriter + dataset_).c_str());
+   
 
    // Delete the visitor
    if (visitor_)
@@ -353,6 +397,11 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       return FME_FAILURE;
    }
    std::string fids(feature.getFeatureType());
+
+   if (!outputJSON_["CityObjects"].is_object())
+   {
+      outputJSON_["CityObjects"] = json::object();
+   }
 
    gLogFile->logMessageString(*fidsFME);
    // gLogFile->logMessageString(*s1, FME_WARN);
@@ -834,7 +883,7 @@ FME_Status FMECityJSONWriter::handleMetadataFeature(const IFMEFeature& feature)
       {
          std::string glval(tempAttr->data(), tempAttr->length());
          outputJSON_["metadata"]["geographicLocation"] = json::object();
-         outputJSON_["CityObjects"]["geographicLocation"]["type"] = glval;
+         outputJSON_["metadata"]["geographicLocation"]["type"] = glval;
 
       }
 
@@ -843,7 +892,7 @@ FME_Status FMECityJSONWriter::handleMetadataFeature(const IFMEFeature& feature)
       {
          std::string glval(tempAttr->data(), tempAttr->length());
          outputJSON_["metadata"]["datasetTopicCategory"] = json::object();
-         outputJSON_["CityObjects"]["datasetTopicCategory"]["type"] = glval;
+         outputJSON_["metadata"]["datasetTopicCategory"]["type"] = glval;
       }
 
       // TODO: this has not yet been implemented.  I have not seen an example
