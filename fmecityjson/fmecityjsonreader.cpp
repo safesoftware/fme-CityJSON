@@ -598,6 +598,9 @@ FME_Status FMECityJSONReader::read(IFMEFeature &feature, FME_Boolean &endOfFile)
     // Perform read actions here
     // -----------------------------------------------------------------------
 
+    // Set the coordinate system
+    feature.setCoordSys(coordSys_.c_str());
+
     if (nextObject_ == inputJSON_.at("CityObjects").end() and metaObject_.empty()) {
         endOfFile = FME_TRUE;
         return FME_SUCCESS;
@@ -694,9 +697,6 @@ FME_Status FMECityJSONReader::read(IFMEFeature &feature, FME_Boolean &endOfFile)
             IFMEGeometry *geom = parseCityObjectGeometry(geometry, vertices_);
             if (geom != nullptr) { feature.setGeometry(geom); }
         }
-
-        // Set the coordinate system
-        feature.setCoordSys(coordSys_.c_str());
 
         ++nextObject_;
 
