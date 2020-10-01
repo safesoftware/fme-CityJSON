@@ -211,7 +211,7 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
       }
       std::string st(schemaFeature->getFeatureType());
       attrToWrite_[st] = sa;
-      gLogFile->logFeature(*schemaFeature, FME_INFORM, 20);
+      //gLogFile->logFeature(*schemaFeature, FME_INFORM, 20);
       gFMESession->destroyStringArray(allatt);
    }
 
@@ -403,8 +403,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       outputJSON_["CityObjects"] = json::object();
    }
 
-   gLogFile->logMessageString(*fidsFME);
-   // gLogFile->logMessageString(*s1, FME_WARN);
+   //gLogFile->logMessageString(*fidsFME);
 
    outputJSON_["CityObjects"][fids] = json::object();
    outputJSON_["CityObjects"][fids]["type"] = ft;
@@ -755,7 +754,7 @@ void FMECityJSONWriter::fetchSchemaFeatures()
       // ...,
       // <FeatureTypeM>,<AttrNameM1>,<AttrTypeM1>,...,<AttrNameMN>,<AttrTypeMN>]
       // gLogFile->logMessageString("===", FME_WARN );
-      logFMEStringArray(*defLineList);
+      //logFMEStringArray(*defLineList);
       
       // We need to determine the feature type names for this writer.
       IFMEStringArray* featureTypes = gFMESession->createStringArray();
@@ -765,7 +764,7 @@ void FMECityJSONWriter::fetchSchemaFeatures()
        *defLineList, *fetchDefsOnly , *featureTypes))
       {
          // gLogFile->logMessageString("---", FME_WARN );
-         logFMEStringArray(*featureTypes);
+         //logFMEStringArray(*featureTypes);
          std::vector<int> potentialFeatureTypeIndices;
          
          // Mark the indices where the feature type names are located in the defLineList.
@@ -836,7 +835,7 @@ void FMECityJSONWriter::addDefLineToSchema(const IFMEStringArray& parameters)
    // Set it on the schema feature.
    schemaFeature->setFeatureType(paramValue->data());
 
-   gLogFile->logMessageString(paramValue->data());
+   //gLogFile->logMessageString(paramValue->data());
 
    for (FME_UInt32 i = 1; i < parameters.entries(); i += 2)
    {
