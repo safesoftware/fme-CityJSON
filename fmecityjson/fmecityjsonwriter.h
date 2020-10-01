@@ -158,6 +158,10 @@ private:
    // Insert additional private methods here
    // -----------------------------------------------------------------------
 
+   //---------------------------------------------------------------
+   // collect information from a metadata feature.
+   FME_Status handleMetadataFeature(const IFMEFeature& feature);
+
 
    // Data members
 

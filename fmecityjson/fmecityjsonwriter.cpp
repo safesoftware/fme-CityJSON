@@ -61,6 +61,7 @@
 #include <igeometryiterator.h>
 
 #include <typeinfo>
+#include <optional>
 
 // These are initialized externally when a writer object is created so all
 // methods in this file can assume they are ready to use.
@@ -237,10 +238,8 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
       return FME_FAILURE;
    }
    outputJSON_["type"] = "CityJSON";
-   outputJSON_["version"] = "1.0";
+   outputJSON_["version"] = cityjson_version_;
    // outputJSON_["metadata"] = "is awesome";
-   outputJSON_["CityObjects"] = json::object();
-   outputJSON_["vertices"] = json::array();
    // -----------------------------------------------------------------------
 
    return FME_SUCCESS;
@@ -272,6 +271,50 @@ FME_Status FMECityJSONWriter::close()
    
    if (vertices_.empty() == false)
    {
+      // Let's update the metadata for the bounds of the actual data.
+      // We may have no vertices or it may all be 2D.  Cover those odd cases.
+      std::optional<double> minx, miny, minz, maxx, maxy, maxz;
+      for (auto& coord : vertices_)
+      {
+         if (!minx || coord[0] < minx) minx = coord[0];
+         if (!maxx || coord[0] > maxx) maxx = coord[0];
+         if (!miny || coord[1] < miny) miny = coord[1];
+         if (!maxy || coord[1] > maxy) maxy = coord[1];
+         if (coord.size() == 3) // have z
+         {
+            if (!minz || coord[2] < minz) minz = coord[2];
+            if (!maxz || coord[2] > maxz) maxz = coord[2];
+         }
+      }
+
+      if (minx && miny && maxx && maxy)
+      {
+         std::vector<double> bounds;
+
+         // not sure if data can be 2D, but let's code it up like it is possible.
+         if (!minz || !maxz)
+         {
+            bounds.push_back(*minx);
+            bounds.push_back(*miny);
+            bounds.push_back(*maxx);
+            bounds.push_back(*maxy);
+         }
+         else
+         {
+            bounds.push_back(*minx);
+            bounds.push_back(*miny);
+            bounds.push_back(*minz);
+            bounds.push_back(*maxx);
+            bounds.push_back(*maxy);
+            bounds.push_back(*maxz);
+         }
+
+         outputJSON_["metadata"]["geographicalExtent"] = json::array();
+         outputJSON_["metadata"]["geographicalExtent"] = bounds;
+      }
+
+      // Output the actual vertices
+      outputJSON_["vertices"] = json::array();
       outputJSON_["vertices"] = vertices_;
       //-- remove duplicates (and potentially compress/quantize the file)
       if (remove_duplicates_ == true)
@@ -282,12 +325,13 @@ FME_Status FMECityJSONWriter::close()
       else {
         outputJSON_["vertices"] = vertices_;
       }
-      //-- write to the file
-      outputFile_ << outputJSON_ << std::endl;
-      // Log that the writer is done
-      gLogFile->logMessageString((kMsgClosingWriter + dataset_).c_str());
    }
-      
+
+   //-- write to the file
+   outputFile_ << outputJSON_ << std::endl;
+   // Log that the writer is done
+   gLogFile->logMessageString((kMsgClosingWriter + dataset_).c_str());
+   
 
    // Delete the visitor
    if (visitor_)
@@ -339,49 +383,48 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    }
 
    // Handle Metadata features specially.
-   // For now, we are basically ignoring it.
    if (ft == "Metadata")
    {
-      IFMEString* rs = gFMESession->createString();
-      // Look for whatever metadata is interesting
-      feature.getAttribute("referenceSystem", *rs);
-      // Use metadata as required
-      // outputJSON_["metadata"] = "is awesome";
-      gFMESession->destroyString(rs); rs = nullptr;
-
-      return FME_SUCCESS;
+      return handleMetadataFeature(feature);
    }
 
    //-- write fid for CityObject
    //-- FAILURE if not one of these
-   IFMEString* s1 = gFMESession->createString();
-   if (feature.getAttribute("fid", *s1) == FME_FALSE) 
+   IFMEString* fidsFME = gFMESession->createString();
+   if (feature.getAttribute("fid", *fidsFME) == FME_FALSE) 
    {
       gLogFile->logMessageString("CityJSON features must have an attribute named 'fid' to uniquely identify them.", FME_WARN );
       return FME_FAILURE;
    }
-   
-   gLogFile->logMessageString(*s1);
+   std::string fids(fidsFME->data(), fidsFME->length());
+
+   if (!outputJSON_["CityObjects"].is_object())
+   {
+      outputJSON_["CityObjects"] = json::object();
+   }
+
+   gLogFile->logMessageString(*fidsFME);
    // gLogFile->logMessageString(*s1, FME_WARN);
 
-   outputJSON_["CityObjects"][s1->data()] = json::object();
-   outputJSON_["CityObjects"][s1->data()]["type"] = ft;
+   outputJSON_["CityObjects"][fids] = json::object();
+   outputJSON_["CityObjects"][fids]["type"] = ft;
    //-- set FeatureType in visitor for surface semantics
    visitor_->setFeatureType(ft);
 
    IFMEStringArray* allatt = gFMESession->createStringArray();
-   outputJSON_["CityObjects"][s1->data()]["attributes"] = json::object();
+   outputJSON_["CityObjects"][fids]["attributes"] = json::object();
    
    feature.getAllAttributeNames(*allatt);
    // feature.getSequencedAttributeList(*allatt);
    for (FME_UInt32 i = 0; i < allatt->entries(); i++)
    {
-      const char* t = allatt->elementAt(i)->data();
-      std::string ts(t);
+      const IFMEString* tFME = allatt->elementAt(i);
+      std::string ts(tFME->data(), tFME->length());
       // gLogFile->logMessageString(ts.c_str());
-      IFMEString* value = gFMESession->createString();
-      feature.getAttribute(t, *value);
-      FME_AttributeType ftype = feature.getAttributeType(t);
+      IFMEString* valueFME = gFMESession->createString();
+      feature.getAttribute(*tFME, *valueFME);
+      std::string val(valueFME->data(), valueFME->length());
+      FME_AttributeType ftype = feature.getAttributeType(*tFME);
       // gLogFile->logMessageString(ts.c_str(), FME_WARN);
       if ( (ts != "fid") &&
            (ts != "cityjson_parents") &&  
@@ -413,20 +456,20 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
                  (ftype == FME_ATTR_REAL64) ||
                  (ftype == FME_ATTR_REAL80) ) 
             {
-               outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+               outputJSON_["CityObjects"][fids]["attributes"][ts] = val;
             } 
             else if ( (ftype == FME_ATTR_STRING) || 
                       (ftype == FME_ATTR_ENCODED_STRING) 
                       ) {
-               outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+               outputJSON_["CityObjects"][fids]["attributes"][ts] = val;
             }
             else if (ftype == FME_ATTR_BOOLEAN) {
                FME_Boolean b;
-               if (feature.getBooleanAttribute(t, b) == FME_TRUE) {
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = "true";
+               if (feature.getBooleanAttribute(*tFME, b) == FME_TRUE) {
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = "true";
                }
                else {
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = "false";
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = "false";
                }
             }
             else {
@@ -456,31 +499,31 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
                  (ftype == FME_ATTR_REAL64) ||
                  (ftype == FME_ATTR_REAL80) ) 
             {
-               long tmp = std::stol(value->data());
-               outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmp;
+               long tmp = std::stol(val);
+               outputJSON_["CityObjects"][fids]["attributes"][ts] = tmp;
             } 
             else if ( (ftype == FME_ATTR_STRING) || 
                       (ftype == FME_ATTR_ENCODED_STRING) ) 
             {
                try {
-                  long tmp = std::stol(value->data());
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmp;
+                  long tmp = std::stol(val);
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = tmp;
                }
                catch (const std::invalid_argument& ia) {
                   std::stringstream ss;
                   ss << "Attribute '" << ts << "' cannot be converted to integer, writing string.";
                   gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = val;
                }
 
             }
             else if (ftype == FME_ATTR_BOOLEAN) {
                FME_Boolean b;
-               if (feature.getBooleanAttribute(t, b) == FME_TRUE) {
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = 1;
+               if (feature.getBooleanAttribute(*tFME, b) == FME_TRUE) {
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = 1;
                }
                else {
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = 0;
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = 0;
                }
             }
             else {
@@ -506,31 +549,31 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
                  (ftype == FME_ATTR_REAL64) ||
                  (ftype == FME_ATTR_REAL80) ) 
             {
-               double tmp = std::stod(value->data());
-               outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmp;
+               double tmp = std::stod(val);
+               outputJSON_["CityObjects"][fids]["attributes"][ts] = tmp;
             } 
             else if ( (ftype == FME_ATTR_STRING) || 
                       (ftype == FME_ATTR_ENCODED_STRING) ) 
             {
                try {
-                  double tmp = std::stod(value->data());
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = tmp;
+                  double tmp = std::stod(val);
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = tmp;
                }
                catch (const std::invalid_argument& ia) {
                   std::stringstream ss;
                   ss << "Attribute '" << ts << "' cannot be converted to integer, writing string.";
                   gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = val;
                }
 
             }
             else if (ftype == FME_ATTR_BOOLEAN) {
                FME_Boolean b;
-               if (feature.getBooleanAttribute(t, b) == FME_TRUE) {
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = 1.0;
+               if (feature.getBooleanAttribute(*tFME, b) == FME_TRUE) {
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = 1.0;
                }
                else {
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = 0.0;
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = 0.0;
                }
             }
             else {
@@ -554,27 +597,27 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
                  (ftype == FME_ATTR_REAL64) ||
                  (ftype == FME_ATTR_REAL80) ) 
             {
-               int tmp = std::stoi(value->data());
+               int tmp = std::stoi(val);
                if (tmp == 1)
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = true;
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = true;
                else if (tmp == 0)
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = false;
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = false;
                else
                {
                   std::stringstream ss;
                   ss << "Attribute '" << ts << "' cannot be converted to Boolean, writing string.";
                   gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = val;
                }
 
             } 
             else if (ftype == FME_ATTR_BOOLEAN) {
                FME_Boolean b;
-               if (feature.getBooleanAttribute(t, b) == FME_TRUE) {
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = true;
+               if (feature.getBooleanAttribute(*tFME, b) == FME_TRUE) {
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = true;
                }
                else {
-                  outputJSON_["CityObjects"][s1->data()]["attributes"][t] = false;
+                  outputJSON_["CityObjects"][fids]["attributes"][ts] = false;
                }
             }
             else {
@@ -586,7 +629,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       //-- DATE/DATETIME writing -----
          else if ( (wtype == "date") || (wtype == "datetime") ) 
          {
-            outputJSON_["CityObjects"][s1->data()]["attributes"][t] = value->data();
+            outputJSON_["CityObjects"][fids]["attributes"][ts] = val;
          }
       //-- OTHERS (TODO: not sure if they exist?)             
          else 
@@ -596,7 +639,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
             gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
          }
       }
-      gFMESession->destroyString(value);
+      gFMESession->destroyString(valueFME);
    }
    gFMESession->destroyStringArray(allatt);
    // gLogFile->logMessageString("Done with attributes", FME_WARN);
@@ -605,10 +648,13 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    IFMEStringArray* childrenValues = gFMESession->createStringArray();
    feature.getListAttribute("cityjson_children", *childrenValues);
    if (childrenValues->entries() > 0)
-   outputJSON_["CityObjects"][s1->data()]["children"] = json::array();   
+   {
+      outputJSON_["CityObjects"][fids]["children"] = json::array();   
+   }
    for (FME_UInt32 i = 0; i < childrenValues->entries(); i++) {
       // TODO : test if children and parents are written as string
-      outputJSON_["CityObjects"][s1->data()]["children"].push_back(childrenValues->elementAt(i)->data());
+      std::string oneVal(childrenValues->elementAt(i)->data(),childrenValues->elementAt(i)->length());
+      outputJSON_["CityObjects"][fids]["children"].push_back(oneVal);
    }
    gFMESession->destroyStringArray(childrenValues);
 
@@ -616,9 +662,12 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    IFMEStringArray* parentValues = gFMESession->createStringArray();
    feature.getListAttribute("cityjson_parents", *parentValues);
    if (parentValues->entries() > 0)
-   outputJSON_["CityObjects"][s1->data()]["parents"] = json::array();   
+   {
+      outputJSON_["CityObjects"][fids]["parents"] = json::array();
+   }
    for (FME_UInt32 i = 0; i < parentValues->entries(); i++) {
-      outputJSON_["CityObjects"][s1->data()]["parents"].push_back(parentValues->elementAt(i)->data());
+      std::string oneVal(parentValues->elementAt(i)->data(), parentValues->elementAt(i)->length());
+      outputJSON_["CityObjects"][fids]["parents"].push_back(oneVal);
    }
    gFMESession->destroyStringArray(parentValues);
 
@@ -630,7 +679,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
    //-- do no process geometry if none, this is allowed in CityJSON
    //-- a CO without geometry still has to have an empty array "geomtry": []
-   outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
+   outputJSON_["CityObjects"][fids]["geometry"] = json::array();
    FME_Boolean isgeomnull = geometry->canCastAs<IFMENull*>();
    if (isgeomnull == false)
    {
@@ -658,8 +707,8 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       //-- fetch the LoD of the geometry
       IFMEString* slod = gFMESession->createString();
       slod->set("cityjson_lod", 12);
-      IFMEString* stmp = gFMESession->createString();
-      if (geometry->getTraitString(*slod, *stmp) == FME_FALSE)
+      IFMEString* stmpFME = gFMESession->createString();
+      if (geometry->getTraitString(*slod, *stmpFME) == FME_FALSE)
       {
          std::stringstream ss;
          ss << "The '" << feature.getFeatureType() << "' feature will not be written because the geometry does not have a 'cityjson_lod' trait.";
@@ -667,16 +716,17 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
          // The 'Building' feature with geometry type 'IFMEBRepSolid' will not be written because the geometry does not have a citygml_lod_name.
          return FME_FAILURE;
       }
+      std::string stemp(stmpFME->data(), stmpFME->length());
 
       //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
       json fgeomjson = (visitor_)->getGeomJSON();
       //-- TODO: write '2' or '2.0' is fine for the "lod"?
-      fgeomjson["lod"] = atof(stmp->data());
+      fgeomjson["lod"] = stod(stemp);
 
       //-- write it to the JSON object
       // outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
       if (!fgeomjson.empty()) {
-         outputJSON_["CityObjects"][s1->data()]["geometry"].push_back(fgeomjson);
+         outputJSON_["CityObjects"][fids]["geometry"].push_back(fgeomjson);
       }
 
       std::vector<std::vector<double>> vtmp = (visitor_)->getGeomVertices();
@@ -710,7 +760,7 @@ void FMECityJSONWriter::fetchSchemaFeatures()
       // We need to determine the feature type names for this writer.
       IFMEStringArray* featureTypes = gFMESession->createStringArray();
       IFMEString* fetchDefsOnly = gFMESession->createString();
-      fetchDefsOnly->set("FETCH_DEFS_ONLY", 16);
+      fetchDefsOnly->set("FETCH_DEFS_ONLY", 15);
       if (gMappingFile->fetchFeatureTypes(writerKeyword_.c_str(), writerTypeName_.c_str(),
        *defLineList, *fetchDefsOnly , *featureTypes))
       {
@@ -721,7 +771,7 @@ void FMECityJSONWriter::fetchSchemaFeatures()
          // Mark the indices where the feature type names are located in the defLineList.
          for (FME_UInt32 i = 0; i < defLineList->entries(); i++)
          {
-            if (featureTypes->contains(defLineList->elementAt(i)->data()))
+            if (featureTypes->contains(*defLineList->elementAt(i)))
             {
                potentialFeatureTypeIndices.push_back(i);
             }
@@ -788,22 +838,71 @@ void FMECityJSONWriter::addDefLineToSchema(const IFMEStringArray& parameters)
 
    gLogFile->logMessageString(paramValue->data());
 
-   std::string attrName;
-   std::string attrType;
    for (FME_UInt32 i = 1; i < parameters.entries(); i += 2)
    {
       // Grab the attribute name and type
-      paramValue = parameters.elementAt(i);
-      attrName = paramValue->data();
-
-      paramValue = parameters.elementAt(i + 1);
-      attrType = paramValue->data();
       // Add the attribute name and type pair to the schema feature.
-      schemaFeature->setSequencedAttribute(attrName.c_str(), attrType.c_str());
+      schemaFeature->setEncodedSequencedAttribute(*parameters.elementAt(i),
+                                                  *parameters.elementAt(i + 1),
+                                                  "fme-system");
       // gLogFile->logMessageString(attrName.c_str());
       // gLogFile->logMessageString(attrType.c_str());
    }
    schemaFeatures_->append(schemaFeature);
+}
+
+//===========================================================================
+FME_Status FMECityJSONWriter::handleMetadataFeature(const IFMEFeature& feature)
+{
+   // TODO:  Right now we will consume as many metadata features as are
+   // passed in.  Each one will take their values and overwrite the last.
+   // I'm not sure if this is good policy, or if we should reject more than
+   // one coming in, or give warning or error messages if we get more than one.
+
+   IFMEString* tempAttr = gFMESession->createString();
+
+   // Look for whatever metadata is interesting
+   // https://www.cityjson.org/specs/1.0.1/#metadata
+
+   // TODO: we should probably scrape off metadata based on the
+   // version number we are writing.
+   //if (cityjson_version_ == "1.0.1")
+   {
+      // Let's ignore the reference system for now.
+      // We take this off of the clues given to the writer, 
+      // not from the metadata features.
+      //feature.getAttribute("referenceSystem", *tempAttr);
+
+      // Let's ignore the geographicalExtent, as we will
+      // use the data's true bounding box as we calculate from
+      // the input features instead.
+      //feature.getAttribute("geographicalExtent", *tempAttr);
+
+      // This is a simple string, and we do no checking
+      if (FME_TRUE == feature.getAttribute("geographicLocation", *tempAttr))
+      {
+         std::string glval(tempAttr->data(), tempAttr->length());
+         outputJSON_["metadata"]["geographicLocation"] = glval;
+
+      }
+
+      // This is a simple string, and we do no checking
+      if (FME_TRUE == feature.getAttribute("datasetTopicCategory", *tempAttr))
+      {
+         std::string glval(tempAttr->data(), tempAttr->length());
+         outputJSON_["metadata"]["datasetTopicCategory"] = glval;
+      }
+
+      // TODO: this has not yet been implemented.  I have not seen an example
+      // of this in data, so it is hard to test currently without it.
+      //feature.getAttribute("lineage", *tempAttr);
+   }
+
+   // clean up
+   gFMESession->destroyString(tempAttr);
+   tempAttr = nullptr;
+
+   return FME_SUCCESS;
 }
 
 //===========================================================================
