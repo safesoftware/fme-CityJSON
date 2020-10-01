@@ -760,7 +760,7 @@ void FMECityJSONWriter::fetchSchemaFeatures()
       // We need to determine the feature type names for this writer.
       IFMEStringArray* featureTypes = gFMESession->createStringArray();
       IFMEString* fetchDefsOnly = gFMESession->createString();
-      fetchDefsOnly->set("FETCH_DEFS_ONLY", 16);
+      fetchDefsOnly->set("FETCH_DEFS_ONLY", 15);
       if (gMappingFile->fetchFeatureTypes(writerKeyword_.c_str(), writerTypeName_.c_str(),
        *defLineList, *fetchDefsOnly , *featureTypes))
       {
