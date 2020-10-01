@@ -882,8 +882,7 @@ FME_Status FMECityJSONWriter::handleMetadataFeature(const IFMEFeature& feature)
       if (FME_TRUE == feature.getAttribute("geographicLocation", *tempAttr))
       {
          std::string glval(tempAttr->data(), tempAttr->length());
-         outputJSON_["metadata"]["geographicLocation"] = json::object();
-         outputJSON_["metadata"]["geographicLocation"]["type"] = glval;
+         outputJSON_["metadata"]["geographicLocation"] = glval;
 
       }
 
@@ -891,8 +890,7 @@ FME_Status FMECityJSONWriter::handleMetadataFeature(const IFMEFeature& feature)
       if (FME_TRUE == feature.getAttribute("datasetTopicCategory", *tempAttr))
       {
          std::string glval(tempAttr->data(), tempAttr->length());
-         outputJSON_["metadata"]["datasetTopicCategory"] = json::object();
-         outputJSON_["metadata"]["datasetTopicCategory"]["type"] = glval;
+         outputJSON_["metadata"]["datasetTopicCategory"] = glval;
       }
 
       // TODO: this has not yet been implemented.  I have not seen an example
