@@ -737,7 +737,8 @@ IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &curre
         std::string geometryType, geometryLodValue;
         std::string geometryLodName = "cityjson_lod"; // geometry Trait name
         json::value_type boundaries = currentGeometry.at("boundaries");
-        json::value_type semantics = currentGeometry["semantics"];
+        json::value_type semantics  = currentGeometry["semantics"];
+        json::value_type materials  = currentGeometry["material"];
 
         // geometry type and level of detail
         geometryType = currentGeometry.at("type").get<std::string>();
@@ -760,29 +761,29 @@ IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &curre
                     return mlinestring;
                 } else if (geometryType == "MultiSurface") {
                     IFMEMultiSurface *msurface = fmeGeometryTools_->createMultiSurface();
-                    parseMultiCompositeSurface(msurface, boundaries, semantics, vertices);
+                    parseMultiCompositeSurface(msurface, boundaries, semantics, materials, vertices);
                     // Set the Level of Detail Trait on the geometry
-                    setTraitString(msurface, geometryLodName, geometryLodValue);
+                    setTraitString(*msurface, geometryLodName, geometryLodValue);
                     // Append the geometry to the FME feature
                     return msurface;
                 } else if (geometryType == "CompositeSurface") {
                     IFMECompositeSurface *csurface = fmeGeometryTools_->createCompositeSurface();
-                    parseMultiCompositeSurface(csurface, boundaries, semantics, vertices);
-                    setTraitString(csurface, geometryLodName, geometryLodValue);
+                    parseMultiCompositeSurface(csurface, boundaries, semantics, materials, vertices);
+                    setTraitString(*csurface, geometryLodName, geometryLodValue);
                     return csurface;
                 } else if (geometryType == "Solid") {
                     IFMEBRepSolid *BSolid = parseSolid(boundaries, semantics, vertices);
-                    setTraitString(BSolid, geometryLodName, geometryLodValue);
+                    setTraitString(*BSolid, geometryLodName, geometryLodValue);
                     return BSolid;
                 } else if (geometryType == "MultiSolid") {
                     IFMEMultiSolid *msolid = fmeGeometryTools_->createMultiSolid();
                     parseMultiCompositeSolid(msolid, boundaries, semantics, vertices);
-                    setTraitString(msolid, geometryLodName, geometryLodValue);
+                    setTraitString(*msolid, geometryLodName, geometryLodValue);
                     return msolid;
                 } else if (geometryType == "CompositeSolid") {
                     IFMECompositeSolid *csolid = fmeGeometryTools_->createCompositeSolid();
                     parseMultiCompositeSolid(csolid, boundaries, semantics, vertices);
-                    setTraitString(csolid, geometryLodName, geometryLodValue);
+                    setTraitString(*csolid, geometryLodName, geometryLodValue);
                     return csolid;
                 } else if (geometryType == "GeometryInstance") {
                     IFMEAggregate *ginst = fmeGeometryTools_->createAggregate();
@@ -829,25 +830,29 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, js
             if (j == 0) {
                 int nrSurfaces = distance(begin(boundaries[i][j]), end(boundaries[i][j]));
                 for (int k = 0; k < nrSurfaces; k++) {
-                    json::value_type semanticSrf;
-                    if (not semantics.is_null()) {
-                        if (not semantics["values"][i][j][k].is_null()) {
+                    IFMEFace *face = parseSurfaceBoundaries(boundaries[i][j][k], vertices);
+
+                    // Does this have any semantic data?
+                    if (not semantics.is_null())
+                    {
+                       json::value_type semanticSrf;
+                       if (not semantics["values"][i][j][k].is_null()) {
                             int semanticIdx = semantics["values"][i][j][k];
                             semanticSrf = semantics["surfaces"][semanticIdx];
                         }
+                       // Add traits onto the face.
+                       parseSemantics(*face, semanticSrf);
                     }
-                    IFMEFace *face = parseSurface(
-                            boundaries[i][j][k], semanticSrf, vertices);
                     outerSurface->appendPart(face);
                 }
             } else {
                 IFMECompositeSurface *innerSurface = fmeGeometryTools_->createCompositeSurface();
                 int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
                 for (int k = 0; k < nrSurfaces; k++) {
-                    json::value_type semanticSrf;
+                    IFMEFace *face = parseSurfaceBoundaries(boundaries[i][j][k], vertices);
+
                     // Inner shells/surfaces do not have semantics
-                    IFMEFace *face = parseSurface(
-                            boundaries[i][j][k], semanticSrf, vertices);
+
                     innerSurface->appendPart(face);
                 }
                 innerSurfaces.push_back(innerSurface);
@@ -870,25 +875,31 @@ IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json:
         if (i == 0) {
             int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
             for (int j = 0; j < nrSurfaces; j++) {
-                json::value_type semanticSrf;
-                if (not semantics.is_null()) {
-                    if (not semantics["values"][i][j].is_null()) {
-                        int semanticIdx = semantics["values"][i][j];
-                        semanticSrf = semantics["surfaces"][semanticIdx];
-                    }
+                IFMEFace *face = parseSurfaceBoundaries(boundaries[i][j], vertices);
+
+                // Does this have any semantic data?
+                if (not semantics.is_null())
+                {
+                   json::value_type semanticSrf;
+                   if (not semantics["values"][i][j].is_null())
+                   {
+                      int semanticIdx = semantics["values"][i][j];
+                      semanticSrf     = semantics["surfaces"][semanticIdx];
+                   }
+                   // Add traits onto the face.
+                   parseSemantics(*face, semanticSrf);
                 }
-                IFMEFace *face = parseSurface(
-                        boundaries[i][j], semanticSrf, vertices);
+
                 outerSurface->appendPart(face);
             }
         } else {
             IFMECompositeSurface *innerSurface = fmeGeometryTools_->createCompositeSurface();
             int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
             for (int j = 0; j < nrSurfaces; j++) {
-                json::value_type semanticSrf;
+                IFMEFace *face = parseSurfaceBoundaries(boundaries[i][j], vertices);
+
                 // Inner shells/surfaces do not have semantics
-                IFMEFace *face = parseSurface(
-                        boundaries[i][j], semanticSrf, vertices);
+
                 innerSurface->appendPart(face);
             }
             innerSurfaces.push_back(innerSurface);
@@ -904,24 +915,51 @@ IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json:
 template<typename MCSurface>
 void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries,
                                                    json::value_type &semantics,
+                                                   json::value_type materials,
                                                    std::vector<std::tuple<double, double, double>> &vertices) {
     int nrSurfaces = distance(begin(boundaries), end(boundaries));
     for (int i = 0; i < nrSurfaces; i++) {
-        json::value_type semanticSrf;
-        if (not semantics.is_null()) {
-            if (not semantics["values"][i].is_null()) {
-                int semanticIdx = semantics["values"][i];
-                semanticSrf = semantics["surfaces"][semanticIdx];
-            }
+
+        // Does this have any material data attached?
+        std::vector<std::string> materialNames;
+        std::vector<json::value_type> materialRefs;
+        if (not materials.is_null()) {
+           std::string msString = materials.dump();
+           gLogFile->logMessageString(msString.c_str(), FME_INFORM);
+
+           for (json::iterator it = materials.begin(); it != materials.end(); ++it)
+           {
+              materialNames.push_back(it.key());
+              materialRefs.push_back(it.value()["values"][i]);
+//               const std::string& materialName = it.key();
+//               json::value_type materialValues = it.value();
+//               std::string msString2            = materialValues["values"].dump();
+//               gLogFile->logMessageString(msString2.c_str(), FME_INFORM);
+//               //const std::string& materialValue = materialValues["values"][i];
+//               json::value_type materialValue = it.value()["values"][i];
+           }
         }
-        IFMEFace *face =
-                parseSurface(boundaries[i], semanticSrf, vertices);
+
+        IFMEFace *face = parseSurfaceBoundaries(boundaries[i], vertices);
+
+        // Does this have any semantic data?
+        if (not semantics.is_null())
+        {
+           json::value_type semanticSrf;
+           if (not semantics["values"][i].is_null())
+           {
+              int semanticIdx = semantics["values"][i];
+              semanticSrf     = semantics["surfaces"][semanticIdx];
+           }
+           // Add traits onto the face.
+           parseSemantics(*face, semanticSrf);
+        }
 
         multiCompositeSurface->appendPart(face);
     }
 }
 
-IFMEFace *FMECityJSONReader::parseSurface(json::value_type surface, json::value_type semanticSurface,
+IFMEFace *FMECityJSONReader::parseSurfaceBoundaries(json::value_type surface, 
                                           std::vector<std::tuple<double, double, double>> &vertices) {
     std::vector<IFMELine *> rings;
     parseRings(&rings, surface, vertices);
@@ -941,54 +979,71 @@ IFMEFace *FMECityJSONReader::parseSurface(json::value_type surface, json::value_
     // TODO: Set the appearance for the face here. See:
     // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L346-L350
 
-    // Setting semantics
-    if (not semanticSurface.is_null()) {
-
-        IFMEString *geometryName = gFMESession->createString();
-        std::string semType = semanticSurface.at("type").get<std::string>();
-        geometryName->set(semType.c_str(), semType.length());
-        face->setName(*geometryName, nullptr);
-        gFMESession->destroyString(geometryName);
-
-        for (json::iterator it = semanticSurface.begin(); it != semanticSurface.end(); it++) {
-            if (it.key() == "children" || it.key() == "parent") {
-                // We ignore Semantic Surface hierachies and the 'children' and 'parent' tag is discarded,
-                // because we don't have a way to handle Semantic Surface hierarchies (eg. Door is a child of a
-                // WallSurface).
-                gLogFile->logMessageString("Semantic Surface hierarchy (children, parent) is discarded",
-                        FME_WARN);
-            }
-            else if (it.key() != "type") {
-                if (it.value().is_string()) {
-                    setTraitString(face, it.key(), it.value());
-                } else if (it.value().is_number_float()) {
-                    IFMEString *geometryTrait = gFMESession->createString();
-                    geometryTrait->set(it.key().c_str(), it.key().length());
-                    face->setTraitReal64(*geometryTrait, it.value());
-                    gFMESession->destroyString(geometryTrait);
-                } else if (it.value().is_number_integer()) {
-                    IFMEString *geometryTrait = gFMESession->createString();
-                    geometryTrait->set(it.key().c_str(), it.key().length());
-                    face->setTraitInt64(*geometryTrait, it.value());
-                    gFMESession->destroyString(geometryTrait);
-                } else if (it.value().is_boolean()) {
-                    IFMEString *geometryTrait = gFMESession->createString();
-                    geometryTrait->set(it.key().c_str(), it.key().length());
-                    if (it.value()) face->setTraitBoolean(*geometryTrait, FME_TRUE);
-                    else face->setTraitBoolean(*geometryTrait, FME_FALSE);
-                    gFMESession->destroyString(geometryTrait);
-                } else {
-                    std::string val = it.value().type_name();
-                    gLogFile->logMessageString(
-                            ("Semantic Surface attribute type '" + val + "' is not allowed.").c_str(),
-                            FME_WARN);
-                }
-            }
-        }
-    }
     return face;
 }
 
+void FMECityJSONReader::parseSemantics(IFMEFace &face, json::value_type& semanticSurface)
+{
+   // Setting semantics
+   if (not semanticSurface.is_null())
+   {
+      IFMEString* geometryName = gFMESession->createString();
+      std::string semType      = semanticSurface.at("type").get<std::string>();
+      geometryName->set(semType.c_str(), semType.length());
+      face.setName(*geometryName, nullptr);
+      gFMESession->destroyString(geometryName);
+
+      for (json::iterator it = semanticSurface.begin(); it != semanticSurface.end(); it++)
+      {
+         if (it.key() == "children" || it.key() == "parent")
+         {
+            // We ignore Semantic Surface hierarchies and the 'children' and 'parent' tag is
+            // discarded, because we don't have a way to handle Semantic Surface hierarchies (eg.
+            // Door is a child of a WallSurface).
+            gLogFile->logMessageString("Semantic Surface hierarchy (children, parent) is discarded",
+                                       FME_WARN);
+         }
+         else if (it.key() != "type")
+         {
+            if (it.value().is_string())
+            {
+               setTraitString(face, it.key(), it.value());
+            }
+            else if (it.value().is_number_float())
+            {
+               IFMEString* geometryTrait = gFMESession->createString();
+               geometryTrait->set(it.key().c_str(), it.key().length());
+               face.setTraitReal64(*geometryTrait, it.value());
+               gFMESession->destroyString(geometryTrait);
+            }
+            else if (it.value().is_number_integer())
+            {
+               IFMEString* geometryTrait = gFMESession->createString();
+               geometryTrait->set(it.key().c_str(), it.key().length());
+               face.setTraitInt64(*geometryTrait, it.value());
+               gFMESession->destroyString(geometryTrait);
+            }
+            else if (it.value().is_boolean())
+            {
+               IFMEString* geometryTrait = gFMESession->createString();
+               geometryTrait->set(it.key().c_str(), it.key().length());
+               if (it.value())
+                  face.setTraitBoolean(*geometryTrait, FME_TRUE);
+               else
+                  face.setTraitBoolean(*geometryTrait, FME_FALSE);
+               gFMESession->destroyString(geometryTrait);
+            }
+            else
+            {
+               std::string val = it.value().type_name();
+               gLogFile->logMessageString(
+                  ("Semantic Surface attribute type '" + val + "' is not allowed.").c_str(), FME_WARN);
+            }
+         }
+      }
+   }
+
+}
 void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries,
                                              std::vector<std::tuple<double, double, double>> &vertices) {
     for (auto &linestring : boundaries) {
@@ -1032,7 +1087,7 @@ void FMECityJSONReader::parseMultiPoint(IFMEMultiPoint *mpoint, json::value_type
     }
 }
 
-void FMECityJSONReader::setTraitString(IFMEGeometry *geometry,
+void FMECityJSONReader::setTraitString(IFMEGeometry& geometry,
                                        const std::string &traitName,
                                        const std::string &traitValue) {
     IFMEString *geometryTrait = gFMESession->createString();
@@ -1041,7 +1096,7 @@ void FMECityJSONReader::setTraitString(IFMEGeometry *geometry,
     IFMEString *value = gFMESession->createString();
     value->set(traitValue.c_str(), traitValue.length());
 
-    geometry->setTraitString(*geometryTrait, *value);
+    geometry.setTraitString(*geometryTrait, *value);
 
     gFMESession->destroyString(geometryTrait);
     gFMESession->destroyString(value);

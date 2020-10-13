@@ -207,10 +207,17 @@ private:
 
    // Parse a Multi- or CompositeSurface
    template <typename MCSurface>
-   void parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries, json::value_type &semantics, std::vector<std::tuple<double, double, double>> &vertices);
+   void parseMultiCompositeSurface(MCSurface multiCompositeSurface,
+                                   json::value_type& boundaries,
+                                   json::value_type& semantics,
+                                   json::value_type materials,
+                                   std::vector<std::tuple<double, double, double>>& vertices);
 
    // Parse a single Surface of the boundary
-   IFMEFace *parseSurface(json::value_type surface, json::value_type semanticSurface, std::vector<std::tuple<double, double, double>> &vertices);
+   IFMEFace *parseSurfaceBoundaries(json::value_type surface, std::vector<std::tuple<double, double, double>> &vertices);
+
+   // parse the sematics and attach them to the surface.
+   void parseSemantics(IFMEFace& face, json::value_type& semanticSurface);
 
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries, std::vector<std::tuple<double, double, double>> &vertices);
@@ -227,7 +234,7 @@ private:
                         std::vector<std::tuple<double, double, double>> &vertices);
 
    // Set the Level of Detail Trait on the geometry
-   static void setTraitString(IFMEGeometry *geometry,
+   static void setTraitString(IFMEGeometry& geometry,
                               const std::string &traitName,
                               const std::string &traitValue);
 
