@@ -437,7 +437,7 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
                 }
             }
             else if (not key_missing) {
-                gLogFile->logMessageString(("The 'lod' attibute is empty in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
+                gLogFile->logMessageString(("The 'lod' attribute is empty in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
             }
             else {
                 gLogFile->logMessageString(("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
@@ -913,33 +913,13 @@ IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json:
 }
 
 template<typename MCSurface>
-void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries,
+void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface,
+                                                   json::value_type &boundaries,
                                                    json::value_type &semantics,
                                                    json::value_type materials,
                                                    std::vector<std::tuple<double, double, double>> &vertices) {
     int nrSurfaces = distance(begin(boundaries), end(boundaries));
     for (int i = 0; i < nrSurfaces; i++) {
-
-        // Does this have any material data attached?
-        std::vector<std::string> materialNames;
-        std::vector<json::value_type> materialRefs;
-        if (not materials.is_null()) {
-           std::string msString = materials.dump();
-           gLogFile->logMessageString(msString.c_str(), FME_INFORM);
-
-           for (json::iterator it = materials.begin(); it != materials.end(); ++it)
-           {
-              materialNames.push_back(it.key());
-              materialRefs.push_back(it.value()["values"][i]);
-//               const std::string& materialName = it.key();
-//               json::value_type materialValues = it.value();
-//               std::string msString2            = materialValues["values"].dump();
-//               gLogFile->logMessageString(msString2.c_str(), FME_INFORM);
-//               //const std::string& materialValue = materialValues["values"][i];
-//               json::value_type materialValue = it.value()["values"][i];
-           }
-        }
-
         IFMEFace *face = parseSurfaceBoundaries(boundaries[i], vertices);
 
         // Does this have any semantic data?
@@ -954,6 +934,23 @@ void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurfa
            // Add traits onto the face.
            parseSemantics(*face, semanticSrf);
         }
+
+        // Does this have any material data attached?
+        if (not materials.is_null()) {
+           std::vector<std::string> materialNames;
+           std::vector<json::value_type> materialRefs;
+//std::string msString = materials.dump();
+//gLogFile->logMessageString(msString.c_str(), FME_INFORM);
+
+           for (json::iterator it = materials.begin(); it != materials.end(); ++it)
+           {
+              materialNames.push_back(it.key());
+              materialRefs.push_back(it.value()["values"][i]);
+           }
+           // Add materials to the face
+           parseMaterials(*face, materialNames, materialRefs);
+        }
+
 
         multiCompositeSurface->appendPart(face);
     }
@@ -1042,8 +1039,25 @@ void FMECityJSONReader::parseSemantics(IFMEFace &face, json::value_type& semanti
          }
       }
    }
-
 }
+
+void FMECityJSONReader::parseMaterials(IFMEFace& face, 
+                                       std::vector<std::string> materialNames,
+                                       std::vector<json::value_type> materialRefs)
+{
+   for (int i = 0; i < materialNames.size(); i++)
+   {
+      if (not materialRefs[i].is_null())
+      {
+         std::string materialName     = materialNames[i];
+         int materialRef              = materialRefs[i];
+         json::value_type materialDef = inputJSON_.at("appearance").at("materials")[materialRef];
+//         std::string msString         = materialDef.dump();
+//         gLogFile->logMessageString(msString.c_str(), FME_INFORM);
+      }
+   }
+}
+
 void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries,
                                              std::vector<std::tuple<double, double, double>> &vertices) {
     for (auto &linestring : boundaries) {

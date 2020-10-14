@@ -216,8 +216,13 @@ private:
    // Parse a single Surface of the boundary
    IFMEFace *parseSurfaceBoundaries(json::value_type surface, std::vector<std::tuple<double, double, double>> &vertices);
 
-   // parse the sematics and attach them to the surface.
+   // parse the semantics and attach them to the surface.
    void parseSemantics(IFMEFace& face, json::value_type& semanticSurface);
+
+   // parse the materials and attach them to the surface.
+   void parseMaterials(IFMEFace& face,
+                       std::vector<std::string> materialNames,
+                       std::vector<json::value_type> materialRefs);
 
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries, std::vector<std::tuple<double, double, double>> &vertices);
