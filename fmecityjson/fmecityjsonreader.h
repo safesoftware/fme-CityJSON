@@ -303,6 +303,7 @@ private:
    int skippedObjects_;
    std::vector<std::tuple<double, double, double>> vertices_;
    std::map<int, FME_UInt32> geomTemplateMap_;
+   std::map<int, FME_UInt32> materialsMap_;
    std::vector<std::string> lodInData_;
 
    bool schemaScanDone_;

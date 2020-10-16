@@ -377,12 +377,13 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     // Scan the LODs in the file, and match to what the reader is requesting.
     scanLODs();
 
-    FME_Status badLuck = readGeometryDefinitions();
-    if (FME_SUCCESS != badLuck) return badLuck;
-
     readMetadata();
 
     readMaterials();
+
+    // These need to be read in after all the appearances/textures/materials have been populated.
+    FME_Status badLuck = readGeometryDefinitions();
+    if (FME_SUCCESS != badLuck) return badLuck;
 
     // Start by pointing to the first CityObject to read
     nextObject_ = inputJSON_.at("CityObjects").begin();
@@ -394,6 +395,83 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
 //===========================================================================
 void FMECityJSONReader::readMaterials()
 {
+   IFMEString* fmeVal = gFMESession->createString();
+
+   json materials = inputJSON_.at("appearance").at("materials");
+//    std::string tcString = materials.dump();
+//    gLogFile->logMessageString(tcString.c_str(), FME_INFORM);
+   
+   int nrMaterials = distance(begin(materials), end(materials));
+   for (int i = 0; i < nrMaterials; i++)
+   {
+      FME_UInt32 materialRef(0);
+      IFMEAppearance* app = fmeGeometryTools_->createAppearance();
+
+      // Set the "name"
+      if (not materials[i]["name"].is_null())
+      {
+         std::string mName = materials[i]["name"].get<std::string>();
+         fmeVal->set(mName.c_str(), mName.length());
+         app->setName(*fmeVal, "fme-system");
+      }
+
+      // Set the "ambientIntensity"
+      // I'm not sure how the ambient Intensity matches to FME's ambient colour.
+      // For now, I'll set all three colour values to be the same.
+      if (not materials[i]["ambientIntensity"].is_null())
+      {
+         app->setColorAmbient(materials[i]["ambientIntensity"],
+                              materials[i]["ambientIntensity"],
+                              materials[i]["ambientIntensity"]);
+      }
+
+      // Set the "diffuseColor"
+      if (not materials[i]["diffuseColor"].is_null())
+      {
+         app->setColorDiffuse(materials[i]["diffuseColor"][0],
+                              materials[i]["diffuseColor"][1],
+                              materials[i]["diffuseColor"][2]);
+      }
+
+      // Set the "emissiveColor"
+      if (not materials[i]["emissiveColor"].is_null())
+      {
+         app->setColorEmissive(materials[i]["emissiveColor"][0],
+                               materials[i]["emissiveColor"][1],
+                               materials[i]["emissiveColor"][2]);
+      }
+
+      // Set the "specularColor"
+      if (not materials[i]["specularColor"].is_null())
+      {
+         app->setColorSpecular(materials[i]["specularColor"][0],
+                               materials[i]["specularColor"][1],
+                               materials[i]["specularColor"][2]);
+      }
+
+      // Set the "shininess"
+      if (not materials[i]["shininess"].is_null())
+      {
+         app->setShininess(materials[i]["shininess"]);
+      }
+
+      // Set the "transparency"
+      if (not materials[i]["transparency"].is_null())
+      {
+         app->setAlpha(1.0 - materials[i]["transparency"]);
+      }
+
+      // Set the "isSmooth"
+      //currently there is no easy way to support this in FME.  Not yet.
+
+      // Add the Material to the FME Library
+      FME_MsgNum badLuck = gFMESession->getLibrary()->addAppearance(materialRef, app);
+
+      // Add the geometry instance reference to the lookup table
+      materialsMap_.insert({i, materialRef});
+   }
+
+   gFMESession->destroyString(fmeVal);
 }
 
 //===========================================================================
@@ -483,6 +561,8 @@ FME_Status FMECityJSONReader::readGeometryDefinitions()
    catch (json::out_of_range& e)
    {
    }
+
+   return FME_SUCCESS;
 }
 
 //===========================================================================
@@ -1121,9 +1201,11 @@ void FMECityJSONReader::parseMaterials(IFMEFace& face,
       {
          std::string materialName     = materialNames[i];
          int materialRef              = materialRefs[i];
-         json::value_type materialDef = inputJSON_.at("appearance").at("materials")[materialRef];
-//         std::string msString         = materialDef.dump();
-//         gLogFile->logMessageString(msString.c_str(), FME_INFORM);
+         FME_UInt32 fmeMatRef = materialsMap_[materialRef];
+
+         // I'm not sure if this material should be on both sides
+         face.setAppearanceReference(fmeMatRef, FME_TRUE);
+         face.setAppearanceReference(fmeMatRef, FME_FALSE);
       }
    }
 }
