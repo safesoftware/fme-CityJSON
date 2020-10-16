@@ -189,6 +189,16 @@ private:
    // Insert additional private methods here
    // -----------------------------------------------------------------------
 
+   void readVertexPool();
+
+   void scanLODs();
+
+   FME_Status readGeometryDefinitions();
+
+   void readMetadata();
+
+   void readMaterials();
+
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
    // Parse the attributes of a CityObject or metadata and assign it as attributes to the feature.

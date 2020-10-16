@@ -290,6 +290,10 @@ FMECityJSONReader::FMECityJSONReader(const char* readerTypeName, const char* rea
    textureCoordVName_(nullptr),
    writerHelperMode_(false)
 {
+    textureCoordUName_ = gFMESession->createString();
+    *textureCoordUName_ = kFME_texture_coordinate_u;
+    textureCoordVName_ = gFMESession->createString();
+    *textureCoordVName_ = kFME_texture_coordinate_v;
 }
 
 //===========================================================================
@@ -316,11 +320,6 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
        // we can skip a lot of the stuff below.
        return FME_SUCCESS;
     }
-
-    textureCoordUName_ = gFMESession->createString();
-    *textureCoordUName_ = kFME_texture_coordinate_u;
-    textureCoordVName_ = gFMESession->createString();
-    *textureCoordVName_ = kFME_texture_coordinate_v;
 
     // -----------------------------------------------------------------------
     // Add additional setup here
@@ -352,200 +351,271 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     // Let's make sure we're parsing this correctly.
     if (inputJSON_.at("type").get<std::string>() != "CityJSON")
     {
-        gLogFile->logMessageString("Not a CityJSON file", FME_ERROR);
-        return FME_FAILURE;
+       gLogFile->logMessageString("Not a CityJSON file", FME_ERROR);
+       return FME_FAILURE;
     }
+
+    // Let's make sure we are reading a version that we expect
     std::string supportedVersion = "1.0";
     if (inputJSON_.at("version").get<std::string>() < supportedVersion)
     {
-        std::stringstream versionStream;
-        versionStream << "Unsupported CityJSON version: "
-                      << inputJSON_.at("version").get<std::string>()
-                      << ". Only the version "
-                      << supportedVersion
-                      << " or higher are supported.";
-        gLogFile->logMessageString(versionStream.str().c_str(), FME_ERROR);
-        return FME_FAILURE;
+       std::stringstream versionStream;
+       versionStream << "Unsupported CityJSON version: " << inputJSON_.at("version").get<std::string>()
+                     << ". Only the version " << supportedVersion << " or higher are supported.";
+       gLogFile->logMessageString(versionStream.str().c_str(), FME_ERROR);
+       return FME_FAILURE;
     }
 
-    // Transform object
-    std::vector<double> scale{1.0, 1.0, 1.0};
-    std::vector<double> translation{0.0, 0.0, 0.0};
-    try
-    {
-        json transformObject = inputJSON_.at("transform");
-        gLogFile->logMessageString("Reading compressed CityJSON file.", FME_INFORM);
-        scale.clear();
-        for (double const s: transformObject.at("scale"))
-        {
-            scale.push_back(s);
-        }
-        translation.clear();
-        for (double const t: transformObject.at("translate"))
-        {
-            translation.push_back(t);
-        }
-    }
-    catch (json::out_of_range &e)
-    {
-        gLogFile->logMessageString("Reading uncompressed CityJSON file.", FME_INFORM);
-    }
-
-    // Vertices
-    for (auto vtx: inputJSON_.at("vertices"))
-    {
-        double x = vtx[0];
-        double y = vtx[1];
-        double z = vtx[2];
-        x = scale[0] * x + translation[0];
-        y = scale[1] * y + translation[1];
-        z = scale[2] * z + translation[2];
-        vertices_.emplace_back(x, y, z);
-    }
-
-    // Need to go through the whole file to extract the LoD of each geometry
-    for (json::iterator it = inputJSON_.at("CityObjects").begin(); it != inputJSON_.at("CityObjects").end(); it++) {
-        for (const auto &geometry : it.value().at("geometry")) {
-            // These are maybe too many checks on the presence of an attribute. Ideally, the file would be
-            //      validated for the schema before it goes into FME, so we can omit these checks.
-            // Check which LoD is present in the data
-            std::string lod;
-            bool key_missing(false);
-            try
-            {
-                geometry.at("lod");
-                lod = lodToString(geometry);
-            }
-            catch (json::out_of_range &e)
-            {
-                try
-                {
-                    int tId = geometry.at("template");
-                    lod = lodToString(inputJSON_.at("geometry-templates").at("templates")[tId]);
-                }
-                catch (json::out_of_range &e)
-                {
-                    lod = "";
-                    key_missing = true;
-                }
-            }
-
-            if (not lod.empty()) {
-                if (std::find(lodInData_.begin(), lodInData_.end(), lod) ==
-                    lodInData_.end()) {
-                    lodInData_.push_back(lod);
-                }
-            }
-            else if (not key_missing) {
-                gLogFile->logMessageString(("The 'lod' attribute is empty in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
-            }
-            else {
-                gLogFile->logMessageString(("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
-            }
-        }
-    }
+    // Reads in the entire batch of vertices for this file.
+    readVertexPool();
 
     // Read the mapping file parameters. Always do this, otherwise the parameters are not
     // recognized when the Reader is created in the Workspace, only when its executed.
+    // We do this to get the LOD parameter, maybe others.
     readParametersDialog();
 
-    if (lodInData_.size() > 1) {
-        std::stringstream lodMsg;
-        lodMsg << "There are multiple Levels of Detail present in the CityJSON data: ";
-        for (auto &l : lodInData_) lodMsg << l << ", ";
-        std::string lodMsgStr = lodMsg.str();
-        lodMsgStr.erase(lodMsgStr.end()-2);
-        gLogFile->logMessageString(lodMsgStr.c_str(), FME_INFORM);
+    // Scan the LODs in the file, and match to what the reader is requesting.
+    scanLODs();
 
-        if (lodParam_.empty()) {
-            // The default LoD to read is the LoD of the first Geometry of the
-            // first CityObject.
-            std::string defaultMsg = "No value is set for the 'CityJSON Level of "
-                                     "Detail' parameter. Defaulting to: " + lodInData_[0];
-            gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
-            lodParam_ = lodInData_[0];
-        } else if (std::find(lodInData_.begin(), lodInData_.end(), lodParam_) == lodInData_.end()) {
-            std::string defaultMsg = "The provided 'CityJSON Level of Detail' parameter value " + lodParam_ +
-                                     " is not present in the data. Defaulting to: " + lodInData_[0];
-            gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
-            lodParam_ = lodInData_[0];
-        }
-    } else if (lodInData_.size() == 1) {
-        // In case there is only one LoD in the data, we ignore the Parameter
-        // even if it is set.
-        lodParam_ = lodInData_[0];
-        gLogFile->logMessageString(("Level of Detail in file: " + lodParam_).c_str(), FME_INFORM);
-    }
+    FME_Status badLuck = readGeometryDefinitions();
+    if (FME_SUCCESS != badLuck) return badLuck;
 
-    // Reading the Geometry Templates and adding them to IFMELibrary as geometry instances
-    try
-    {
-        json templates = inputJSON_.at("geometry-templates").at("templates");
-        json verticesTemplates = inputJSON_.at("geometry-templates").at("vertices-templates");
-        std::vector<std::tuple<double, double, double>> verticesTemplatesVec;
-        FME_MsgNum badLuck;
+    readMetadata();
 
-        for (auto vtx: verticesTemplates) { verticesTemplatesVec.emplace_back(vtx[0], vtx[1], vtx[2]); }
-        int nrTemplates = distance(begin(templates), end(templates));
-        for (int i = 0; i < nrTemplates; i++) {
-            IFMEGeometry *geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec);
-            FME_UInt32 geomRef(0);
-            badLuck = gFMESession->getLibrary()->addGeometryDefinition(geomRef, geom);
-            if (badLuck) {
-                std::string msg = "Not able to add geometry template #" + std::to_string(i) + " to IFMELibrary";
-                gLogFile->logMessageString(msg.c_str(), FME_ERROR);
-                return FME_FAILURE;
-            }
-            else {
-                // Add the geometry instance reference to the lookup table
-                geomTemplateMap_.insert({i, geomRef});
-            }
-        }
-    }
-    catch (json::out_of_range &e){}
-
-    // Check for metadata in the file
-    try
-    {
-        metaObject_ = inputJSON_.at("metadata");
-        schemaScanDoneMeta_ = false;
-
-        // Scrape the coordinate system
-        try
-        {
-            std::string inputCoordSys = metaObject_.at("referenceSystem").get<std::string>();
-            // Looking to make the form EPSG:XXXX
-            inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
-            if (inputCoordSys.find("::") != std::string::npos) {
-                // In case of OGC URN 'urn:ogc:def:crs:EPSG::7415
-                coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
-            }
-            else if (inputCoordSys.find(":") != std::string::npos) {
-                // In case of legacy EPSG:7415
-                coordSys_ = inputCoordSys;
-            } else {
-                gLogFile->logMessageString("Cannot parse EPSG code. Please provide the EPSG code as OGC URN, "
-                                           "for example 'urn:ogc:def:crs:EPSG::7415'.", FME_WARN);
-            }
-            gLogFile->logMessageString(("Coordinate Reference System is set to " + coordSys_).c_str(), FME_INFORM);
-        }
-        catch (json::out_of_range &e)
-        {
-            gLogFile->logMessageString("Coordinate Reference System is not set in the file", FME_WARN);
-        }
-    }
-    catch (json::out_of_range &e)
-    {
-        gLogFile->logMessageString("The file does not contain any metadata ('referenceSystem', "
-                                   "'geographicalExtent' etc.)", FME_WARN);
-        schemaScanDoneMeta_ = true;
-    }
+    readMaterials();
 
     // Start by pointing to the first CityObject to read
     nextObject_ = inputJSON_.at("CityObjects").begin();
     skippedObjects_ = 0;
 
     return FME_SUCCESS;
+}
+
+//===========================================================================
+void FMECityJSONReader::readMaterials()
+{
+}
+
+//===========================================================================
+void FMECityJSONReader::readMetadata()
+{
+   // Check for metadata in the file
+   try
+   {
+      metaObject_         = inputJSON_.at("metadata");
+      schemaScanDoneMeta_ = false;
+
+      // Scrape the coordinate system
+      try
+      {
+         std::string inputCoordSys = metaObject_.at("referenceSystem").get<std::string>();
+         // Looking to make the form EPSG:XXXX
+         inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
+         if (inputCoordSys.find("::") != std::string::npos)
+         {
+            // In case of OGC URN 'urn:ogc:def:crs:EPSG::7415
+            coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
+         }
+         else if (inputCoordSys.find(":") != std::string::npos)
+         {
+            // In case of legacy EPSG:7415
+            coordSys_ = inputCoordSys;
+         }
+         else
+         {
+            gLogFile->logMessageString("Cannot parse EPSG code. Please provide the EPSG code as "
+                                       "OGC URN, "
+                                       "for example 'urn:ogc:def:crs:EPSG::7415'.",
+                                       FME_WARN);
+         }
+         gLogFile->logMessageString(("Coordinate Reference System is set to " + coordSys_).c_str(),
+                                    FME_INFORM);
+      }
+      catch (json::out_of_range& e)
+      {
+         gLogFile->logMessageString("Coordinate Reference System is not set in the file", FME_WARN);
+      }
+   }
+   catch (json::out_of_range& e)
+   {
+      gLogFile->logMessageString("The file does not contain any metadata ('referenceSystem', "
+                                 "'geographicalExtent' etc.)",
+                                 FME_WARN);
+      schemaScanDoneMeta_ = true;
+   }
+}
+
+//===========================================================================
+FME_Status FMECityJSONReader::readGeometryDefinitions()
+{
+   // Reading the Geometry Templates and adding them to IFMELibrary as geometry instances
+   try
+   {
+      json templates         = inputJSON_.at("geometry-templates").at("templates");
+      json verticesTemplates = inputJSON_.at("geometry-templates").at("vertices-templates");
+      std::vector<std::tuple<double, double, double>> verticesTemplatesVec;
+      FME_MsgNum badLuck;
+
+      for (auto vtx : verticesTemplates)
+      {
+         verticesTemplatesVec.emplace_back(vtx[0], vtx[1], vtx[2]);
+      }
+      int nrTemplates = distance(begin(templates), end(templates));
+      for (int i = 0; i < nrTemplates; i++)
+      {
+         IFMEGeometry* geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec);
+         FME_UInt32 geomRef(0);
+         badLuck = gFMESession->getLibrary()->addGeometryDefinition(geomRef, geom);
+         if (badLuck)
+         {
+            std::string msg =
+               "Not able to add geometry template #" + std::to_string(i) + " to IFMELibrary";
+            gLogFile->logMessageString(msg.c_str(), FME_ERROR);
+            return FME_FAILURE;
+         }
+         else
+         {
+            // Add the geometry instance reference to the lookup table
+            geomTemplateMap_.insert({i, geomRef});
+         }
+      }
+   }
+   catch (json::out_of_range& e)
+   {
+   }
+}
+
+//===========================================================================
+void FMECityJSONReader::scanLODs()
+{
+   // Need to go through the whole file to extract the LoD of each geometry
+   for (json::iterator it = inputJSON_.at("CityObjects").begin();
+        it != inputJSON_.at("CityObjects").end();
+        it++)
+   {
+      for (const auto& geometry : it.value().at("geometry"))
+      {
+         // These are maybe too many checks on the presence of an attribute. Ideally, the file would be
+         //      validated for the schema before it goes into FME, so we can omit these checks.
+         // Check which LoD is present in the data
+         std::string lod;
+         bool key_missing(false);
+         try
+         {
+            geometry.at("lod");
+            lod = lodToString(geometry);
+         }
+         catch (json::out_of_range& e)
+         {
+            try
+            {
+               int tId = geometry.at("template");
+               lod     = lodToString(inputJSON_.at("geometry-templates").at("templates")[tId]);
+            }
+            catch (json::out_of_range& e)
+            {
+               lod         = "";
+               key_missing = true;
+            }
+         }
+
+         if (not lod.empty())
+         {
+            if (std::find(lodInData_.begin(), lodInData_.end(), lod) == lodInData_.end())
+            {
+               lodInData_.push_back(lod);
+            }
+         }
+         else if (not key_missing)
+         {
+            gLogFile->logMessageString(
+               ("The 'lod' attribute is empty in the geometry of the CityObject: " + it.key()).c_str(),
+               FME_ERROR);
+         }
+         else
+         {
+            gLogFile->logMessageString(
+               ("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(),
+               FME_ERROR);
+         }
+      }
+   }
+
+   if (lodInData_.size() > 1)
+   {
+      std::stringstream lodMsg;
+      lodMsg << "There are multiple Levels of Detail present in the CityJSON data: ";
+      for (auto& l : lodInData_)
+         lodMsg << l << ", ";
+      std::string lodMsgStr = lodMsg.str();
+      lodMsgStr.erase(lodMsgStr.end() - 2);
+      gLogFile->logMessageString(lodMsgStr.c_str(), FME_INFORM);
+
+      if (lodParam_.empty())
+      {
+         // The default LoD to read is the LoD of the first Geometry of the
+         // first CityObject.
+         std::string defaultMsg = "No value is set for the 'CityJSON Level of "
+                                  "Detail' parameter. Defaulting to: " +
+                                  lodInData_[0];
+         gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
+         lodParam_ = lodInData_[0];
+      }
+      else if (std::find(lodInData_.begin(), lodInData_.end(), lodParam_) == lodInData_.end())
+      {
+         std::string defaultMsg = "The provided 'CityJSON Level of Detail' parameter value " +
+                                  lodParam_ +
+                                  " is not present in the data. Defaulting to: " + lodInData_[0];
+         gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
+         lodParam_ = lodInData_[0];
+      }
+   }
+   else if (lodInData_.size() == 1)
+   {
+      // In case there is only one LoD in the data, we ignore the Parameter
+      // even if it is set.
+      lodParam_ = lodInData_[0];
+      gLogFile->logMessageString(("Level of Detail in file: " + lodParam_).c_str(), FME_INFORM);
+   }
+}
+
+//===========================================================================
+void FMECityJSONReader::readVertexPool()
+{
+   // Transform object
+   std::vector<double> scale{1.0, 1.0, 1.0};
+   std::vector<double> translation{0.0, 0.0, 0.0};
+   try
+   {
+      json transformObject = inputJSON_.at("transform");
+      gLogFile->logMessageString("Reading compressed CityJSON file.", FME_INFORM);
+      scale.clear();
+      for (double const s : transformObject.at("scale"))
+      {
+         scale.push_back(s);
+      }
+      translation.clear();
+      for (double const t : transformObject.at("translate"))
+      {
+         translation.push_back(t);
+      }
+   }
+   catch (json::out_of_range& e)
+   {
+      gLogFile->logMessageString("Reading uncompressed CityJSON file.", FME_INFORM);
+   }
+
+   // Vertices
+   for (auto vtx : inputJSON_.at("vertices"))
+   {
+      double x = vtx[0];
+      double y = vtx[1];
+      double z = vtx[2];
+      x        = scale[0] * x + translation[0];
+      y        = scale[1] * y + translation[1];
+      z        = scale[2] * z + translation[2];
+      vertices_.emplace_back(x, y, z);
+   }
 }
 
 //===========================================================================
