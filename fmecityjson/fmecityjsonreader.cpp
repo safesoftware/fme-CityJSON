@@ -290,6 +290,10 @@ FMECityJSONReader::FMECityJSONReader(const char* readerTypeName, const char* rea
    textureCoordVName_(nullptr),
    writerHelperMode_(false)
 {
+    textureCoordUName_ = gFMESession->createString();
+    *textureCoordUName_ = kFME_texture_coordinate_u;
+    textureCoordVName_ = gFMESession->createString();
+    *textureCoordVName_ = kFME_texture_coordinate_v;
 }
 
 //===========================================================================
@@ -316,11 +320,6 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
        // we can skip a lot of the stuff below.
        return FME_SUCCESS;
     }
-
-    textureCoordUName_ = gFMESession->createString();
-    *textureCoordUName_ = kFME_texture_coordinate_u;
-    textureCoordVName_ = gFMESession->createString();
-    *textureCoordVName_ = kFME_texture_coordinate_v;
 
     // -----------------------------------------------------------------------
     // Add additional setup here
@@ -352,200 +351,351 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     // Let's make sure we're parsing this correctly.
     if (inputJSON_.at("type").get<std::string>() != "CityJSON")
     {
-        gLogFile->logMessageString("Not a CityJSON file", FME_ERROR);
-        return FME_FAILURE;
+       gLogFile->logMessageString("Not a CityJSON file", FME_ERROR);
+       return FME_FAILURE;
     }
+
+    // Let's make sure we are reading a version that we expect
     std::string supportedVersion = "1.0";
     if (inputJSON_.at("version").get<std::string>() < supportedVersion)
     {
-        std::stringstream versionStream;
-        versionStream << "Unsupported CityJSON version: "
-                      << inputJSON_.at("version").get<std::string>()
-                      << ". Only the version "
-                      << supportedVersion
-                      << " or higher are supported.";
-        gLogFile->logMessageString(versionStream.str().c_str(), FME_ERROR);
-        return FME_FAILURE;
+       std::stringstream versionStream;
+       versionStream << "Unsupported CityJSON version: " << inputJSON_.at("version").get<std::string>()
+                     << ". Only the version " << supportedVersion << " or higher are supported.";
+       gLogFile->logMessageString(versionStream.str().c_str(), FME_ERROR);
+       return FME_FAILURE;
     }
 
-    // Transform object
-    std::vector<double> scale{1.0, 1.0, 1.0};
-    std::vector<double> translation{0.0, 0.0, 0.0};
-    try
-    {
-        json transformObject = inputJSON_.at("transform");
-        gLogFile->logMessageString("Reading compressed CityJSON file.", FME_INFORM);
-        scale.clear();
-        for (double const s: transformObject.at("scale"))
-        {
-            scale.push_back(s);
-        }
-        translation.clear();
-        for (double const t: transformObject.at("translate"))
-        {
-            translation.push_back(t);
-        }
-    }
-    catch (json::out_of_range &e)
-    {
-        gLogFile->logMessageString("Reading uncompressed CityJSON file.", FME_INFORM);
-    }
-
-    // Vertices
-    for (auto vtx: inputJSON_.at("vertices"))
-    {
-        double x = vtx[0];
-        double y = vtx[1];
-        double z = vtx[2];
-        x = scale[0] * x + translation[0];
-        y = scale[1] * y + translation[1];
-        z = scale[2] * z + translation[2];
-        vertices_.emplace_back(x, y, z);
-    }
-
-    // Need to go through the whole file to extract the LoD of each geometry
-    for (json::iterator it = inputJSON_.at("CityObjects").begin(); it != inputJSON_.at("CityObjects").end(); it++) {
-        for (const auto &geometry : it.value().at("geometry")) {
-            // These are maybe too many checks on the presence of an attribute. Ideally, the file would be
-            //      validated for the schema before it goes into FME, so we can omit these checks.
-            // Check which LoD is present in the data
-            std::string lod;
-            bool key_missing(false);
-            try
-            {
-                geometry.at("lod");
-                lod = lodToString(geometry);
-            }
-            catch (json::out_of_range &e)
-            {
-                try
-                {
-                    int tId = geometry.at("template");
-                    lod = lodToString(inputJSON_.at("geometry-templates").at("templates")[tId]);
-                }
-                catch (json::out_of_range &e)
-                {
-                    lod = "";
-                    key_missing = true;
-                }
-            }
-
-            if (not lod.empty()) {
-                if (std::find(lodInData_.begin(), lodInData_.end(), lod) ==
-                    lodInData_.end()) {
-                    lodInData_.push_back(lod);
-                }
-            }
-            else if (not key_missing) {
-                gLogFile->logMessageString(("The 'lod' attibute is empty in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
-            }
-            else {
-                gLogFile->logMessageString(("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(), FME_ERROR);
-            }
-        }
-    }
+    // Reads in the entire batch of vertices for this file.
+    readVertexPool();
 
     // Read the mapping file parameters. Always do this, otherwise the parameters are not
     // recognized when the Reader is created in the Workspace, only when its executed.
+    // We do this to get the LOD parameter, maybe others.
     readParametersDialog();
 
-    if (lodInData_.size() > 1) {
-        std::stringstream lodMsg;
-        lodMsg << "There are multiple Levels of Detail present in the CityJSON data: ";
-        for (auto &l : lodInData_) lodMsg << l << ", ";
-        std::string lodMsgStr = lodMsg.str();
-        lodMsgStr.erase(lodMsgStr.end()-2);
-        gLogFile->logMessageString(lodMsgStr.c_str(), FME_INFORM);
+    // Scan the LODs in the file, and match to what the reader is requesting.
+    scanLODs();
 
-        if (lodParam_.empty()) {
-            // The default LoD to read is the LoD of the first Geometry of the
-            // first CityObject.
-            std::string defaultMsg = "No value is set for the 'CityJSON Level of "
-                                     "Detail' parameter. Defaulting to: " + lodInData_[0];
-            gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
-            lodParam_ = lodInData_[0];
-        } else if (std::find(lodInData_.begin(), lodInData_.end(), lodParam_) == lodInData_.end()) {
-            std::string defaultMsg = "The provided 'CityJSON Level of Detail' parameter value " + lodParam_ +
-                                     " is not present in the data. Defaulting to: " + lodInData_[0];
-            gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
-            lodParam_ = lodInData_[0];
-        }
-    } else if (lodInData_.size() == 1) {
-        // In case there is only one LoD in the data, we ignore the Parameter
-        // even if it is set.
-        lodParam_ = lodInData_[0];
-        gLogFile->logMessageString(("Level of Detail in file: " + lodParam_).c_str(), FME_INFORM);
-    }
+    readMetadata();
 
-    // Reading the Geometry Templates and adding them to IFMELibrary as geometry instances
-    try
-    {
-        json templates = inputJSON_.at("geometry-templates").at("templates");
-        json verticesTemplates = inputJSON_.at("geometry-templates").at("vertices-templates");
-        std::vector<std::tuple<double, double, double>> verticesTemplatesVec;
-        FME_MsgNum badLuck;
+    readMaterials();
 
-        for (auto vtx: verticesTemplates) { verticesTemplatesVec.emplace_back(vtx[0], vtx[1], vtx[2]); }
-        int nrTemplates = distance(begin(templates), end(templates));
-        for (int i = 0; i < nrTemplates; i++) {
-            IFMEGeometry *geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec);
-            FME_UInt32 geomRef(0);
-            badLuck = gFMESession->getLibrary()->addGeometryDefinition(geomRef, geom);
-            if (badLuck) {
-                std::string msg = "Not able to add geometry template #" + std::to_string(i) + " to IFMELibrary";
-                gLogFile->logMessageString(msg.c_str(), FME_ERROR);
-                return FME_FAILURE;
-            }
-            else {
-                // Add the geometry instance reference to the lookup table
-                geomTemplateMap_.insert({i, geomRef});
-            }
-        }
-    }
-    catch (json::out_of_range &e){}
-
-    // Check for metadata in the file
-    try
-    {
-        metaObject_ = inputJSON_.at("metadata");
-        schemaScanDoneMeta_ = false;
-
-        // Scrape the coordinate system
-        try
-        {
-            std::string inputCoordSys = metaObject_.at("referenceSystem").get<std::string>();
-            // Looking to make the form EPSG:XXXX
-            inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
-            if (inputCoordSys.find("::") != std::string::npos) {
-                // In case of OGC URN 'urn:ogc:def:crs:EPSG::7415
-                coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
-            }
-            else if (inputCoordSys.find(":") != std::string::npos) {
-                // In case of legacy EPSG:7415
-                coordSys_ = inputCoordSys;
-            } else {
-                gLogFile->logMessageString("Cannot parse EPSG code. Please provide the EPSG code as OGC URN, "
-                                           "for example 'urn:ogc:def:crs:EPSG::7415'.", FME_WARN);
-            }
-            gLogFile->logMessageString(("Coordinate Reference System is set to " + coordSys_).c_str(), FME_INFORM);
-        }
-        catch (json::out_of_range &e)
-        {
-            gLogFile->logMessageString("Coordinate Reference System is not set in the file", FME_WARN);
-        }
-    }
-    catch (json::out_of_range &e)
-    {
-        gLogFile->logMessageString("The file does not contain any metadata ('referenceSystem', "
-                                   "'geographicalExtent' etc.)", FME_WARN);
-        schemaScanDoneMeta_ = true;
-    }
+    // These need to be read in after all the appearances/textures/materials have been populated.
+    FME_Status badLuck = readGeometryDefinitions();
+    if (FME_SUCCESS != badLuck) return badLuck;
 
     // Start by pointing to the first CityObject to read
     nextObject_ = inputJSON_.at("CityObjects").begin();
     skippedObjects_ = 0;
 
     return FME_SUCCESS;
+}
+
+//===========================================================================
+void FMECityJSONReader::readMaterials()
+{
+   IFMEString* fmeVal = gFMESession->createString();
+
+   json materials = inputJSON_.at("appearance").at("materials");
+//    std::string tcString = materials.dump();
+//    gLogFile->logMessageString(tcString.c_str(), FME_INFORM);
+   
+   int nrMaterials = distance(begin(materials), end(materials));
+   for (int i = 0; i < nrMaterials; i++)
+   {
+      FME_UInt32 materialRef(0);
+      IFMEAppearance* app = fmeGeometryTools_->createAppearance();
+
+      // Set the "name"
+      if (not materials[i]["name"].is_null())
+      {
+         std::string mName = materials[i]["name"].get<std::string>();
+         fmeVal->set(mName.c_str(), mName.length());
+         app->setName(*fmeVal, "fme-system");
+      }
+
+      // Set the "ambientIntensity"
+      // I'm not sure how the ambient Intensity matches to FME's ambient colour.
+      // For now, I'll set all three colour values to be the same.
+      if (not materials[i]["ambientIntensity"].is_null())
+      {
+         app->setColorAmbient(materials[i]["ambientIntensity"],
+                              materials[i]["ambientIntensity"],
+                              materials[i]["ambientIntensity"]);
+      }
+
+      // Set the "diffuseColor"
+      if (not materials[i]["diffuseColor"].is_null())
+      {
+         app->setColorDiffuse(materials[i]["diffuseColor"][0],
+                              materials[i]["diffuseColor"][1],
+                              materials[i]["diffuseColor"][2]);
+      }
+
+      // Set the "emissiveColor"
+      if (not materials[i]["emissiveColor"].is_null())
+      {
+         app->setColorEmissive(materials[i]["emissiveColor"][0],
+                               materials[i]["emissiveColor"][1],
+                               materials[i]["emissiveColor"][2]);
+      }
+
+      // Set the "specularColor"
+      if (not materials[i]["specularColor"].is_null())
+      {
+         app->setColorSpecular(materials[i]["specularColor"][0],
+                               materials[i]["specularColor"][1],
+                               materials[i]["specularColor"][2]);
+      }
+
+      // Set the "shininess"
+      if (not materials[i]["shininess"].is_null())
+      {
+         app->setShininess(materials[i]["shininess"]);
+      }
+
+      // Set the "transparency"
+      if (not materials[i]["transparency"].is_null())
+      {
+         app->setAlpha(1.0 - materials[i]["transparency"]);
+      }
+
+      // Set the "isSmooth"
+      //currently there is no easy way to support this in FME.  Not yet.
+
+      // Add the Material to the FME Library
+      FME_MsgNum badLuck = gFMESession->getLibrary()->addAppearance(materialRef, app);
+
+      // Add the geometry instance reference to the lookup table
+      materialsMap_.insert({i, materialRef});
+   }
+
+   gFMESession->destroyString(fmeVal);
+}
+
+//===========================================================================
+void FMECityJSONReader::readMetadata()
+{
+   // Check for metadata in the file
+   try
+   {
+      metaObject_         = inputJSON_.at("metadata");
+      schemaScanDoneMeta_ = false;
+
+      // Scrape the coordinate system
+      try
+      {
+         std::string inputCoordSys = metaObject_.at("referenceSystem").get<std::string>();
+         // Looking to make the form EPSG:XXXX
+         inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
+         if (inputCoordSys.find("::") != std::string::npos)
+         {
+            // In case of OGC URN 'urn:ogc:def:crs:EPSG::7415
+            coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
+         }
+         else if (inputCoordSys.find(":") != std::string::npos)
+         {
+            // In case of legacy EPSG:7415
+            coordSys_ = inputCoordSys;
+         }
+         else
+         {
+            gLogFile->logMessageString("Cannot parse EPSG code. Please provide the EPSG code as "
+                                       "OGC URN, "
+                                       "for example 'urn:ogc:def:crs:EPSG::7415'.",
+                                       FME_WARN);
+         }
+         gLogFile->logMessageString(("Coordinate Reference System is set to " + coordSys_).c_str(),
+                                    FME_INFORM);
+      }
+      catch (json::out_of_range& e)
+      {
+         gLogFile->logMessageString("Coordinate Reference System is not set in the file", FME_WARN);
+      }
+   }
+   catch (json::out_of_range& e)
+   {
+      gLogFile->logMessageString("The file does not contain any metadata ('referenceSystem', "
+                                 "'geographicalExtent' etc.)",
+                                 FME_WARN);
+      schemaScanDoneMeta_ = true;
+   }
+}
+
+//===========================================================================
+FME_Status FMECityJSONReader::readGeometryDefinitions()
+{
+   // Reading the Geometry Templates and adding them to IFMELibrary as geometry instances
+   try
+   {
+      json templates         = inputJSON_.at("geometry-templates").at("templates");
+      json verticesTemplates = inputJSON_.at("geometry-templates").at("vertices-templates");
+      std::vector<std::tuple<double, double, double>> verticesTemplatesVec;
+      FME_MsgNum badLuck;
+
+      for (auto vtx : verticesTemplates)
+      {
+         verticesTemplatesVec.emplace_back(vtx[0], vtx[1], vtx[2]);
+      }
+      int nrTemplates = distance(begin(templates), end(templates));
+      for (int i = 0; i < nrTemplates; i++)
+      {
+         IFMEGeometry* geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec);
+         FME_UInt32 geomRef(0);
+         badLuck = gFMESession->getLibrary()->addGeometryDefinition(geomRef, geom);
+         if (badLuck)
+         {
+            std::string msg =
+               "Not able to add geometry template #" + std::to_string(i) + " to IFMELibrary";
+            gLogFile->logMessageString(msg.c_str(), FME_ERROR);
+            return FME_FAILURE;
+         }
+         else
+         {
+            // Add the geometry instance reference to the lookup table
+            geomTemplateMap_.insert({i, geomRef});
+         }
+      }
+   }
+   catch (json::out_of_range& e)
+   {
+   }
+
+   return FME_SUCCESS;
+}
+
+//===========================================================================
+void FMECityJSONReader::scanLODs()
+{
+   // Need to go through the whole file to extract the LoD of each geometry
+   for (json::iterator it = inputJSON_.at("CityObjects").begin();
+        it != inputJSON_.at("CityObjects").end();
+        it++)
+   {
+      for (const auto& geometry : it.value().at("geometry"))
+      {
+         // These are maybe too many checks on the presence of an attribute. Ideally, the file would be
+         //      validated for the schema before it goes into FME, so we can omit these checks.
+         // Check which LoD is present in the data
+         std::string lod;
+         bool key_missing(false);
+         try
+         {
+            geometry.at("lod");
+            lod = lodToString(geometry);
+         }
+         catch (json::out_of_range& e)
+         {
+            try
+            {
+               int tId = geometry.at("template");
+               lod     = lodToString(inputJSON_.at("geometry-templates").at("templates")[tId]);
+            }
+            catch (json::out_of_range& e)
+            {
+               lod         = "";
+               key_missing = true;
+            }
+         }
+
+         if (not lod.empty())
+         {
+            if (std::find(lodInData_.begin(), lodInData_.end(), lod) == lodInData_.end())
+            {
+               lodInData_.push_back(lod);
+            }
+         }
+         else if (not key_missing)
+         {
+            gLogFile->logMessageString(
+               ("The 'lod' attribute is empty in the geometry of the CityObject: " + it.key()).c_str(),
+               FME_ERROR);
+         }
+         else
+         {
+            gLogFile->logMessageString(
+               ("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(),
+               FME_ERROR);
+         }
+      }
+   }
+
+   if (lodInData_.size() > 1)
+   {
+      std::stringstream lodMsg;
+      lodMsg << "There are multiple Levels of Detail present in the CityJSON data: ";
+      for (auto& l : lodInData_)
+         lodMsg << l << ", ";
+      std::string lodMsgStr = lodMsg.str();
+      lodMsgStr.erase(lodMsgStr.end() - 2);
+      gLogFile->logMessageString(lodMsgStr.c_str(), FME_INFORM);
+
+      if (lodParam_.empty())
+      {
+         // The default LoD to read is the LoD of the first Geometry of the
+         // first CityObject.
+         std::string defaultMsg = "No value is set for the 'CityJSON Level of "
+                                  "Detail' parameter. Defaulting to: " +
+                                  lodInData_[0];
+         gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
+         lodParam_ = lodInData_[0];
+      }
+      else if (std::find(lodInData_.begin(), lodInData_.end(), lodParam_) == lodInData_.end())
+      {
+         std::string defaultMsg = "The provided 'CityJSON Level of Detail' parameter value " +
+                                  lodParam_ +
+                                  " is not present in the data. Defaulting to: " + lodInData_[0];
+         gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
+         lodParam_ = lodInData_[0];
+      }
+   }
+   else if (lodInData_.size() == 1)
+   {
+      // In case there is only one LoD in the data, we ignore the Parameter
+      // even if it is set.
+      lodParam_ = lodInData_[0];
+      gLogFile->logMessageString(("Level of Detail in file: " + lodParam_).c_str(), FME_INFORM);
+   }
+}
+
+//===========================================================================
+void FMECityJSONReader::readVertexPool()
+{
+   // Transform object
+   std::vector<double> scale{1.0, 1.0, 1.0};
+   std::vector<double> translation{0.0, 0.0, 0.0};
+   try
+   {
+      json transformObject = inputJSON_.at("transform");
+      gLogFile->logMessageString("Reading compressed CityJSON file.", FME_INFORM);
+      scale.clear();
+      for (double const s : transformObject.at("scale"))
+      {
+         scale.push_back(s);
+      }
+      translation.clear();
+      for (double const t : transformObject.at("translate"))
+      {
+         translation.push_back(t);
+      }
+   }
+   catch (json::out_of_range& e)
+   {
+      gLogFile->logMessageString("Reading uncompressed CityJSON file.", FME_INFORM);
+   }
+
+   // Vertices
+   for (auto vtx : inputJSON_.at("vertices"))
+   {
+      double x = vtx[0];
+      double y = vtx[1];
+      double z = vtx[2];
+      x        = scale[0] * x + translation[0];
+      y        = scale[1] * y + translation[1];
+      z        = scale[2] * z + translation[2];
+      vertices_.emplace_back(x, y, z);
+   }
 }
 
 //===========================================================================
@@ -737,7 +887,8 @@ IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &curre
         std::string geometryType, geometryLodValue;
         std::string geometryLodName = "cityjson_lod"; // geometry Trait name
         json::value_type boundaries = currentGeometry.at("boundaries");
-        json::value_type semantics = currentGeometry["semantics"];
+        json::value_type semantics  = currentGeometry["semantics"];
+        json::value_type materials  = currentGeometry["material"];
 
         // geometry type and level of detail
         geometryType = currentGeometry.at("type").get<std::string>();
@@ -760,29 +911,29 @@ IFMEGeometry *FMECityJSONReader::parseCityObjectGeometry(json::value_type &curre
                     return mlinestring;
                 } else if (geometryType == "MultiSurface") {
                     IFMEMultiSurface *msurface = fmeGeometryTools_->createMultiSurface();
-                    parseMultiCompositeSurface(msurface, boundaries, semantics, vertices);
+                    parseMultiCompositeSurface(msurface, boundaries, semantics, materials, vertices);
                     // Set the Level of Detail Trait on the geometry
-                    setTraitString(msurface, geometryLodName, geometryLodValue);
+                    setTraitString(*msurface, geometryLodName, geometryLodValue);
                     // Append the geometry to the FME feature
                     return msurface;
                 } else if (geometryType == "CompositeSurface") {
                     IFMECompositeSurface *csurface = fmeGeometryTools_->createCompositeSurface();
-                    parseMultiCompositeSurface(csurface, boundaries, semantics, vertices);
-                    setTraitString(csurface, geometryLodName, geometryLodValue);
+                    parseMultiCompositeSurface(csurface, boundaries, semantics, materials, vertices);
+                    setTraitString(*csurface, geometryLodName, geometryLodValue);
                     return csurface;
                 } else if (geometryType == "Solid") {
                     IFMEBRepSolid *BSolid = parseSolid(boundaries, semantics, vertices);
-                    setTraitString(BSolid, geometryLodName, geometryLodValue);
+                    setTraitString(*BSolid, geometryLodName, geometryLodValue);
                     return BSolid;
                 } else if (geometryType == "MultiSolid") {
                     IFMEMultiSolid *msolid = fmeGeometryTools_->createMultiSolid();
                     parseMultiCompositeSolid(msolid, boundaries, semantics, vertices);
-                    setTraitString(msolid, geometryLodName, geometryLodValue);
+                    setTraitString(*msolid, geometryLodName, geometryLodValue);
                     return msolid;
                 } else if (geometryType == "CompositeSolid") {
                     IFMECompositeSolid *csolid = fmeGeometryTools_->createCompositeSolid();
                     parseMultiCompositeSolid(csolid, boundaries, semantics, vertices);
-                    setTraitString(csolid, geometryLodName, geometryLodValue);
+                    setTraitString(*csolid, geometryLodName, geometryLodValue);
                     return csolid;
                 } else if (geometryType == "GeometryInstance") {
                     IFMEAggregate *ginst = fmeGeometryTools_->createAggregate();
@@ -829,25 +980,29 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid, js
             if (j == 0) {
                 int nrSurfaces = distance(begin(boundaries[i][j]), end(boundaries[i][j]));
                 for (int k = 0; k < nrSurfaces; k++) {
-                    json::value_type semanticSrf;
-                    if (not semantics.is_null()) {
-                        if (not semantics["values"][i][j][k].is_null()) {
+                    IFMEFace *face = parseSurfaceBoundaries(boundaries[i][j][k], vertices);
+
+                    // Does this have any semantic data?
+                    if (not semantics.is_null())
+                    {
+                       json::value_type semanticSrf;
+                       if (not semantics["values"][i][j][k].is_null()) {
                             int semanticIdx = semantics["values"][i][j][k];
                             semanticSrf = semantics["surfaces"][semanticIdx];
                         }
+                       // Add traits onto the face.
+                       parseSemantics(*face, semanticSrf);
                     }
-                    IFMEFace *face = parseSurface(
-                            boundaries[i][j][k], semanticSrf, vertices);
                     outerSurface->appendPart(face);
                 }
             } else {
                 IFMECompositeSurface *innerSurface = fmeGeometryTools_->createCompositeSurface();
                 int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
                 for (int k = 0; k < nrSurfaces; k++) {
-                    json::value_type semanticSrf;
+                    IFMEFace *face = parseSurfaceBoundaries(boundaries[i][j][k], vertices);
+
                     // Inner shells/surfaces do not have semantics
-                    IFMEFace *face = parseSurface(
-                            boundaries[i][j][k], semanticSrf, vertices);
+
                     innerSurface->appendPart(face);
                 }
                 innerSurfaces.push_back(innerSurface);
@@ -870,25 +1025,31 @@ IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json:
         if (i == 0) {
             int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
             for (int j = 0; j < nrSurfaces; j++) {
-                json::value_type semanticSrf;
-                if (not semantics.is_null()) {
-                    if (not semantics["values"][i][j].is_null()) {
-                        int semanticIdx = semantics["values"][i][j];
-                        semanticSrf = semantics["surfaces"][semanticIdx];
-                    }
+                IFMEFace *face = parseSurfaceBoundaries(boundaries[i][j], vertices);
+
+                // Does this have any semantic data?
+                if (not semantics.is_null())
+                {
+                   json::value_type semanticSrf;
+                   if (not semantics["values"][i][j].is_null())
+                   {
+                      int semanticIdx = semantics["values"][i][j];
+                      semanticSrf     = semantics["surfaces"][semanticIdx];
+                   }
+                   // Add traits onto the face.
+                   parseSemantics(*face, semanticSrf);
                 }
-                IFMEFace *face = parseSurface(
-                        boundaries[i][j], semanticSrf, vertices);
+
                 outerSurface->appendPart(face);
             }
         } else {
             IFMECompositeSurface *innerSurface = fmeGeometryTools_->createCompositeSurface();
             int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
             for (int j = 0; j < nrSurfaces; j++) {
-                json::value_type semanticSrf;
+                IFMEFace *face = parseSurfaceBoundaries(boundaries[i][j], vertices);
+
                 // Inner shells/surfaces do not have semantics
-                IFMEFace *face = parseSurface(
-                        boundaries[i][j], semanticSrf, vertices);
+
                 innerSurface->appendPart(face);
             }
             innerSurfaces.push_back(innerSurface);
@@ -902,26 +1063,50 @@ IFMEBRepSolid *FMECityJSONReader::parseSolid(json::value_type &boundaries, json:
 }
 
 template<typename MCSurface>
-void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries,
+void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface,
+                                                   json::value_type &boundaries,
                                                    json::value_type &semantics,
+                                                   json::value_type materials,
                                                    std::vector<std::tuple<double, double, double>> &vertices) {
     int nrSurfaces = distance(begin(boundaries), end(boundaries));
     for (int i = 0; i < nrSurfaces; i++) {
-        json::value_type semanticSrf;
-        if (not semantics.is_null()) {
-            if (not semantics["values"][i].is_null()) {
-                int semanticIdx = semantics["values"][i];
-                semanticSrf = semantics["surfaces"][semanticIdx];
-            }
+        IFMEFace *face = parseSurfaceBoundaries(boundaries[i], vertices);
+
+        // Does this have any semantic data?
+        if (not semantics.is_null())
+        {
+           json::value_type semanticSrf;
+           if (not semantics["values"][i].is_null())
+           {
+              int semanticIdx = semantics["values"][i];
+              semanticSrf     = semantics["surfaces"][semanticIdx];
+           }
+           // Add traits onto the face.
+           parseSemantics(*face, semanticSrf);
         }
-        IFMEFace *face =
-                parseSurface(boundaries[i], semanticSrf, vertices);
+
+        // Does this have any material data attached?
+        if (not materials.is_null()) {
+           std::vector<std::string> materialNames;
+           std::vector<json::value_type> materialRefs;
+//std::string msString = materials.dump();
+//gLogFile->logMessageString(msString.c_str(), FME_INFORM);
+
+           for (json::iterator it = materials.begin(); it != materials.end(); ++it)
+           {
+              materialNames.push_back(it.key());
+              materialRefs.push_back(it.value()["values"][i]);
+           }
+           // Add materials to the face
+           parseMaterials(*face, materialNames, materialRefs);
+        }
+
 
         multiCompositeSurface->appendPart(face);
     }
 }
 
-IFMEFace *FMECityJSONReader::parseSurface(json::value_type surface, json::value_type semanticSurface,
+IFMEFace *FMECityJSONReader::parseSurfaceBoundaries(json::value_type surface, 
                                           std::vector<std::tuple<double, double, double>> &vertices) {
     std::vector<IFMELine *> rings;
     parseRings(&rings, surface, vertices);
@@ -941,52 +1126,88 @@ IFMEFace *FMECityJSONReader::parseSurface(json::value_type surface, json::value_
     // TODO: Set the appearance for the face here. See:
     // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L346-L350
 
-    // Setting semantics
-    if (not semanticSurface.is_null()) {
-
-        IFMEString *geometryName = gFMESession->createString();
-        std::string semType = semanticSurface.at("type").get<std::string>();
-        geometryName->set(semType.c_str(), semType.length());
-        face->setName(*geometryName, nullptr);
-        gFMESession->destroyString(geometryName);
-
-        for (json::iterator it = semanticSurface.begin(); it != semanticSurface.end(); it++) {
-            if (it.key() == "children" || it.key() == "parent") {
-                // We ignore Semantic Surface hierachies and the 'children' and 'parent' tag is discarded,
-                // because we don't have a way to handle Semantic Surface hierarchies (eg. Door is a child of a
-                // WallSurface).
-                gLogFile->logMessageString("Semantic Surface hierarchy (children, parent) is discarded",
-                        FME_WARN);
-            }
-            else if (it.key() != "type") {
-                if (it.value().is_string()) {
-                    setTraitString(face, it.key(), it.value());
-                } else if (it.value().is_number_float()) {
-                    IFMEString *geometryTrait = gFMESession->createString();
-                    geometryTrait->set(it.key().c_str(), it.key().length());
-                    face->setTraitReal64(*geometryTrait, it.value());
-                    gFMESession->destroyString(geometryTrait);
-                } else if (it.value().is_number_integer()) {
-                    IFMEString *geometryTrait = gFMESession->createString();
-                    geometryTrait->set(it.key().c_str(), it.key().length());
-                    face->setTraitInt64(*geometryTrait, it.value());
-                    gFMESession->destroyString(geometryTrait);
-                } else if (it.value().is_boolean()) {
-                    IFMEString *geometryTrait = gFMESession->createString();
-                    geometryTrait->set(it.key().c_str(), it.key().length());
-                    if (it.value()) face->setTraitBoolean(*geometryTrait, FME_TRUE);
-                    else face->setTraitBoolean(*geometryTrait, FME_FALSE);
-                    gFMESession->destroyString(geometryTrait);
-                } else {
-                    std::string val = it.value().type_name();
-                    gLogFile->logMessageString(
-                            ("Semantic Surface attribute type '" + val + "' is not allowed.").c_str(),
-                            FME_WARN);
-                }
-            }
-        }
-    }
     return face;
+}
+
+void FMECityJSONReader::parseSemantics(IFMEFace &face, json::value_type& semanticSurface)
+{
+   // Setting semantics
+   if (not semanticSurface.is_null())
+   {
+      IFMEString* geometryName = gFMESession->createString();
+      std::string semType      = semanticSurface.at("type").get<std::string>();
+      geometryName->set(semType.c_str(), semType.length());
+      face.setName(*geometryName, nullptr);
+      gFMESession->destroyString(geometryName);
+
+      for (json::iterator it = semanticSurface.begin(); it != semanticSurface.end(); it++)
+      {
+         if (it.key() == "children" || it.key() == "parent")
+         {
+            // We ignore Semantic Surface hierarchies and the 'children' and 'parent' tag is
+            // discarded, because we don't have a way to handle Semantic Surface hierarchies (eg.
+            // Door is a child of a WallSurface).
+            gLogFile->logMessageString("Semantic Surface hierarchy (children, parent) is discarded",
+                                       FME_WARN);
+         }
+         else if (it.key() != "type")
+         {
+            if (it.value().is_string())
+            {
+               setTraitString(face, it.key(), it.value());
+            }
+            else if (it.value().is_number_float())
+            {
+               IFMEString* geometryTrait = gFMESession->createString();
+               geometryTrait->set(it.key().c_str(), it.key().length());
+               face.setTraitReal64(*geometryTrait, it.value());
+               gFMESession->destroyString(geometryTrait);
+            }
+            else if (it.value().is_number_integer())
+            {
+               IFMEString* geometryTrait = gFMESession->createString();
+               geometryTrait->set(it.key().c_str(), it.key().length());
+               face.setTraitInt64(*geometryTrait, it.value());
+               gFMESession->destroyString(geometryTrait);
+            }
+            else if (it.value().is_boolean())
+            {
+               IFMEString* geometryTrait = gFMESession->createString();
+               geometryTrait->set(it.key().c_str(), it.key().length());
+               if (it.value())
+                  face.setTraitBoolean(*geometryTrait, FME_TRUE);
+               else
+                  face.setTraitBoolean(*geometryTrait, FME_FALSE);
+               gFMESession->destroyString(geometryTrait);
+            }
+            else
+            {
+               std::string val = it.value().type_name();
+               gLogFile->logMessageString(
+                  ("Semantic Surface attribute type '" + val + "' is not allowed.").c_str(), FME_WARN);
+            }
+         }
+      }
+   }
+}
+
+void FMECityJSONReader::parseMaterials(IFMEFace& face, 
+                                       std::vector<std::string> materialNames,
+                                       std::vector<json::value_type> materialRefs)
+{
+   for (int i = 0; i < materialNames.size(); i++)
+   {
+      if (not materialRefs[i].is_null())
+      {
+         std::string materialName     = materialNames[i];
+         int materialRef              = materialRefs[i];
+         FME_UInt32 fmeMatRef = materialsMap_[materialRef];
+
+         // I'm not sure if this material should be on both sides
+         face.setAppearanceReference(fmeMatRef, FME_TRUE);
+         face.setAppearanceReference(fmeMatRef, FME_FALSE);
+      }
+   }
 }
 
 void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries,
@@ -1032,7 +1253,7 @@ void FMECityJSONReader::parseMultiPoint(IFMEMultiPoint *mpoint, json::value_type
     }
 }
 
-void FMECityJSONReader::setTraitString(IFMEGeometry *geometry,
+void FMECityJSONReader::setTraitString(IFMEGeometry& geometry,
                                        const std::string &traitName,
                                        const std::string &traitValue) {
     IFMEString *geometryTrait = gFMESession->createString();
@@ -1041,7 +1262,7 @@ void FMECityJSONReader::setTraitString(IFMEGeometry *geometry,
     IFMEString *value = gFMESession->createString();
     value->set(traitValue.c_str(), traitValue.length());
 
-    geometry->setTraitString(*geometryTrait, *value);
+    geometry.setTraitString(*geometryTrait, *value);
 
     gFMESession->destroyString(geometryTrait);
     gFMESession->destroyString(value);

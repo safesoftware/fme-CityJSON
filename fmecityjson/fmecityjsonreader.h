@@ -189,6 +189,16 @@ private:
    // Insert additional private methods here
    // -----------------------------------------------------------------------
 
+   void readVertexPool();
+
+   void scanLODs();
+
+   FME_Status readGeometryDefinitions();
+
+   void readMetadata();
+
+   void readMaterials();
+
    FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
 
    // Parse the attributes of a CityObject or metadata and assign it as attributes to the feature.
@@ -207,10 +217,22 @@ private:
 
    // Parse a Multi- or CompositeSurface
    template <typename MCSurface>
-   void parseMultiCompositeSurface(MCSurface multiCompositeSurface, json::value_type &boundaries, json::value_type &semantics, std::vector<std::tuple<double, double, double>> &vertices);
+   void parseMultiCompositeSurface(MCSurface multiCompositeSurface,
+                                   json::value_type& boundaries,
+                                   json::value_type& semantics,
+                                   json::value_type materials,
+                                   std::vector<std::tuple<double, double, double>>& vertices);
 
    // Parse a single Surface of the boundary
-   IFMEFace *parseSurface(json::value_type surface, json::value_type semanticSurface, std::vector<std::tuple<double, double, double>> &vertices);
+   IFMEFace *parseSurfaceBoundaries(json::value_type surface, std::vector<std::tuple<double, double, double>> &vertices);
+
+   // parse the semantics and attach them to the surface.
+   void parseSemantics(IFMEFace& face, json::value_type& semanticSurface);
+
+   // parse the materials and attach them to the surface.
+   void parseMaterials(IFMEFace& face,
+                       std::vector<std::string> materialNames,
+                       std::vector<json::value_type> materialRefs);
 
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries, std::vector<std::tuple<double, double, double>> &vertices);
@@ -227,7 +249,7 @@ private:
                         std::vector<std::tuple<double, double, double>> &vertices);
 
    // Set the Level of Detail Trait on the geometry
-   static void setTraitString(IFMEGeometry *geometry,
+   static void setTraitString(IFMEGeometry& geometry,
                               const std::string &traitName,
                               const std::string &traitValue);
 
@@ -281,6 +303,7 @@ private:
    int skippedObjects_;
    std::vector<std::tuple<double, double, double>> vertices_;
    std::map<int, FME_UInt32> geomTemplateMap_;
+   std::map<int, FME_UInt32> materialsMap_;
    std::vector<std::string> lodInData_;
 
    bool schemaScanDone_;
