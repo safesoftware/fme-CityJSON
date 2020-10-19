@@ -65,6 +65,7 @@ using json = nlohmann::json;
 class IFMEFeature;
 class IFMELogFile;
 class IFMEGeometryTools;
+class IFMERaster;
 
 // -----------------------------------------------------------------------
 // Gather schema feature definitions, by looking in the official CityJSON specs
@@ -199,7 +200,9 @@ private:
 
    void readMaterials();
 
-   FME_Status readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse);
+   void readTextures();
+
+   FME_Status readRaster(const std::string& fullFileName, IFMERaster*& raster, std::string readerToUse);
 
    // Parse the attributes of a CityObject or metadata and assign it as attributes to the feature.
    // Takes an iterator over a json object. Also need to pass the end of the iterator to know when to stop.
@@ -304,6 +307,7 @@ private:
    std::vector<std::tuple<double, double, double>> vertices_;
    std::map<int, FME_UInt32> geomTemplateMap_;
    std::map<int, FME_UInt32> materialsMap_;
+   std::map<int, FME_UInt32> texturesMap_;
    std::vector<std::string> lodInData_;
 
    bool schemaScanDone_;

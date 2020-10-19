@@ -54,6 +54,7 @@
 
 #include <sstream>
 #include <iomanip>
+#include <filesystem>
 
 // These are initialized externally when a reader object is created so all
 // methods in this file can assume they are ready to use.
@@ -381,6 +382,8 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
 
     readMaterials();
 
+    readTextures();
+
     // These need to be read in after all the appearances/textures/materials have been populated.
     FME_Status badLuck = readGeometryDefinitions();
     if (FME_SUCCESS != badLuck) return badLuck;
@@ -390,6 +393,141 @@ FME_Status FMECityJSONReader::open(const char *datasetName, const IFMEStringArra
     skippedObjects_ = 0;
 
     return FME_SUCCESS;
+}
+
+//===========================================================================
+void FMECityJSONReader::readTextures()
+{
+   IFMEString* fmeVal = gFMESession->createString();
+
+   json textures = inputJSON_.at("appearance").at("textures");
+//    std::string tcString = textures.dump();
+//    gLogFile->logMessageString(tcString.c_str(), FME_INFORM);
+
+   int nrTextures = distance(begin(textures), end(textures));
+   for (int i = 0; i < nrTextures; i++)
+   {
+//       std::string tcString = textures[i].dump();
+//       gLogFile->logMessageString(tcString.c_str(), FME_INFORM);
+
+      // Get the "type"
+      std::string rasterType;
+      if (not textures[i]["type"].is_null())
+      {
+         std::string givenType = textures[i]["type"].get<std::string>();
+         // These are the only expected types for now
+         if (givenType == "PNG")
+         {
+            rasterType = "PNGRASTER";
+         }
+         else if (givenType == "JPG")
+         {
+            rasterType = "JPEG";
+         }
+      }
+
+      // Get the "image"
+      IFMERaster* raster(nullptr);
+      if (not textures[i]["image"].is_null())
+      {
+         std::string imagePath = textures[i]["image"].get<std::string>();
+         std::string fullFileName = imagePath;
+
+         // We've got to make the full path, if it is relative.
+         // If it starts with "http" we know it's not relative.  If it can
+         // be found as a full path we'll also assume it is not relative.
+         if ((imagePath.rfind("http", 0) != 0) && (!std::filesystem::exists("imagePath")))
+         {
+            // Fix up the relative pathname so we can find it.
+            // It is relative to the current dataset path.
+
+            // This is really gross code here.  Should be a separate method, etc.
+            // but I thought it would just be a good example starting point.
+            fullFileName = dataset_;
+            // TODO: I guess finding the directory the dataset is in may be tricky,
+            // and different on Windows and Linux, etc.   This is quick and dirty.
+            if (fullFileName.find_last_of("/") != std::string::npos)
+            {
+               fullFileName.erase(fullFileName.find_last_of("/") + 1, std::string::npos);
+            }
+            if (fullFileName.find_last_of("\\") != std::string::npos)
+            {
+               fullFileName.erase(fullFileName.find_last_of("\\") + 1, std::string::npos);
+            }
+            fullFileName += imagePath;
+         }
+
+         FME_Status badLuck = readRaster(fullFileName, raster, rasterType);
+      }
+
+      // Set the Raster on the texture.
+      IFMETexture* tex = fmeGeometryTools_->createTexture();
+      if (raster)
+      {
+         // Add the Raster to the FME Library
+         FME_UInt32 rasterRef(0);
+         FME_Status badLuck = gFMESession->getLibrary()->addRaster(rasterRef, raster);
+         raster = nullptr; // We no longer have ownership.
+         tex->setRasterReference(rasterRef);
+      }
+
+      // Set the "wrapMode"
+      if (not textures[i]["wrapMode"].is_null())
+      {
+         std::string wrapmode = textures[i]["wrapMode"].get<std::string>();
+         if (wrapmode == "none")
+         {
+            tex->setTextureWrap(FME_TEXTURE_NONE);
+         }
+         else if (wrapmode == "wrap")
+         {
+            tex->setTextureWrap(FME_TEXTURE_REPEAT_BOTH);
+         }
+         else if (wrapmode == "mirror")
+         {
+            tex->setTextureWrap(FME_TEXTURE_MIRROR);
+         }
+         else if (wrapmode == "clamp")
+         {
+            tex->setTextureWrap(FME_TEXTURE_CLAMP_BOTH);
+         }
+         else if (wrapmode == "border")
+         {
+            tex->setTextureWrap(FME_TEXTURE_BORDER_FILL);
+         }
+      }
+
+      // Set the "borderColor"
+      if (not textures[i]["borderColor"].is_null())
+      {
+         // Note: Alpha is not used here.
+         tex->setBorderColor(textures[i]["borderColor"][0],
+                             textures[i]["borderColor"][1],
+                             textures[i]["borderColor"][2]);
+      }
+
+      // Set the "textureType"
+      // I'm not sure how best to represent this in FME.
+
+      // Add the Texture to the FME Library
+      FME_UInt32 textureRef(0);
+      FME_Status badLuck = gFMESession->getLibrary()->addTexture(textureRef, tex);
+      tex = nullptr; // We no longer have ownership.
+
+      // Set the texture on a new Appearance
+      IFMEAppearance* app = fmeGeometryTools_->createAppearance();
+      app->setTextureReference(textureRef);
+
+      // Add the Appearance to the FME Library
+      FME_UInt32 appRef(0);
+      badLuck = gFMESession->getLibrary()->addAppearance(appRef, app);
+      app = nullptr; // We no longer have ownership.
+
+      // Add the appearance (with texture) reference to the lookup table
+      texturesMap_.insert({i, appRef});
+   }
+
+   gFMESession->destroyString(fmeVal);
 }
 
 //===========================================================================
@@ -465,9 +603,10 @@ void FMECityJSONReader::readMaterials()
       //currently there is no easy way to support this in FME.  Not yet.
 
       // Add the Material to the FME Library
-      FME_MsgNum badLuck = gFMESession->getLibrary()->addAppearance(materialRef, app);
+      FME_Status badLuck = gFMESession->getLibrary()->addAppearance(materialRef, app);
+      app = nullptr; // We no longer have ownership.
 
-      // Add the geometry instance reference to the lookup table
+      // Add the material reference to the lookup table
       materialsMap_.insert({i, materialRef});
    }
 
@@ -1641,7 +1780,7 @@ bool FMECityJSONReader::fetchWriterDirectives(const IFMEStringArray& parameters)
    return writerHelperMode_;
 }
 
-FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName, FME_UInt32& appearanceReference, std::string readerToUse)
+FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName, IFMERaster*& raster, std::string readerToUse)
 {
    IFMEUniversalReader* newReader(nullptr);
    if (readerToUse.length() == 0)
@@ -1669,12 +1808,6 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName, FME_UI
    FME_Boolean endOfFile = FME_FALSE;
    IFMEFeature* textureFeature = gFMESession->createFeature();
 
-   if (nullptr == textureFeature)
-   {
-      // TODO: Log some error message
-      return FME_FAILURE;
-   }
-
    badLuck = newReader->read(*textureFeature, endOfFile);
    if (badLuck)
    {
@@ -1684,13 +1817,16 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName, FME_UI
 
    IFMEGeometry* geom = textureFeature->removeGeometry();
 
-   if (nullptr == geom || !geom->canCastAs<IFMERaster*>())
+   if (!geom->canCastAs<IFMERaster*>())
    {
-      // TODO: Log some error message
-      return FME_FAILURE;
+      // TODO: Log some warning message
+     raster = nullptr;
    }
-
-   IFMERaster* raster =geom->castAs<IFMERaster*>();
+   else
+   {
+      // This is what we'll return
+      raster = geom->castAs<IFMERaster*>();
+   }
 
    //Close the reader and *ignore* any errors.
    badLuck = newReader->close();
@@ -1698,41 +1834,6 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName, FME_UI
    // clean up
    gFMESession->destroyFeature(textureFeature); textureFeature = nullptr;
    gFMESession->destroyReader(newReader); newReader = nullptr;
-
-   // Let's stick this raster into the FME Library so we can refer to it by reference.
-   // TODO: Really, we should only add each once, and share it among all features that refer to it.
-   FME_UInt32 rasterRef(0);
-   badLuck = gFMESession->getLibrary()->addRaster(rasterRef, raster);
-   if (badLuck)
-   {
-      // TODO: Log some error message
-      return FME_FAILURE;
-   }
-
-   IFMETexture* texture = fmeGeometryTools_->createTexture();
-   texture->setRasterReference(rasterRef);
-
-   // Let's stick this texture into the FME Library so we can refer to it by reference.
-   // TODO: Really, we should only add each once, and share it among all features that refer to it.
-   FME_UInt32 textureRef(0);
-   badLuck = gFMESession->getLibrary()->addTexture(textureRef, texture);
-   if (badLuck)
-   {
-      // TODO: Log some error message
-      return FME_FAILURE;
-   }
-
-   IFMEAppearance* appearance = fmeGeometryTools_->createAppearance();
-   appearance->setTextureReference(textureRef);
-
-   // Let's stick this appearance into the FME Library so we can refer to it by reference.
-   // TODO: Really, we should only add each once, and share it among all features that refer to it.
-   badLuck = gFMESession->getLibrary()->addAppearance(appearanceReference, appearance);
-   if (badLuck)
-   {
-      // TODO: Log some error message
-      return FME_FAILURE;
-   }
 
    return FME_SUCCESS;
 }
