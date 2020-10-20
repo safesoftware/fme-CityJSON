@@ -60,7 +60,6 @@
 // for convenience
 using json = nlohmann::json;
 
-
 // Forward declarations
 class IFMEFeature;
 class IFMELogFile;
@@ -81,12 +80,9 @@ void addAttributeNamesAndTypes(IFMEFeature& schemaFeature,
                                json attributeValue);
 void addObjectProperties(json::value_type& itemPart, IFMEFeature& schemaFeature, std::string& featureType);
 
-
 class FMECityJSONReader : public IFMEReader
 {
-
 public:
-
    // Please refer to the IFMEWriter documentation for more information in
    // FME_DEV_HOME/pluginbuilder/cpp/apidoc/classIFMEReader.html
    // -----------------------------------------------------------------------
@@ -95,12 +91,12 @@ public:
    // - the name of the format's .db file in the formatsinfo folder
    // - the format short name for the format within the .db file
    // - FORMAT_NAME in the metafile
-   // 
+   //
    // The readerKeyword is a unique identifier for this reader instance.
    // It is usually set by the READER_KEYWORD in the mapping file.
-   // 
+   //
    // Since there can be multiple instances of a readerTypeName within
-   // an FME session, the readerKeyword must be used when fetching 
+   // an FME session, the readerKeyword must be used when fetching
    // context information from FME.
    FMECityJSONReader(const char* readerTypeName, const char* readerKeyword);
 
@@ -137,7 +133,6 @@ public:
    // Insert additional public methods here
    // -----------------------------------------------------------------------
 
-
    // Data members
 
    // A pointer to an IFMELogFile object that allows the plug-in to log messages
@@ -158,16 +153,14 @@ public:
    // Insert additional public data members here
    // -----------------------------------------------------------------------
 
-
 private:
-
    // -----------------------------------------------------------------------
    // Copy constructor
    FMECityJSONReader(const FMECityJSONReader&);
 
    // -----------------------------------------------------------------------
    // Assignment operator
-   FMECityJSONReader &operator=(const FMECityJSONReader&);
+   FMECityJSONReader& operator=(const FMECityJSONReader&);
 
    // -----------------------------------------------------------------------
    // readParametersDialog
@@ -208,26 +201,27 @@ private:
 
    // Parse the attributes of a CityObject or metadata and assign it as attributes to the feature.
    // Takes an iterator over a json object. Also need to pass the end of the iterator to know when to stop.
-   static void parseAttributes(IFMEFeature &feature, json::iterator &it, const json::iterator &_end);
+   static void parseAttributes(IFMEFeature& feature, json::iterator& it, const json::iterator& _end);
 
    // Parse a single Geometry of a CityObject
-   IFMEGeometry *parseCityObjectGeometry(json::value_type &currentGeometry, std::vector<std::tuple<double, double, double>> &vertices);
+   IFMEGeometry* parseCityObjectGeometry(json::value_type& currentGeometry,
+                                         std::vector<std::tuple<double, double, double>>& vertices);
 
    // Parse a Multi- or CompositeSolid
    template <typename MCSolid>
    void parseMultiCompositeSolid(MCSolid multiCompositeSolid,
-                                 json::value_type &boundaries,
-                                 json::value_type &semantics,
+                                 json::value_type& boundaries,
+                                 json::value_type& semantics,
                                  json::value_type& materials,
                                  json::value_type& textures,
-                                 std::vector<std::tuple<double, double, double>> &vertices);
+                                 std::vector<std::tuple<double, double, double>>& vertices);
 
    // Parse a Solid
-   IFMEBRepSolid *parseSolid(json::value_type &boundaries, 
-                             json::value_type &semantics, 
+   IFMEBRepSolid* parseSolid(json::value_type& boundaries,
+                             json::value_type& semantics,
                              json::value_type& materials,
                              json::value_type& textures,
-                             std::vector<std::tuple<double, double, double>> &vertices);
+                             std::vector<std::tuple<double, double, double>>& vertices);
 
    // Parse a Multi- or CompositeSurface
    template <typename MCSurface>
@@ -239,8 +233,8 @@ private:
                                    std::vector<std::tuple<double, double, double>>& vertices);
 
    // Parse a single Surface of the boundary
-   IFMEFace *parseSurfaceBoundaries(json::value_type surface,
-                                    std::vector<std::tuple<double, double, double>> &vertices, 
+   IFMEFace* parseSurfaceBoundaries(json::value_type surface,
+                                    std::vector<std::tuple<double, double, double>>& vertices,
                                     std::vector<std::string> textureThemes,
                                     std::vector<json::value_type> textureRefs);
 
@@ -258,31 +252,33 @@ private:
                       std::vector<json::value_type> textureRefs);
 
    // Parse a MultiLineString
-   void parseMultiLineString(IFMEMultiCurve *mlinestring, json::value_type &boundaries, std::vector<std::tuple<double, double, double>> &vertices);
+   void parseMultiLineString(IFMEMultiCurve* mlinestring,
+                             json::value_type& boundaries,
+                             std::vector<std::tuple<double, double, double>>& vertices);
 
    // Parse a single Ring to an IFMELine
-   void parseRings(std::vector<IFMELine *>& rings,
+   void parseRings(std::vector<IFMELine*>& rings,
                    std::vector<FME_UInt32>& appearanceRefs,
-                   json::value_type &boundary, 
-                   std::vector<std::tuple<double, double, double>> &vertices,
+                   json::value_type& boundary,
+                   std::vector<std::tuple<double, double, double>>& vertices,
                    json::value_type& textureRefs);
 
    // Parse a single LineString
-   void parseLineString(IFMELine *line,
+   void parseLineString(IFMELine* line,
                         FME_UInt32& appearanceRef,
                         json::value_type& boundary,
                         std::vector<std::tuple<double, double, double>>& vertices,
                         json::value_type& textureRefs);
 
    // Parse MultiPoint geometry
-   void parseMultiPoint(IFMEMultiPoint *mpoint,
-                        json::value_type &boundary,
-                        std::vector<std::tuple<double, double, double>> &vertices);
+   void parseMultiPoint(IFMEMultiPoint* mpoint,
+                        json::value_type& boundary,
+                        std::vector<std::tuple<double, double, double>>& vertices);
 
    // Set the Level of Detail Trait on the geometry
    static void setTraitString(IFMEGeometry& geometry,
-                              const std::string &traitName,
-                              const std::string &traitValue);
+                              const std::string& traitName,
+                              const std::string& traitValue);
 
    // Cast the geometry LoD to a string, even though the specs require a number.
    // Because strings are easier to compare than floats (in case of extended LoD).
