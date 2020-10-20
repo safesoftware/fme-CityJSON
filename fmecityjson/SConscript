@@ -13,7 +13,7 @@ pluginbuilder_env.Append(CXXFLAGS = ['--std=c++11'],
                                     '-Wno-unused-variable', # remove after code is clean
                                     '-fvisibility=hidden','-O0', '-g'],
                          LIBPATH = ['$LIBDIR'],
-                         LIBS = ['fmeobj'])
+                         LIBS = ['fmeobj', 'stdc++fs'])
 
 if platform.uname()[0].lower() == 'linux':
     pluginbuilder_env.Append(CCFLAGS = ['-finline-functions'],
