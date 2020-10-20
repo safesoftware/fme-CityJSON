@@ -713,7 +713,7 @@ FME_Status FMECityJSONReader::readGeometryDefinitions()
    {
       json templates         = inputJSON_.at("geometry-templates").at("templates");
       json verticesTemplates = inputJSON_.at("geometry-templates").at("vertices-templates");
-      std::vector<std::tuple<double, double, double>> verticesTemplatesVec;
+      VertexPool3D verticesTemplatesVec;
       FME_MsgNum badLuck;
 
       for (auto vtx : verticesTemplates)
@@ -1099,8 +1099,8 @@ void FMECityJSONReader::parseAttributes(IFMEFeature& feature,
    }
 }
 
-IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(
-   json::value_type& currentGeometry, std::vector<std::tuple<double, double, double>>& vertices)
+IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& currentGeometry,
+                                                         VertexPool3D& vertices)
 {
    if (currentGeometry.is_object())
    {
@@ -1216,7 +1216,7 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid,
                                                  json::value_type& semantics,
                                                  json::value_type& materials,
                                                  json::value_type& textures,
-                                                 std::vector<std::tuple<double, double, double>>& vertices)
+                                                 VertexPool3D& vertices)
 {
    int nrSolids = distance(begin(boundaries), end(boundaries));
    for (int i = 0; i < nrSolids; i++)
@@ -1331,7 +1331,7 @@ IFMEBRepSolid* FMECityJSONReader::parseSolid(json::value_type& boundaries,
                                              json::value_type& semantics,
                                              json::value_type& materials,
                                              json::value_type& textures,
-                                             std::vector<std::tuple<double, double, double>>& vertices)
+                                             VertexPool3D& vertices)
 {
    IFMECompositeSurface* outerSurface = fmeGeometryTools_->createCompositeSurface();
    std::vector<IFMECompositeSurface*> innerSurfaces;
@@ -1444,7 +1444,7 @@ void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurfa
                                                    json::value_type& semantics,
                                                    json::value_type& materials,
                                                    json::value_type& textures,
-                                                   std::vector<std::tuple<double, double, double>>& vertices)
+                                                   VertexPool3D& vertices)
 {
    int nrSurfaces = distance(begin(boundaries), end(boundaries));
    for (int i = 0; i < nrSurfaces; i++)
@@ -1495,7 +1495,7 @@ void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurfa
 }
 
 IFMEFace* FMECityJSONReader::parseSurfaceBoundaries(json::value_type surface,
-                                                    std::vector<std::tuple<double, double, double>>& vertices,
+                                                    VertexPool3D& vertices,
                                                     std::vector<std::string> textureThemes,
                                                     std::vector<json::value_type> textureRefs)
 {
@@ -1667,7 +1667,7 @@ void FMECityJSONReader::parseMaterials(IFMEFace& face,
 
 void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve* mlinestring,
                                              json::value_type& boundaries,
-                                             std::vector<std::tuple<double, double, double>>& vertices)
+                                             VertexPool3D& vertices)
 {
    for (auto& linestring : boundaries)
    {
@@ -1681,7 +1681,7 @@ void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve* mlinestring,
 void FMECityJSONReader::parseRings(std::vector<IFMELine*>& rings,
                                    std::vector<FME_UInt32>& appearanceRefs,
                                    json::value_type& boundary,
-                                   std::vector<std::tuple<double, double, double>>& vertices,
+                                   VertexPool3D& vertices,
                                    json::value_type& textureRefs)
 {
    int nrRings = distance(begin(boundary), end(boundary));
@@ -1698,7 +1698,7 @@ void FMECityJSONReader::parseRings(std::vector<IFMELine*>& rings,
 void FMECityJSONReader::parseLineString(IFMELine* line,
                                         FME_UInt32& appearanceRef,
                                         json::value_type& boundary,
-                                        std::vector<std::tuple<double, double, double>>& vertices,
+                                        VertexPool3D& vertices,
                                         json::value_type& textureRefs)
 {
    // the textureRefs include one reference to the texture plus all the vertexcoord references
@@ -1734,7 +1734,7 @@ void FMECityJSONReader::parseLineString(IFMELine* line,
 
 void FMECityJSONReader::parseMultiPoint(IFMEMultiPoint* mpoint,
                                         json::value_type& boundary,
-                                        std::vector<std::tuple<double, double, double>>& vertices)
+                                        VertexPool3D& vertices)
 {
    for (json::iterator it = boundary.begin(); it != boundary.end(); it++)
    {
