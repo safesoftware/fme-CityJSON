@@ -39,6 +39,7 @@
 #include <fstream>
 #include <string>
 #include <map>
+#include <optional>
 
 #include <fmefeat.h>
 #include <igeometry.h>
@@ -247,11 +248,6 @@ private:
                        std::vector<std::string> materialNames,
                        std::vector<json::value_type> materialRefs);
 
-   // parse the textures and attach them to the surface.
-   void parseTextures(IFMEFace& face,
-                      std::vector<std::string> textureThemes,
-                      std::vector<json::value_type> textureRefs);
-
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve* mlinestring,
                              json::value_type& boundaries,
@@ -266,7 +262,7 @@ private:
 
    // Parse a single LineString
    void parseLineString(IFMELine* line,
-                        FME_UInt32& appearanceRef,
+                        std::optional<FME_UInt32>& appearanceRef,
                         json::value_type& boundary,
                         VertexPool3D& vertices,
                         json::value_type& textureRefs);
