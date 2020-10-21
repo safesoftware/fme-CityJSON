@@ -39,6 +39,7 @@
 #include <fstream>
 #include <string>
 #include <map>
+#include <optional>
 
 #include <fmefeat.h>
 #include <igeometry.h>
@@ -59,6 +60,8 @@
 #include <nlohmann/json.hpp>
 // for convenience
 using json = nlohmann::json;
+using VertexPool3D = std::vector<std::tuple<double, double, double>>;
+using VertexPool2D = std::vector<std::tuple<double, double>>;
 
 // Forward declarations
 class IFMEFeature;
@@ -204,8 +207,7 @@ private:
    static void parseAttributes(IFMEFeature& feature, json::iterator& it, const json::iterator& _end);
 
    // Parse a single Geometry of a CityObject
-   IFMEGeometry* parseCityObjectGeometry(json::value_type& currentGeometry,
-                                         std::vector<std::tuple<double, double, double>>& vertices);
+   IFMEGeometry* parseCityObjectGeometry(json::value_type& currentGeometry, VertexPool3D& vertices);
 
    // Parse a Multi- or CompositeSolid
    template <typename MCSolid>
@@ -214,14 +216,14 @@ private:
                                  json::value_type& semantics,
                                  json::value_type& materials,
                                  json::value_type& textures,
-                                 std::vector<std::tuple<double, double, double>>& vertices);
+                                 VertexPool3D& vertices);
 
    // Parse a Solid
    IFMEBRepSolid* parseSolid(json::value_type& boundaries,
                              json::value_type& semantics,
                              json::value_type& materials,
                              json::value_type& textures,
-                             std::vector<std::tuple<double, double, double>>& vertices);
+                             VertexPool3D& vertices);
 
    // Parse a Multi- or CompositeSurface
    template <typename MCSurface>
@@ -230,11 +232,11 @@ private:
                                    json::value_type& semantics,
                                    json::value_type& materials,
                                    json::value_type& textures,
-                                   std::vector<std::tuple<double, double, double>>& vertices);
+                                   VertexPool3D& vertices);
 
    // Parse a single Surface of the boundary
    IFMEFace* parseSurfaceBoundaries(json::value_type surface,
-                                    std::vector<std::tuple<double, double, double>>& vertices,
+                                    VertexPool3D& vertices,
                                     std::vector<std::string> textureThemes,
                                     std::vector<json::value_type> textureRefs);
 
@@ -246,34 +248,29 @@ private:
                        std::vector<std::string> materialNames,
                        std::vector<json::value_type> materialRefs);
 
-   // parse the textures and attach them to the surface.
-   void parseTextures(IFMEFace& face,
-                      std::vector<std::string> textureThemes,
-                      std::vector<json::value_type> textureRefs);
-
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve* mlinestring,
                              json::value_type& boundaries,
-                             std::vector<std::tuple<double, double, double>>& vertices);
+                             VertexPool3D& vertices);
 
    // Parse a single Ring to an IFMELine
    void parseRings(std::vector<IFMELine*>& rings,
                    std::vector<FME_UInt32>& appearanceRefs,
                    json::value_type& boundary,
-                   std::vector<std::tuple<double, double, double>>& vertices,
+                   VertexPool3D& vertices,
                    json::value_type& textureRefs);
 
    // Parse a single LineString
    void parseLineString(IFMELine* line,
-                        FME_UInt32& appearanceRef,
+                        std::optional<FME_UInt32>& appearanceRef,
                         json::value_type& boundary,
-                        std::vector<std::tuple<double, double, double>>& vertices,
+                        VertexPool3D& vertices,
                         json::value_type& textureRefs);
 
    // Parse MultiPoint geometry
    void parseMultiPoint(IFMEMultiPoint* mpoint,
                         json::value_type& boundary,
-                        std::vector<std::tuple<double, double, double>>& vertices);
+                        VertexPool3D& vertices);
 
    // Set the Level of Detail Trait on the geometry
    static void setTraitString(IFMEGeometry& geometry,
@@ -328,8 +325,8 @@ private:
    json metaObject_; // for storing the metadata object
    json::iterator nextObject_;
    int skippedObjects_;
-   std::vector<std::tuple<double, double, double>> vertices_;
-   std::vector<std::tuple<double, double>> textureVertices_;
+   VertexPool3D vertices_;
+   VertexPool2D textureVertices_;
    std::map<int, FME_UInt32> geomTemplateMap_;
    std::map<int, FME_UInt32> materialsMap_;
    std::string defaultThemeMaterial_;
