@@ -62,6 +62,10 @@
 using json = nlohmann::json;
 using VertexPool3D = std::vector<std::tuple<double, double, double>>;
 using VertexPool2D = std::vector<std::tuple<double, double>>;
+using RefVec       = std::vector<json::value_type>;
+using RefVec2      = std::vector<RefVec>;
+using RefVec3      = std::vector<RefVec2>;
+using RefVec4      = std::vector<RefVec3>;
 
 // Forward declarations
 class IFMEFeature;
@@ -215,14 +219,17 @@ private:
                                  json::value_type& boundaries,
                                  json::value_type& semantics,
                                  json::value_type& materials,
-                                 json::value_type& textures,
+                                 std::vector<std::string>& textureThemes,
+                                 RefVec4&
+                                    textureRefsPerBoundaryPerShellPerSolid,
                                  VertexPool3D& vertices);
 
    // Parse a Solid
    IFMEBRepSolid* parseSolid(json::value_type& boundaries,
                              json::value_type& semantics,
                              json::value_type& materials,
-                             json::value_type& textures,
+                             std::vector<std::string>& textureThemes,
+                             RefVec3& textureRefsPerBoundaryPerShell,
                              VertexPool3D& vertices);
 
    // Parse a Multi- or CompositeSurface
@@ -231,14 +238,24 @@ private:
                                    json::value_type& boundaries,
                                    json::value_type& semantics,
                                    json::value_type& materials,
-                                   json::value_type& textures,
+                                   std::vector<std::string>& textureThemes,
+                                   RefVec2& textureRefsPerBoundary,
                                    VertexPool3D& vertices);
 
+   IFMEFace* createOneSurface(std::vector<std::string>& textureThemes,
+                              RefVec* textureRefs,
+                              int i,
+                              json::value_type& boundaries,
+                              VertexPool3D& vertices,
+                              json::value_type& semantics,
+                              json::value_type* semanticSrf,
+                              json::value_type& materials);
+
    // Parse a single Surface of the boundary
-   IFMEFace* parseSurfaceBoundaries(json::value_type surface,
+   IFMEFace* parseSurfaceBoundaries(json::value_type& surface,
                                     VertexPool3D& vertices,
-                                    std::vector<std::string> textureThemes,
-                                    std::vector<json::value_type> textureRefs);
+                                    std::vector<std::string>& textureThemes,
+                                    RefVec* textureRefs);
 
    // parse the semantics and attach them to the surface.
    void parseSemantics(IFMEFace& face, json::value_type& semanticSurface);
@@ -246,7 +263,7 @@ private:
    // parse the materials and attach them to the surface.
    void parseMaterials(IFMEFace& face,
                        std::vector<std::string> materialNames,
-                       std::vector<json::value_type> materialRefs);
+                       RefVec materialRefs);
 
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve* mlinestring,
@@ -280,6 +297,27 @@ private:
    // Cast the geometry LoD to a string, even though the specs require a number.
    // Because strings are easier to compare than floats (in case of extended LoD).
    static std::string lodToString(json currentGeometry);
+
+   // If we have N references per M boundaries, make a vector
+   // of M entries, each with N values, rather than the inverse.
+   // This is done 2 levels deep.
+   void unrollReferences2(json::value_type& references,
+                          json::value_type boundaries,
+                          RefVec2& refsPerBoundary);
+
+   // If we have N references per M boundaries, make a vector
+   // of M entries, each with N values, rather than the inverse.
+   // This is done 3 levels deep.
+   void unrollReferences3(json::value_type& references,
+                          json::value_type boundaries,
+                          RefVec3& refsPerBoundaryPerShell);
+
+   // If we have N references per M boundaries, make a vector
+   // of M entries, each with N values, rather than the inverse.
+   // This is done 4 levels deep.
+   void unrollReferences4(json::value_type& references,
+                          json::value_type boundaries,
+                          RefVec4& refsPerBoundaryPerShellperSolid);
 
    // -----------------------------------------------------------------------
    // If the reader is being used as a "helper" to the writer, to gather
