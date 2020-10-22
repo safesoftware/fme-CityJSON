@@ -491,7 +491,18 @@ void FMECityJSONReader::readTextures()
             tex->setRasterReference(rasterRef);
          }
 
+         // Set the "borderColor"
+         if (not textures[i]["borderColor"].is_null())
+         {
+            // Note: Alpha is not used here.
+            tex->setBorderColor(textures[i]["borderColor"][0],
+                                textures[i]["borderColor"][1],
+                                textures[i]["borderColor"][2]);
+         }
+
          // Set the "wrapMode"
+         // Note that if you set the border colour after this, it will
+         // change the texture mode to FME_TEXTURE_BORDER_FILL.
          if (not textures[i]["wrapMode"].is_null())
          {
             std::string wrapmode = textures[i]["wrapMode"].get<std::string>();
@@ -517,15 +528,6 @@ void FMECityJSONReader::readTextures()
             }
          }
 
-         // Set the "borderColor"
-         if (not textures[i]["borderColor"].is_null())
-         {
-            // Note: Alpha is not used here.
-            tex->setBorderColor(textures[i]["borderColor"][0],
-                                textures[i]["borderColor"][1],
-                                textures[i]["borderColor"][2]);
-         }
-
          // Set the "textureType"
          // I'm not sure how best to represent this in FME.
 
@@ -547,7 +549,7 @@ void FMECityJSONReader::readTextures()
          texturesMap_.insert({i, appRef});
       }
 
-      // What is the "default"?  (Not sure where to store this in FME yet.)
+      // TODO: What is the "default"?  (Not sure where to store this in FME yet.)
       if (inputJSON_.at("appearance").contains("default-theme-texture"))
       {
          defaultThemeTexture_ =
