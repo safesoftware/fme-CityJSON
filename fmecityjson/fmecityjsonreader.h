@@ -305,21 +305,21 @@ private:
    // of M entries, each with N values, rather than the inverse.
    // This is done 2 levels deep.
    void unrollReferences2(json::value_type& references,
-                          json::value_type boundaries,
+                          json::value_type& boundaries,
                           RefVec2& refsPerBoundary);
 
    // If we have N references per M boundaries, make a vector
    // of M entries, each with N values, rather than the inverse.
    // This is done 3 levels deep.
    void unrollReferences3(json::value_type& references,
-                          json::value_type boundaries,
+                          json::value_type& boundaries,
                           RefVec3& refsPerBoundaryPerShell);
 
    // If we have N references per M boundaries, make a vector
    // of M entries, each with N values, rather than the inverse.
    // This is done 4 levels deep.
    void unrollReferences4(json::value_type& references,
-                          json::value_type boundaries,
+                          json::value_type& boundaries,
                           RefVec4& refsPerBoundaryPerShellperSolid);
 
    // -----------------------------------------------------------------------

@@ -427,8 +427,7 @@ void FMECityJSONReader::readTextures()
    {
       json textures = inputJSON_.at("appearance").at("textures");
 
-      int nrTextures = distance(begin(textures), end(textures));
-      for (int i = 0; i < nrTextures; i++)
+      for (int i = 0; i < textures.size(); i++)
       {
          // Get the "type"
          std::string rasterType;
@@ -572,8 +571,7 @@ void FMECityJSONReader::readMaterials()
 
       json materials = inputJSON_.at("appearance").at("materials");
 
-      int nrMaterials = distance(begin(materials), end(materials));
-      for (int i = 0; i < nrMaterials; i++)
+      for (int i = 0; i < materials.size(); i++)
       {
          FME_UInt32 materialRef(0);
          IFMEAppearance* app = fmeGeometryTools_->createAppearance();
@@ -722,8 +720,7 @@ FME_Status FMECityJSONReader::readGeometryDefinitions()
       {
          verticesTemplatesVec.emplace_back(vtx[0], vtx[1], vtx[2]);
       }
-      int nrTemplates = distance(begin(templates), end(templates));
-      for (int i = 0; i < nrTemplates; i++)
+      for (int i = 0; i < templates.size(); i++)
       {
          IFMEGeometry* geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec);
          FME_UInt32 geomRef(0);
@@ -1288,8 +1285,7 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid,
                                                  RefVec4& materialRefsPerBoundaryPerShellPerSolid,
                                                  VertexPool3D& vertices)
 {
-   int nrSolids = distance(begin(boundaries), end(boundaries));
-   for (int i = 0; i < nrSolids; i++)
+   for (int i = 0; i < boundaries.size(); i++)
    {
       json::value_type& shellBoundaries = boundaries[i];
 
@@ -1332,8 +1328,7 @@ IFMEBRepSolid* FMECityJSONReader::parseSolid(json::value_type& boundaries,
    IFMECompositeSurface* outerSurface = fmeGeometryTools_->createCompositeSurface();
    IFMECompositeSurface* innerSurface(nullptr);
 
-   int nrShells = distance(begin(boundaries), end(boundaries));
-   for (int i = 0; i < nrShells; i++)
+   for (int i = 0; i < boundaries.size(); i++)
    {
       json::value_type& surfaceBoundaries = boundaries[i];
 
@@ -1411,8 +1406,7 @@ void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurfa
                                                    RefVec2* materialRefsPerBoundary,
                                                    VertexPool3D& vertices)
 {
-   int nrSurfaces = distance(begin(boundaries), end(boundaries));
-   for (int i = 0; i < nrSurfaces; i++)
+   for (int i = 0; i < boundaries.size(); i++)
    {
       // Does this have any texture data attached?
       RefVec* textureRefs = (!textureRefsPerBoundary || textureRefsPerBoundary->empty()) ?
@@ -1506,12 +1500,13 @@ IFMEFace* FMECityJSONReader::parseSurfaceBoundaries(json::value_type& surface,
    // Set the texture/appearance
    if (not appearanceRefs.empty())
    {
-      // TODO: I'm not sure if this texture should be on both sides.  I'll just do the "front" for now.
+      // TODO: I'm not sure if this texture should be on both sides.
       // TODO: I'm not sure if rings can refer to different appearances, but if so,
       //       which would we use?  I am assuming they are all the same and pick the
       //       appearance from the outer ring "0".
       face->setAppearanceReference(appearanceRefs[0], FME_TRUE);
-      face->deleteSide(FME_FALSE); // make the back face not exist, "transparent".
+      face->setAppearanceReference(appearanceRefs[0], FME_FALSE);
+      //face->deleteSide(FME_FALSE); // make the back face not exist, "transparent".
    }
 
    return face;
@@ -1609,9 +1604,10 @@ void FMECityJSONReader::parseMaterials(IFMEFace& face,
       {
          FME_UInt32 fmeMatRef = materialsMap_[materialRefToUse];
 
-         // TODO: I'm not sure if this material should be on both sides.  I'll just do the "front" for now.
+         // TODO: I'm not sure if this material should be on both sides.
          face.setAppearanceReference(fmeMatRef, FME_TRUE);
-         face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
+         face.setAppearanceReference(fmeMatRef, FME_FALSE);
+         //face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
       }
    }
 }
@@ -1635,8 +1631,7 @@ void FMECityJSONReader::parseRings(std::vector<IFMELine*>& rings,
                                    VertexPool3D& vertices,
                                    json::value_type& textureRefs)
 {
-   int nrRings = distance(begin(boundary), end(boundary));
-   for (int i = 0; i < nrRings; i++)
+   for (int i = 0; i < boundary.size(); i++)
    {
       IFMELine* line = fmeGeometryTools_->createLine();
       std::optional<FME_UInt32> appearanceRef;
@@ -1932,7 +1927,7 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature& feature, FME_Boolean& endO
 
          // The value here must be something found in the left hand
          // column of the GEOM_MAP line in the metafile 'fmecityjson.fmf'
-         int nrGeometries = distance(begin(cityObject.at("geometry")), end(cityObject.at("geometry")));
+         int nrGeometries = cityObject.at("geometry").size();
          if (nrGeometries == 0)
          {
             gLogFile->logMessageString("Empty geometry for CityObject", FME_WARN);
@@ -2180,14 +2175,13 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName,
 }
 
 void FMECityJSONReader::unrollReferences2(json::value_type& references,
-                                          json::value_type boundaries,
+                                          json::value_type& boundaries,
                                           RefVec2& refsPerBoundary)
 {
    // Does this have any texture data attached?
    if (not references.is_null())
    {
-      int nrSurfaces = distance(begin(boundaries), end(boundaries));
-      for (int i = 0; i < nrSurfaces; i++)
+      for (int i = 0; i < boundaries.size(); i++)
       {
          RefVec refs;
          for (json::iterator it = references.begin(); it != references.end(); ++it)
@@ -2200,18 +2194,16 @@ void FMECityJSONReader::unrollReferences2(json::value_type& references,
 }
 
 void FMECityJSONReader::unrollReferences3(json::value_type& references,
-                                          json::value_type boundaries,
+                                          json::value_type& boundaries,
                                           RefVec3& refsPerBoundaryPerShell)
 {
    // Does this have any texture data attached?
    if (not references.is_null())
    {
-      int nrShells = distance(begin(boundaries), end(boundaries));
-      for (int i = 0; i < nrShells; i++)
+      for (int i = 0; i < boundaries.size(); i++)
       {
          RefVec2 refsPerBoundary;
-         int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
-         for (int j = 0; j < nrSurfaces; j++)
+         for (int j = 0; j < boundaries[i].size(); j++)
          {
             RefVec refs;
             for (json::iterator it = references.begin(); it != references.end(); ++it)
@@ -2226,22 +2218,19 @@ void FMECityJSONReader::unrollReferences3(json::value_type& references,
 }
 
 void FMECityJSONReader::unrollReferences4(json::value_type& references,
-                                          json::value_type boundaries,
+                                          json::value_type& boundaries,
                                           RefVec4& refsPerBoundaryPerShellperSolid)
 {
    // Does this have any texture data attached?
    if (not references.is_null())
    {
-      int nrSolids = distance(begin(boundaries), end(boundaries));
-      for (int i = 0; i < nrSolids; i++)
+      for (int i = 0; i < boundaries.size(); i++)
       {
          RefVec3 refsPerBoundaryPerShell;
-         int nrShells = distance(begin(boundaries[i]), end(boundaries[i]));
-         for (int j = 0; j < nrShells; j++)
+         for (int j = 0; j < boundaries[i].size(); j++)
          {
             RefVec2 refsPerBoundary;
-            int nrSurfaces = distance(begin(boundaries[i][j]), end(boundaries[i][j]));
-            for (int k = 0; k < nrSurfaces; k++)
+            for (int k = 0; k < boundaries[i][j].size(); k++)
             {
                RefVec rRefs;
                for (json::iterator it = references.begin(); it != references.end(); ++it)
