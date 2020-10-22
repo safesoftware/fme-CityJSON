@@ -218,18 +218,20 @@ private:
    void parseMultiCompositeSolid(MCSolid multiCompositeSolid,
                                  json::value_type& boundaries,
                                  json::value_type& semantics,
-                                 json::value_type& materials,
                                  std::vector<std::string>& textureThemes,
-                                 RefVec4&
-                                    textureRefsPerBoundaryPerShellPerSolid,
+                                 RefVec4& textureRefsPerBoundaryPerShellPerSolid,
+                                 std::vector<std::string>& materialNames,
+                                 RefVec4& materialRefsPerBoundaryPerShellPerSolid,
                                  VertexPool3D& vertices);
 
    // Parse a Solid
    IFMEBRepSolid* parseSolid(json::value_type& boundaries,
                              json::value_type& semantics,
-                             json::value_type& materials,
+                             json::value_type* semanticSrfVec2,
                              std::vector<std::string>& textureThemes,
-                             RefVec3& textureRefsPerBoundaryPerShell,
+                             RefVec3* textureRefsPerBoundaryPerShell,
+                             std::vector<std::string>& materialNames,
+                             RefVec3* materialRefsPerBoundaryPerShell,
                              VertexPool3D& vertices);
 
    // Parse a Multi- or CompositeSurface
@@ -237,19 +239,20 @@ private:
    void parseMultiCompositeSurface(MCSurface multiCompositeSurface,
                                    json::value_type& boundaries,
                                    json::value_type& semantics,
-                                   json::value_type& materials,
+                                   json::value_type* semanticSrfVec,
                                    std::vector<std::string>& textureThemes,
-                                   RefVec2& textureRefsPerBoundary,
+                                   RefVec2* textureRefsPerBoundary,
+                                   std::vector<std::string>& materialNames,
+                                   RefVec2* materialRefsPerBoundary,
                                    VertexPool3D& vertices);
 
    IFMEFace* createOneSurface(std::vector<std::string>& textureThemes,
                               RefVec* textureRefs,
-                              int i,
+                              std::vector<std::string>& materialNames,
+                              RefVec* materialRefs,
                               json::value_type& boundaries,
                               VertexPool3D& vertices,
-                              json::value_type& semantics,
-                              json::value_type* semanticSrf,
-                              json::value_type& materials);
+                              json::value_type* semanticSrf);
 
    // Parse a single Surface of the boundary
    IFMEFace* parseSurfaceBoundaries(json::value_type& surface,
@@ -258,12 +261,12 @@ private:
                                     RefVec* textureRefs);
 
    // parse the semantics and attach them to the surface.
-   void parseSemantics(IFMEFace& face, json::value_type& semanticSurface);
+   void parseSemantics(IFMEFace& face, json::value_type* semanticSurface);
 
    // parse the materials and attach them to the surface.
    void parseMaterials(IFMEFace& face,
-                       std::vector<std::string> materialNames,
-                       RefVec materialRefs);
+                       std::vector<std::string>& materialNames,
+                       RefVec* materialRefs);
 
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve* mlinestring,
@@ -324,6 +327,9 @@ private:
    // schema feature definitions, these will look in the official CityJSON specs
    // and pull out the correct schema information.
    FME_Status fetchSchemaFeaturesForWriter();
+
+   // -----------------------------------------------------------------------
+   json::value_type* fetchSemanticsValues(json::value_type& semantics);
 
    // Data members
 

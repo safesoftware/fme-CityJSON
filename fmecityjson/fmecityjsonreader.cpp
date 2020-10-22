@@ -1108,7 +1108,6 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
       std::string geometryLodName = "cityjson_lod"; // geometry Trait name
       json::value_type boundaries = currentGeometry.at("boundaries");
       json::value_type semantics  = currentGeometry["semantics"];
-      json::value_type materials  = currentGeometry["material"];
 
       // Does this have any texture data attached?
       json::value_type textures = currentGeometry["texture"];
@@ -1121,6 +1120,16 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
          }
       }
 
+      // Does this have any material data attached?
+      json::value_type materials = currentGeometry["material"];
+      std::vector<std::string> materialNames;
+      if (not materials.is_null())
+      {
+         for (json::iterator it = materials.begin(); it != materials.end(); ++it)
+         {
+            materialNames.push_back(it.key());
+         }
+      }
 
       // geometry type and level of detail
       geometryType = currentGeometry.at("type").get<std::string>();
@@ -1154,9 +1163,14 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
             {
                RefVec2 textureRefsPerBoundary;
                unrollReferences2(textures, boundaries, textureRefsPerBoundary);
+               RefVec2 materialRefsPerBoundary;
+               unrollReferences2(materials, boundaries, materialRefsPerBoundary);
+
+               // Does this have any semantic data?
+               json::value_type* semanticSrfVec = fetchSemanticsValues(semantics);
 
                IFMEMultiSurface* msurface = fmeGeometryTools_->createMultiSurface();
-               parseMultiCompositeSurface(msurface, boundaries, semantics, materials, textureThemes, textureRefsPerBoundary, vertices);
+               parseMultiCompositeSurface(msurface, boundaries, semantics, semanticSrfVec, textureThemes, &textureRefsPerBoundary, materialNames, &materialRefsPerBoundary, vertices);
                // Set the Level of Detail Trait on the geometry
                setTraitString(*msurface, geometryLodName, geometryLodValue);
                // Append the geometry to the FME feature
@@ -1168,9 +1182,14 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
                // Does this have any texture data attached?
                RefVec2 textureRefsPerBoundary;
                unrollReferences2(textures, boundaries, textureRefsPerBoundary);
+               RefVec2 materialRefsPerBoundary;
+               unrollReferences2(materials, boundaries, materialRefsPerBoundary);
+
+               // Does this have any semantic data?
+               json::value_type* semanticSrfVec = fetchSemanticsValues(semantics);
 
                IFMECompositeSurface* csurface = fmeGeometryTools_->createCompositeSurface();
-               parseMultiCompositeSurface(csurface, boundaries, semantics, materials, textureThemes, textureRefsPerBoundary, vertices);
+               parseMultiCompositeSurface(csurface, boundaries, semantics, semanticSrfVec, textureThemes, &textureRefsPerBoundary, materialNames, &materialRefsPerBoundary, vertices);
                setTraitString(*csurface, geometryLodName, geometryLodValue);
                return csurface;
             }
@@ -1178,9 +1197,14 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
             {
                RefVec3 textureRefsPerBoundaryPerShell;
                unrollReferences3(textures, boundaries, textureRefsPerBoundaryPerShell);
+               RefVec3 materialRefsPerBoundaryPerShell;
+               unrollReferences3(materials, boundaries, materialRefsPerBoundaryPerShell);
+
+               // Does this have any semantic data?
+               json::value_type* semanticSrfVec2 = fetchSemanticsValues(semantics);
 
                IFMEBRepSolid* BSolid =
-                  parseSolid(boundaries, semantics, materials, textureThemes, textureRefsPerBoundaryPerShell, vertices);
+                  parseSolid(boundaries, semantics, semanticSrfVec2, textureThemes, &textureRefsPerBoundaryPerShell, materialNames, &materialRefsPerBoundaryPerShell, vertices);
                setTraitString(*BSolid, geometryLodName, geometryLodValue);
                return BSolid;
             }
@@ -1188,9 +1212,11 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
             {
                RefVec4 textureRefsPerBoundaryPerShellPerSolid;
                unrollReferences4(textures, boundaries, textureRefsPerBoundaryPerShellPerSolid);
+               RefVec4 materialRefsPerBoundaryPerShellPerSolid;
+               unrollReferences4(materials, boundaries, materialRefsPerBoundaryPerShellPerSolid);
 
                IFMEMultiSolid* msolid = fmeGeometryTools_->createMultiSolid();
-               parseMultiCompositeSolid(msolid, boundaries, semantics, materials, textureThemes, textureRefsPerBoundaryPerShellPerSolid, vertices);
+               parseMultiCompositeSolid(msolid, boundaries, semantics, textureThemes, textureRefsPerBoundaryPerShellPerSolid, materialNames, materialRefsPerBoundaryPerShellPerSolid, vertices);
                setTraitString(*msolid, geometryLodName, geometryLodValue);
                return msolid;
             }
@@ -1198,9 +1224,11 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
             {
                RefVec4 textureRefsPerBoundaryPerShellPerSolid;
                unrollReferences4(textures, boundaries, textureRefsPerBoundaryPerShellPerSolid);
+               RefVec4 materialRefsPerBoundaryPerShellPerSolid;
+               unrollReferences4(materials, boundaries, materialRefsPerBoundaryPerShellPerSolid);
 
                IFMECompositeSolid* csolid = fmeGeometryTools_->createCompositeSolid();
-               parseMultiCompositeSolid(csolid, boundaries, semantics, materials, textureThemes, textureRefsPerBoundaryPerShellPerSolid, vertices);
+               parseMultiCompositeSolid(csolid, boundaries, semantics, textureThemes, textureRefsPerBoundaryPerShellPerSolid, materialNames, materialRefsPerBoundaryPerShellPerSolid, vertices);
                setTraitString(*csolid, geometryLodName, geometryLodValue);
                return csolid;
             }
@@ -1238,124 +1266,64 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
    return nullptr;
 }
 
+
+json::value_type* FMECityJSONReader::fetchSemanticsValues(json::value_type& semantics)
+{
+   if ((not semantics.is_null()) && (not semantics["values"].is_null()))
+   {
+      return &semantics["values"];
+   }
+   return nullptr;
+}
+
 template <typename MCSolid>
 void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid,
                                                  json::value_type& boundaries,
                                                  json::value_type& semantics,
-                                                 json::value_type& materials,
                                                  std::vector<std::string>& textureThemes,
                                                  RefVec4& textureRefsPerBoundaryPerShellPerSolid,
+                                                 std::vector<std::string>& materialNames,
+                                                 RefVec4& materialRefsPerBoundaryPerShellPerSolid,
                                                  VertexPool3D& vertices)
 {
-//    int nrSolids = distance(begin(boundaries), end(boundaries));
-   int nrSolids = boundaries.size();
+   int nrSolids = distance(begin(boundaries), end(boundaries));
    for (int i = 0; i < nrSolids; i++)
    {
+      json::value_type& shellBoundaries = boundaries[i];
+
       // Does this have any semantic data?
-      json::value_type* semanticSrfVec2(nullptr);
-      if ((not semantics.is_null()) && (not semantics["values"][i].is_null()))
-      {
-         semanticSrfVec2 = &semantics["values"][i];
-      }
+      json::value_type* semanticSrfVec2 = fetchSemanticsValues(semantics);
 
       // Does this have any texture data attached?
-      RefVec3* textureRefsPerBoundaryPerShell =
-         textureRefsPerBoundaryPerShellPerSolid.empty() ? nullptr : &textureRefsPerBoundaryPerShellPerSolid[i];
+      RefVec3* textureRefsPerBoundaryPerShell = textureRefsPerBoundaryPerShellPerSolid.empty() ?
+                                                   nullptr :
+                                                   &textureRefsPerBoundaryPerShellPerSolid[i];
 
-      IFMEBRepSolid* BSolid(nullptr);
-      IFMECompositeSurface* outerSurface = fmeGeometryTools_->createCompositeSurface();
-      IFMECompositeSurface* innerSurface(nullptr);
-      int nrShells = distance(begin(boundaries[i]), end(boundaries[i]));
-      for (int j = 0; j < nrShells; j++)
-      {
-         // Does this have any texture data attached?
-         RefVec2* textureRefsPerBoundary =
-            textureRefsPerBoundaryPerShell->empty() ? nullptr : &(*textureRefsPerBoundaryPerShell)[j];
+      // Does this have any texture data attached?
+      RefVec3* materialRefsPerBoundaryPerShell = materialRefsPerBoundaryPerShellPerSolid.empty() ?
+                                                    nullptr :
+                                                    &materialRefsPerBoundaryPerShellPerSolid[i];
 
-         // Set up the inner surface we're building
-         json::value_type* semanticSrfVec(nullptr);
-         if (j == 0)
-         {
-            // Does this have any semantic data?
-            if (semanticSrfVec2 && (not (*semanticSrfVec2)[j].is_null()))
-            {
-               semanticSrfVec = &(*semanticSrfVec2)[j];
-            }
-         }
-         else
-         {
-            innerSurface = fmeGeometryTools_->createCompositeSurface();
-         }
+      IFMEBRepSolid* BSolid = parseSolid(shellBoundaries,
+                                         semantics,
+                                         semanticSrfVec2,
+                                         textureThemes,
+                                         textureRefsPerBoundaryPerShell,
+                                         materialNames,
+                                         materialRefsPerBoundaryPerShell,
+                                         vertices);
 
-         int nrSurfaces = distance(begin(boundaries[i][j]), end(boundaries[i][j]));
-         for (int k = 0; k < nrSurfaces; k++)
-         {
-            // Does this have any texture data attached?
-            RefVec* textureRefs =
-               (!textureRefsPerBoundary || textureRefsPerBoundary->empty()) ?
-                  nullptr :
-                  &(*textureRefsPerBoundary)[k];
-
-            IFMEFace* face =
-               parseSurfaceBoundaries(boundaries[i][j][k], vertices, textureThemes, textureRefs);
-
-            // Does this have any semantic data?
-            if (semanticSrfVec && (not (*semanticSrfVec)[k].is_null()))
-            {
-               // Add traits onto the face.
-               json::value_type semanticSrf = semantics["surfaces"][int((*semanticSrfVec)[k])];
-               parseSemantics(*face, semanticSrf);
-            }
-
-            // Does this have any material data attached?
-            if (not materials.is_null())
-            {
-               std::vector<std::string> materialNames;
-               RefVec materialRefs;
-               for (json::iterator it = materials.begin(); it != materials.end(); ++it)
-               {
-                  materialNames.push_back(it.key());
-                  materialRefs.push_back(it.value()["values"][i][j][k]);
-               }
-               // Add materials to the face
-               parseMaterials(*face, materialNames, materialRefs);
-            }
-
-            if (j == 0)
-            {
-               outerSurface->appendPart(face);
-            }
-            else
-            {
-               innerSurface->appendPart(face);
-            }
-         }
-         if (j == 0)
-         {
-            BSolid       = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
-            outerSurface = nullptr; // we gave up ownership
-         }
-         else
-         {
-            BSolid->addInnerSurface(innerSurface);
-         }
-      }
-
-      // Let's see if we had some empty set of shells and return an empty brepsolid.
-      if (!BSolid)
-      {
-         BSolid       = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
-         outerSurface = nullptr; // we gave up ownership
-      }
       multiCompositeSolid->appendPart(BSolid);
    }
 }
 
 IFMEBRepSolid* FMECityJSONReader::parseSolid(json::value_type& boundaries,
                                              json::value_type& semantics,
-                                             json::value_type& materials,
+                                             json::value_type* semanticSrfVec2,
                                              std::vector<std::string>& textureThemes,
-                                             RefVec3& textureRefsPerBoundaryPerShell,
+                                             RefVec3* textureRefsPerBoundaryPerShell,
+                                             std::vector<std::string>& materialNames,
+                                             RefVec3* materialRefsPerBoundaryPerShell,
                                              VertexPool3D& vertices)
 {
    IFMEBRepSolid* BSolid(nullptr);
@@ -1365,18 +1333,28 @@ IFMEBRepSolid* FMECityJSONReader::parseSolid(json::value_type& boundaries,
    int nrShells = distance(begin(boundaries), end(boundaries));
    for (int i = 0; i < nrShells; i++)
    {
+      json::value_type& surfaceBoundaries = boundaries[i];
+
       // Does this have any texture data attached?
       RefVec2* textureRefsPerBoundary =
-         textureRefsPerBoundaryPerShell.empty() ? nullptr : &textureRefsPerBoundaryPerShell[i];
+         (!textureRefsPerBoundaryPerShell || textureRefsPerBoundaryPerShell->empty()) ?
+            nullptr :
+            &(*textureRefsPerBoundaryPerShell)[i];
+
+      // Does this have any material data attached?
+      RefVec2* materialRefsPerBoundary =
+         (!materialRefsPerBoundaryPerShell || materialRefsPerBoundaryPerShell->empty()) ?
+            nullptr :
+            &(*materialRefsPerBoundaryPerShell)[i];
 
       // Inner shells/surfaces do not have semantics
       json::value_type* semanticSrfVec(nullptr);
       if (i == 0)
       {
          // Does this have any semantic data?
-         if ((not semantics.is_null()) && (not semantics["values"][i].is_null()))
+         if (semanticSrfVec2 && (not(*semanticSrfVec2)[i].is_null()))
          {
-            semanticSrfVec = &semantics["values"][i];
+            semanticSrfVec = &(*semanticSrfVec2)[i];
          }
       }
       else
@@ -1385,49 +1363,20 @@ IFMEBRepSolid* FMECityJSONReader::parseSolid(json::value_type& boundaries,
          innerSurface = fmeGeometryTools_->createCompositeSurface();
       }
 
-      int nrSurfaces = distance(begin(boundaries[i]), end(boundaries[i]));
-      for (int j = 0; j < nrSurfaces; j++)
-      {
-         // Does this have any texture data attached?
-         RefVec* textureRefs =
-            (!textureRefsPerBoundary || textureRefsPerBoundary->empty()) ?
-               nullptr :
-               &(*textureRefsPerBoundary)[j];
+      // First let's build the outer surfaces, then the inner ones.
+      IFMECompositeSurface* surfaceToBuild = (i == 0) ? outerSurface : innerSurface;
 
-         IFMEFace* face =
-            parseSurfaceBoundaries(boundaries[i][j], vertices, textureThemes, textureRefs);
+      // put together the composite surface
+      parseMultiCompositeSurface(surfaceToBuild,
+                                 surfaceBoundaries,
+                                 semantics,
+                                 semanticSrfVec,
+                                 textureThemes,
+                                 textureRefsPerBoundary,
+                                 materialNames,
+                                 materialRefsPerBoundary,
+                                 vertices);
 
-         // Does this have any semantic data?
-         if (semanticSrfVec && (not (*semanticSrfVec)[j].is_null()))
-         {
-            // Add traits onto the face.
-            json::value_type semanticSrf = semantics["surfaces"][int((*semanticSrfVec)[j])];
-            parseSemantics(*face, semanticSrf);
-         }
-
-         // Does this have any material data attached?
-         if (not materials.is_null())
-         {
-            std::vector<std::string> materialNames;
-            RefVec materialRefs;
-            for (json::iterator it = materials.begin(); it != materials.end(); ++it)
-            {
-               materialNames.push_back(it.key());
-               materialRefs.push_back(it.value()["values"][i][j]);
-            }
-            // Add materials to the face
-            parseMaterials(*face, materialNames, materialRefs);
-         }
-
-         if (i == 0)
-         {
-            outerSurface->appendPart(face);
-         }
-         else
-         {
-            innerSurface->appendPart(face);
-         }
-      }
       if (i == 0)
       {
          BSolid       = fmeGeometryTools_->createBRepSolidBySurface(outerSurface);
@@ -1453,65 +1402,58 @@ template <typename MCSurface>
 void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurface,
                                                    json::value_type& boundaries,
                                                    json::value_type& semantics,
-                                                   json::value_type& materials,
+                                                   json::value_type* semanticSrfVec,
                                                    std::vector<std::string>& textureThemes,
-                                                   RefVec2& textureRefsPerBoundary,
+                                                   RefVec2* textureRefsPerBoundary,
+                                                   std::vector<std::string>& materialNames,
+                                                   RefVec2* materialRefsPerBoundary,
                                                    VertexPool3D& vertices)
 {
    int nrSurfaces = distance(begin(boundaries), end(boundaries));
    for (int i = 0; i < nrSurfaces; i++)
    {
+      // Does this have any texture data attached?
+      RefVec* textureRefs = (!textureRefsPerBoundary || textureRefsPerBoundary->empty()) ?
+                               nullptr :
+                               &(*textureRefsPerBoundary)[i];
+
+      // Does this have any material data attached?
+      RefVec* materialRefs = (!materialRefsPerBoundary || materialRefsPerBoundary->empty()) ?
+                                nullptr :
+                                &(*materialRefsPerBoundary)[i];
+
       // Does this have any semantic data?
-      json::value_type* semanticSrf(nullptr);
-      if ((not semantics.is_null()) && (not semantics["values"][i].is_null()))
-      {
-         semanticSrf = &semantics["surfaces"][int(semantics["values"][i])];
-      }
+      json::value_type* semanticSrf = (!semanticSrfVec || (*semanticSrfVec)[i].is_null()) ?
+                                         nullptr :
+                                         &semantics["surfaces"][int((*semanticSrfVec)[i])];
 
       IFMEFace* face = createOneSurface(textureThemes,
-                                        (textureRefsPerBoundary.empty() ? nullptr : &textureRefsPerBoundary[i]),
-                                        i,
+                                        textureRefs,
+                                        materialNames,
+                                        materialRefs,
                                         boundaries[i],
                                         vertices,
-                                        semantics,
-                                        semanticSrf,
-                                        materials);
+                                        semanticSrf);
 
       multiCompositeSurface->appendPart(face);
    }
 }
 
 IFMEFace* FMECityJSONReader::createOneSurface(std::vector<std::string>& textureThemes,
-                                         RefVec* textureRefs,
-                                         int i,
-                                         json::value_type& boundaries,
-                                         VertexPool3D& vertices,
-                                         json::value_type& semantics,
-                                         json::value_type* semanticSrf,
-                                         json::value_type& materials)
+                                              RefVec* textureRefs,
+                                              std::vector<std::string>& materialNames,
+                                              RefVec* materialRefs,
+                                              json::value_type& boundaries,
+                                              VertexPool3D& vertices,
+                                              json::value_type* semanticSrf)
 {
    IFMEFace* face = parseSurfaceBoundaries(boundaries, vertices, textureThemes, textureRefs);
 
-   // Does this have any semantic data?
-   if (semanticSrf)
-   {
-      // Add traits onto the face.
-      parseSemantics(*face, *semanticSrf);
-   }
+   // Add traits onto the face.
+   parseSemantics(*face, semanticSrf);
 
-   // Does this have any material data attached?
-   if (not materials.is_null())
-   {
-      std::vector<std::string> materialNames;
-      RefVec materialRefs;
-      for (json::iterator it = materials.begin(); it != materials.end(); ++it)
-      {
-         materialNames.push_back(it.key());
-         materialRefs.push_back(it.value()["values"][i]);
-      }
-      // Add materials to the face
-      parseMaterials(*face, materialNames, materialRefs);
-   }
+   // Add materials to the face
+   parseMaterials(*face, materialNames, materialRefs);
 
    return face;
 }
@@ -1540,13 +1482,14 @@ IFMEFace* FMECityJSONReader::parseSurfaceBoundaries(json::value_type& surface,
       }
    }
 
+   // TODO: "themeToUse" is not put on the feature or geometry anywhere.
+   //       Is this really not needed?  Maybe it is only used in some
+   //       future where the user has input on which to use.
+
    std::vector<IFMELine*> rings;
    std::vector<FME_UInt32> appearanceRefs;
    parseRings(rings, appearanceRefs, surface, vertices, textureRefToUse);
    IFMELine* outerRing = rings[0];
-
-   // TODO: Create the appearance for the face here. See:
-   // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L271-L341
 
    IFMEArea* area = fmeGeometryTools_->createSimpleAreaByCurve(outerRing);
    IFMEFace* face = fmeGeometryTools_->createFaceByArea(area, FME_CLOSE_3D_EXTEND_MODE);
@@ -1561,29 +1504,29 @@ IFMEFace* FMECityJSONReader::parseSurfaceBoundaries(json::value_type& surface,
    // Set the texture/appearance
    if (not appearanceRefs.empty())
    {
-      // I'm not sure if this texture should be on both sides
+      // TODO: I'm not sure if this texture should be on both sides.  I'll just do the "front" for now.
+      // TODO: I'm not sure if rings can refer to different appearances, but if so,
+      //       which would we use?  I am assuming they are all the same and pick the
+      //       appearance from the outer ring "0".
       face->setAppearanceReference(appearanceRefs[0], FME_TRUE);
-      face->setAppearanceReference(appearanceRefs[0], FME_FALSE);
+      face->deleteSide(FME_FALSE); // make the back face not exist, "transparent".
    }
-
-   // TODO: Set the appearance for the face here. See:
-   // https://github.com/safesoftware/fme-CityJSON/blob/c203e92bd06a9e6c0cb25a7fb7be8c182a63675e/fmecityjson/fmecityjsonreader.cpp#L346-L350
 
    return face;
 }
 
-void FMECityJSONReader::parseSemantics(IFMEFace& face, json::value_type& semanticSurface)
+void FMECityJSONReader::parseSemantics(IFMEFace& face, json::value_type* semanticSurface)
 {
    // Setting semantics
-   if (not semanticSurface.is_null())
+   if (semanticSurface && (not semanticSurface->is_null()))
    {
       IFMEString* geometryName = gFMESession->createString();
-      std::string semType      = semanticSurface.at("type").get<std::string>();
+      std::string semType      = semanticSurface->at("type").get<std::string>();
       geometryName->set(semType.c_str(), semType.length());
       face.setName(*geometryName, nullptr);
       gFMESession->destroyString(geometryName);
 
-      for (json::iterator it = semanticSurface.begin(); it != semanticSurface.end(); it++)
+      for (json::iterator it = semanticSurface->begin(); it != semanticSurface->end(); it++)
       {
          if (it.key() == "children" || it.key() == "parent")
          {
@@ -1635,20 +1578,38 @@ void FMECityJSONReader::parseSemantics(IFMEFace& face, json::value_type& semanti
 }
 
 void FMECityJSONReader::parseMaterials(IFMEFace& face,
-                                       std::vector<std::string> materialNames,
-                                       RefVec materialRefs)
+                                       std::vector<std::string>& materialNames,
+                                       RefVec* materialRefs)
 {
-   for (int i = 0; i < materialNames.size(); i++)
+   json::value_type materialRefToUse(json{nullptr});
+   std::string nameToUse;
+   if (materialRefs)
    {
-      if (not materialRefs[i].is_null())
-      {
-         std::string materialName = materialNames[i];
-         int materialRef          = materialRefs[i];
-         FME_UInt32 fmeMatRef     = materialsMap_[materialRef];
+      // TODO: I guess here we could use the materialNames to decide how to attach them, or which to
+      // use.  For now I think FME can only store one.
+      int nameNumToUse(0); // <-- arbitrary choice
 
-         // I'm not sure if this material should be on both sides
+      // Make sure we don't extend beyond the size of what is passed in.
+      if (materialNames.size() > nameNumToUse)
+      {
+         nameToUse = materialNames[nameNumToUse];
+      }
+      if (materialRefs->size() > nameNumToUse)
+      {
+         materialRefToUse = (*materialRefs)[nameNumToUse];
+      }
+
+      // TODO: "nameToUse" is not put on the feature or geometry anywhere.
+      //       Is this really not needed?  Maybe it is only used in some
+      //       future where the user has input on which to use.
+
+      if (not materialRefToUse.is_null())
+      {
+         FME_UInt32 fmeMatRef = materialsMap_[materialRefToUse];
+
+         // TODO: I'm not sure if this material should be on both sides.  I'll just do the "front" for now.
          face.setAppearanceReference(fmeMatRef, FME_TRUE);
-         face.setAppearanceReference(fmeMatRef, FME_FALSE);
+         face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
       }
    }
 }
@@ -2223,8 +2184,7 @@ void FMECityJSONReader::unrollReferences2(json::value_type& references,
    // Does this have any texture data attached?
    if (not references.is_null())
    {
-//       int nrSurfaces = distance(begin(boundaries), end(boundaries));
-      int nrSurfaces = boundaries.size();
+      int nrSurfaces = distance(begin(boundaries), end(boundaries));
       for (int i = 0; i < nrSurfaces; i++)
       {
          RefVec refs;
