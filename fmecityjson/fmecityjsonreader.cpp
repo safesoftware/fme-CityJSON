@@ -478,6 +478,7 @@ void FMECityJSONReader::readTextures()
             }
 
             FME_Status badLuck = readRaster(fullFileName, raster, rasterType);
+            // TODO: handle badLuck
 
             // Set the "name".  We'll use that as the name of the appearance.
             iName = std::filesystem::path(fullFileName).stem().string();
@@ -490,6 +491,7 @@ void FMECityJSONReader::readTextures()
             // Add the Raster to the FME Library
             FME_UInt32 rasterRef(0);
             FME_Status badLuck = gFMESession->getLibrary()->addRaster(rasterRef, raster);
+            // TODO: handle badLuck
             raster             = nullptr; // We no longer have ownership.
             tex->setRasterReference(rasterRef);
          }
@@ -537,6 +539,7 @@ void FMECityJSONReader::readTextures()
          // Add the Texture to the FME Library
          FME_UInt32 textureRef(0);
          FME_Status badLuck = gFMESession->getLibrary()->addTexture(textureRef, tex);
+         // TODO: handle badLuck
          tex                = nullptr; // We no longer have ownership.
 
          // Set the texture on a new Appearance
@@ -648,6 +651,7 @@ void FMECityJSONReader::readMaterials()
 
          // Add the Material to the FME Library
          FME_Status badLuck = gFMESession->getLibrary()->addAppearance(materialRef, app);
+         // TODO: handle badLuck
          app                = nullptr; // We no longer have ownership.
 
          // Add the material reference to the lookup table
@@ -727,7 +731,6 @@ FME_Status FMECityJSONReader::readGeometryDefinitions()
       json templates         = inputJSON_.at("geometry-templates").at("templates");
       json verticesTemplates = inputJSON_.at("geometry-templates").at("vertices-templates");
       VertexPool3D verticesTemplatesVec;
-      FME_MsgNum badLuck;
 
       for (auto vtx : verticesTemplates)
       {
@@ -737,7 +740,7 @@ FME_Status FMECityJSONReader::readGeometryDefinitions()
       {
          IFMEGeometry* geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec);
          FME_UInt32 geomRef(0);
-         badLuck = gFMESession->getLibrary()->addGeometryDefinition(geomRef, geom);
+         FME_Status badLuck = gFMESession->getLibrary()->addGeometryDefinition(geomRef, geom);
          if (badLuck)
          {
             std::string msg =
@@ -940,7 +943,6 @@ FME_Status FMECityJSONReader::close()
 // Read
 FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
 {
-   FME_Status badLuck(FME_SUCCESS);
    // -----------------------------------------------------------------------
    // Perform read actions here
    // -----------------------------------------------------------------------
@@ -2177,6 +2179,7 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName,
 
    // Close the reader and *ignore* any errors.
    badLuck = newReader->close();
+   // TODO: handle badLuck
 
    // clean up
    gFMESession->destroyFeature(textureFeature);
