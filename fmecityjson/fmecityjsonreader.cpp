@@ -447,6 +447,7 @@ void FMECityJSONReader::readTextures()
 
          // Get the "image"
          IFMERaster* raster(nullptr);
+         std::string iName;
          if (not textures[i]["image"].is_null())
          {
             std::string imagePath    = textures[i]["image"].get<std::string>();
@@ -477,6 +478,9 @@ void FMECityJSONReader::readTextures()
             }
 
             FME_Status badLuck = readRaster(fullFileName, raster, rasterType);
+
+            // Set the "name".  We'll use that as the name of the appearance.
+            iName = std::filesystem::path(fullFileName).stem().string();
          }
 
          // Set the Raster on the texture.
@@ -538,6 +542,15 @@ void FMECityJSONReader::readTextures()
          // Set the texture on a new Appearance
          IFMEAppearance* app = fmeGeometryTools_->createAppearance();
          app->setTextureReference(textureRef);
+
+         // Set the "name".
+         if (not iName.empty())
+         {
+            IFMEString* fmeVal = gFMESession->createString();
+            fmeVal->set(iName.c_str(), iName.length());
+            app->setName(*fmeVal, "fme-system");
+            gFMESession->destroyString(fmeVal);
+         }
 
          // Add the Appearance to the FME Library
          FME_UInt32 appRef(0);
