@@ -220,8 +220,7 @@ private:
                                  json::value_type& semantics,
                                  std::vector<std::string>& textureThemes,
                                  RefVec4& textureRefsPerBoundaryPerShellPerSolid,
-                                 std::vector<std::string>& materialNames,
-                                 RefVec4& materialRefsPerBoundaryPerShellPerSolid,
+                                 json::value_type& materialRefs,
                                  VertexPool3D& vertices);
 
    // Parse a Solid
@@ -230,8 +229,7 @@ private:
                              json::value_type* semanticSrfVec2,
                              std::vector<std::string>& textureThemes,
                              RefVec3* textureRefsPerBoundaryPerShell,
-                             std::vector<std::string>& materialNames,
-                             RefVec3* materialRefsPerBoundaryPerShell,
+                             json::value_type& materialRefs,
                              VertexPool3D& vertices);
 
    // Parse a Multi- or CompositeSurface
@@ -242,14 +240,12 @@ private:
                                    json::value_type* semanticSrfVec,
                                    std::vector<std::string>& textureThemes,
                                    RefVec2* textureRefsPerBoundary,
-                                   std::vector<std::string>& materialNames,
-                                   RefVec2* materialRefsPerBoundary,
+                                   json::value_type& materialRefs,
                                    VertexPool3D& vertices);
 
    IFMEFace* createOneSurface(std::vector<std::string>& textureThemes,
                               RefVec* textureRefs,
-                              std::vector<std::string>& materialNames,
-                              RefVec* materialRefs,
+                              json::value_type& materialRefs,
                               json::value_type& boundaries,
                               VertexPool3D& vertices,
                               json::value_type* semanticSrf);
@@ -264,9 +260,7 @@ private:
    void parseSemantics(IFMEFace& face, json::value_type* semanticSurface);
 
    // parse the materials and attach them to the surface.
-   void parseMaterials(IFMEFace& face,
-                       std::vector<std::string>& materialNames,
-                       RefVec* materialRefs);
+   void parseMaterials(IFMEFace& face, json::value_type& materialRef);
 
    // Parse a MultiLineString
    void parseMultiLineString(IFMEMultiCurve* mlinestring,
