@@ -1125,24 +1125,34 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
 
       // Does this have any texture data attached?
       json::value_type textures = currentGeometry["texture"];
-      std::vector<std::string> textureThemes;
+      json::value_type textureRefsToUse(json{nullptr});
       if (not textures.is_null())
       {
-         for (json::iterator it = textures.begin(); it != textures.end(); ++it)
-         {
-            textureThemes.push_back(it.key());
-         }
+         // TODO: I guess here we could use the textureThemes to decide how to attach them, or which
+         // to use.  For now I think FME can only store one.
+         // As an arbitrary choice, for now, let's just pick the first one.
+         std::string themeToUse = textures.begin().key();
+         textureRefsToUse       = textures.begin().value()["values"];
+
+         // TODO: Texture Themes are not put on the feature or geometry anywhere.
+         //       Is this really not needed?  Maybe it is only used in some
+         //       future where the user has input on which to use.
       }
 
       // Does this have any material data attached?
       json::value_type materials = currentGeometry["material"];
-      std::vector<std::string> materialNames;
+      json::value_type materialRefsToUse(json{nullptr});
       if (not materials.is_null())
       {
-         for (json::iterator it = materials.begin(); it != materials.end(); ++it)
-         {
-            materialNames.push_back(it.key());
-         }
+         // TODO: I guess here we could use the materialNames to decide how to attach them, or which
+         // to use.  For now I think FME can only store one.
+         // As an arbitrary choice, for now, let's just pick the first one.
+         std::string nameToUse = materials.begin().key();
+         materialRefsToUse     = materials.begin().value()["values"];
+
+         // TODO: Material Names are not put on the feature or geometry anywhere.
+         //       Is this really not needed?  Maybe it is only used in some
+         //       future where the user has input on which to use.
       }
 
       // geometry type and level of detail
@@ -1175,16 +1185,8 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
             }
             else if (geometryType == "MultiSurface")
             {
-               RefVec2 textureRefsPerBoundary;
-               unrollReferences2(textures, boundaries, textureRefsPerBoundary);
-               RefVec2 materialRefsPerBoundary;
-               unrollReferences2(materials, boundaries, materialRefsPerBoundary);
-
-               // Does this have any semantic data?
-               json::value_type* semanticSrfVec = fetchSemanticsValues(semantics);
-
                IFMEMultiSurface* msurface = fmeGeometryTools_->createMultiSurface();
-               parseMultiCompositeSurface(msurface, boundaries, semantics, semanticSrfVec, textureThemes, &textureRefsPerBoundary, materialNames, &materialRefsPerBoundary, vertices);
+               parseMultiCompositeSurface(msurface, boundaries, semantics, fetchSemanticsValues(semantics), textureRefsToUse, materialRefsToUse, vertices);
                // Set the Level of Detail Trait on the geometry
                setTraitString(*msurface, geometryLodName, geometryLodValue);
                // Append the geometry to the FME feature
@@ -1192,57 +1194,29 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
             }
             else if (geometryType == "CompositeSurface")
             {
-               
-               // Does this have any texture data attached?
-               RefVec2 textureRefsPerBoundary;
-               unrollReferences2(textures, boundaries, textureRefsPerBoundary);
-               RefVec2 materialRefsPerBoundary;
-               unrollReferences2(materials, boundaries, materialRefsPerBoundary);
-
-               // Does this have any semantic data?
-               json::value_type* semanticSrfVec = fetchSemanticsValues(semantics);
-
                IFMECompositeSurface* csurface = fmeGeometryTools_->createCompositeSurface();
-               parseMultiCompositeSurface(csurface, boundaries, semantics, semanticSrfVec, textureThemes, &textureRefsPerBoundary, materialNames, &materialRefsPerBoundary, vertices);
+               parseMultiCompositeSurface(csurface, boundaries, semantics, fetchSemanticsValues(semantics), textureRefsToUse, materialRefsToUse, vertices);
                setTraitString(*csurface, geometryLodName, geometryLodValue);
                return csurface;
             }
             else if (geometryType == "Solid")
             {
-               RefVec3 textureRefsPerBoundaryPerShell;
-               unrollReferences3(textures, boundaries, textureRefsPerBoundaryPerShell);
-               RefVec3 materialRefsPerBoundaryPerShell;
-               unrollReferences3(materials, boundaries, materialRefsPerBoundaryPerShell);
-
-               // Does this have any semantic data?
-               json::value_type* semanticSrfVec2 = fetchSemanticsValues(semantics);
-
                IFMEBRepSolid* BSolid =
-                  parseSolid(boundaries, semantics, semanticSrfVec2, textureThemes, &textureRefsPerBoundaryPerShell, materialNames, &materialRefsPerBoundaryPerShell, vertices);
+                  parseSolid(boundaries, semantics, fetchSemanticsValues(semantics), textureRefsToUse, materialRefsToUse, vertices);
                setTraitString(*BSolid, geometryLodName, geometryLodValue);
                return BSolid;
             }
             else if (geometryType == "MultiSolid")
             {
-               RefVec4 textureRefsPerBoundaryPerShellPerSolid;
-               unrollReferences4(textures, boundaries, textureRefsPerBoundaryPerShellPerSolid);
-               RefVec4 materialRefsPerBoundaryPerShellPerSolid;
-               unrollReferences4(materials, boundaries, materialRefsPerBoundaryPerShellPerSolid);
-
                IFMEMultiSolid* msolid = fmeGeometryTools_->createMultiSolid();
-               parseMultiCompositeSolid(msolid, boundaries, semantics, textureThemes, textureRefsPerBoundaryPerShellPerSolid, materialNames, materialRefsPerBoundaryPerShellPerSolid, vertices);
+               parseMultiCompositeSolid(msolid, boundaries, semantics, textureRefsToUse, materialRefsToUse, vertices);
                setTraitString(*msolid, geometryLodName, geometryLodValue);
                return msolid;
             }
             else if (geometryType == "CompositeSolid")
             {
-               RefVec4 textureRefsPerBoundaryPerShellPerSolid;
-               unrollReferences4(textures, boundaries, textureRefsPerBoundaryPerShellPerSolid);
-               RefVec4 materialRefsPerBoundaryPerShellPerSolid;
-               unrollReferences4(materials, boundaries, materialRefsPerBoundaryPerShellPerSolid);
-
                IFMECompositeSolid* csolid = fmeGeometryTools_->createCompositeSolid();
-               parseMultiCompositeSolid(csolid, boundaries, semantics, textureThemes, textureRefsPerBoundaryPerShellPerSolid, materialNames, materialRefsPerBoundaryPerShellPerSolid, vertices);
+               parseMultiCompositeSolid(csolid, boundaries, semantics, textureRefsToUse, materialRefsToUse, vertices);
                setTraitString(*csolid, geometryLodName, geometryLodValue);
                return csolid;
             }
@@ -1294,36 +1268,17 @@ template <typename MCSolid>
 void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid,
                                                  json::value_type& boundaries,
                                                  json::value_type& semantics,
-                                                 std::vector<std::string>& textureThemes,
-                                                 RefVec4& textureRefsPerBoundaryPerShellPerSolid,
-                                                 std::vector<std::string>& materialNames,
-                                                 RefVec4& materialRefsPerBoundaryPerShellPerSolid,
+                                                 json::value_type& textureRefs,
+                                                 json::value_type& materialRefs,
                                                  VertexPool3D& vertices)
 {
    for (int i = 0; i < boundaries.size(); i++)
    {
-      json::value_type& shellBoundaries = boundaries[i];
-
-      // Does this have any semantic data?
-      json::value_type* semanticSrfVec2 = fetchSemanticsValues(semantics);
-
-      // Does this have any texture data attached?
-      RefVec3* textureRefsPerBoundaryPerShell = textureRefsPerBoundaryPerShellPerSolid.empty() ?
-                                                   nullptr :
-                                                   &textureRefsPerBoundaryPerShellPerSolid[i];
-
-      // Does this have any texture data attached?
-      RefVec3* materialRefsPerBoundaryPerShell = materialRefsPerBoundaryPerShellPerSolid.empty() ?
-                                                    nullptr :
-                                                    &materialRefsPerBoundaryPerShellPerSolid[i];
-
-      IFMEBRepSolid* BSolid = parseSolid(shellBoundaries,
+      IFMEBRepSolid* BSolid = parseSolid(boundaries[i],
                                          semantics,
-                                         semanticSrfVec2,
-                                         textureThemes,
-                                         textureRefsPerBoundaryPerShell,
-                                         materialNames,
-                                         materialRefsPerBoundaryPerShell,
+                                         fetchSemanticsValues(semantics),
+                                         (textureRefs.is_null() ? textureRefs : textureRefs[i]),
+                                         (materialRefs.is_null() ? materialRefs : materialRefs[i]),
                                          vertices);
 
       multiCompositeSolid->appendPart(BSolid);
@@ -1333,10 +1288,8 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid,
 IFMEBRepSolid* FMECityJSONReader::parseSolid(json::value_type& boundaries,
                                              json::value_type& semantics,
                                              json::value_type* semanticSrfVec2,
-                                             std::vector<std::string>& textureThemes,
-                                             RefVec3* textureRefsPerBoundaryPerShell,
-                                             std::vector<std::string>& materialNames,
-                                             RefVec3* materialRefsPerBoundaryPerShell,
+                                             json::value_type& textureRefs,
+                                             json::value_type& materialRefs,
                                              VertexPool3D& vertices)
 {
    IFMEBRepSolid* BSolid(nullptr);
@@ -1345,20 +1298,6 @@ IFMEBRepSolid* FMECityJSONReader::parseSolid(json::value_type& boundaries,
 
    for (int i = 0; i < boundaries.size(); i++)
    {
-      json::value_type& surfaceBoundaries = boundaries[i];
-
-      // Does this have any texture data attached?
-      RefVec2* textureRefsPerBoundary =
-         (!textureRefsPerBoundaryPerShell || textureRefsPerBoundaryPerShell->empty()) ?
-            nullptr :
-            &(*textureRefsPerBoundaryPerShell)[i];
-
-      // Does this have any material data attached?
-      RefVec2* materialRefsPerBoundary =
-         (!materialRefsPerBoundaryPerShell || materialRefsPerBoundaryPerShell->empty()) ?
-            nullptr :
-            &(*materialRefsPerBoundaryPerShell)[i];
-
       // Inner shells/surfaces do not have semantics
       json::value_type* semanticSrfVec(nullptr);
       if (i == 0)
@@ -1380,13 +1319,11 @@ IFMEBRepSolid* FMECityJSONReader::parseSolid(json::value_type& boundaries,
 
       // put together the composite surface
       parseMultiCompositeSurface(surfaceToBuild,
-                                 surfaceBoundaries,
+                                 boundaries[i],
                                  semantics,
                                  semanticSrfVec,
-                                 textureThemes,
-                                 textureRefsPerBoundary,
-                                 materialNames,
-                                 materialRefsPerBoundary,
+                                 (textureRefs.is_null() ? textureRefs : textureRefs[i]),
+                                 (materialRefs.is_null() ? materialRefs : materialRefs[i]),
                                  vertices);
 
       if (i == 0)
@@ -1415,33 +1352,19 @@ void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurfa
                                                    json::value_type& boundaries,
                                                    json::value_type& semantics,
                                                    json::value_type* semanticSrfVec,
-                                                   std::vector<std::string>& textureThemes,
-                                                   RefVec2* textureRefsPerBoundary,
-                                                   std::vector<std::string>& materialNames,
-                                                   RefVec2* materialRefsPerBoundary,
+                                                   json::value_type& textureRefs,
+                                                   json::value_type& materialRefs,
                                                    VertexPool3D& vertices)
 {
    for (int i = 0; i < boundaries.size(); i++)
    {
-      // Does this have any texture data attached?
-      RefVec* textureRefs = (!textureRefsPerBoundary || textureRefsPerBoundary->empty()) ?
-                               nullptr :
-                               &(*textureRefsPerBoundary)[i];
-
-      // Does this have any material data attached?
-      RefVec* materialRefs = (!materialRefsPerBoundary || materialRefsPerBoundary->empty()) ?
-                                nullptr :
-                                &(*materialRefsPerBoundary)[i];
-
       // Does this have any semantic data?
       json::value_type* semanticSrf = (!semanticSrfVec || (*semanticSrfVec)[i].is_null()) ?
                                          nullptr :
                                          &semantics["surfaces"][int((*semanticSrfVec)[i])];
 
-      IFMEFace* face = createOneSurface(textureThemes,
-                                        textureRefs,
-                                        materialNames,
-                                        materialRefs,
+      IFMEFace* face = createOneSurface((textureRefs.is_null() ? textureRefs : textureRefs[i]),
+                                        (materialRefs.is_null() ? materialRefs : materialRefs[i]),
                                         boundaries[i],
                                         vertices,
                                         semanticSrf);
@@ -1450,56 +1373,30 @@ void FMECityJSONReader::parseMultiCompositeSurface(MCSurface multiCompositeSurfa
    }
 }
 
-IFMEFace* FMECityJSONReader::createOneSurface(std::vector<std::string>& textureThemes,
-                                              RefVec* textureRefs,
-                                              std::vector<std::string>& materialNames,
-                                              RefVec* materialRefs,
+IFMEFace* FMECityJSONReader::createOneSurface(json::value_type& textureRefs,
+                                              json::value_type& materialRefs,
                                               json::value_type& boundaries,
                                               VertexPool3D& vertices,
                                               json::value_type* semanticSrf)
 {
-   IFMEFace* face = parseSurfaceBoundaries(boundaries, vertices, textureThemes, textureRefs);
+   IFMEFace* face = parseSurfaceBoundaries(boundaries, vertices, textureRefs);
 
    // Add traits onto the face.
    parseSemantics(*face, semanticSrf);
 
    // Add materials to the face
-   parseMaterials(*face, materialNames, materialRefs);
+   parseMaterials(*face, materialRefs);
 
    return face;
 }
 
 IFMEFace* FMECityJSONReader::parseSurfaceBoundaries(json::value_type& surface,
                                                     VertexPool3D& vertices,
-                                                    std::vector<std::string>& textureThemes,
-                                                    RefVec* textureRefs)
+                                                    json::value_type& textureRefs)
 {
-   json::value_type textureRefToUse(json{nullptr});
-   std::string themeToUse;
-   if (textureRefs)
-   {
-      // TODO: I guess here we could use the textureThemes to decide how to attach them, or which to
-      // use.  For now I think FME can only store one.
-      int themeNumToUse(0); // <-- arbitrary choice
-
-      // Make sure we don't extend beyond the size of what is passed in.
-      if (textureThemes.size() > themeNumToUse)
-      {
-         themeToUse = textureThemes[themeNumToUse];
-      }
-      if (textureRefs->size() > themeNumToUse)
-      {
-         textureRefToUse = (*textureRefs)[themeNumToUse];
-      }
-   }
-
-   // TODO: "themeToUse" is not put on the feature or geometry anywhere.
-   //       Is this really not needed?  Maybe it is only used in some
-   //       future where the user has input on which to use.
-
    std::vector<IFMELine*> rings;
    std::vector<FME_UInt32> appearanceRefs;
-   parseRings(rings, appearanceRefs, surface, vertices, textureRefToUse);
+   parseRings(rings, appearanceRefs, surface, vertices, textureRefs);
    IFMELine* outerRing = rings[0];
 
    IFMEArea* area = fmeGeometryTools_->createSimpleAreaByCurve(outerRing);
@@ -1589,41 +1486,16 @@ void FMECityJSONReader::parseSemantics(IFMEFace& face, json::value_type* semanti
    }
 }
 
-void FMECityJSONReader::parseMaterials(IFMEFace& face,
-                                       std::vector<std::string>& materialNames,
-                                       RefVec* materialRefs)
+void FMECityJSONReader::parseMaterials(IFMEFace& face, json::value_type& materialRef)
 {
-   json::value_type materialRefToUse(json{nullptr});
-   std::string nameToUse;
-   if (materialRefs)
+   if (not materialRef.is_null())
    {
-      // TODO: I guess here we could use the materialNames to decide how to attach them, or which to
-      // use.  For now I think FME can only store one.
-      int nameNumToUse(0); // <-- arbitrary choice
+      FME_UInt32 fmeMatRef = materialsMap_[materialRef];
 
-      // Make sure we don't extend beyond the size of what is passed in.
-      if (materialNames.size() > nameNumToUse)
-      {
-         nameToUse = materialNames[nameNumToUse];
-      }
-      if (materialRefs->size() > nameNumToUse)
-      {
-         materialRefToUse = (*materialRefs)[nameNumToUse];
-      }
-
-      // TODO: "nameToUse" is not put on the feature or geometry anywhere.
-      //       Is this really not needed?  Maybe it is only used in some
-      //       future where the user has input on which to use.
-
-      if (not materialRefToUse.is_null())
-      {
-         FME_UInt32 fmeMatRef = materialsMap_[materialRefToUse];
-
-         // TODO: I'm not sure if this material should be on both sides.
-         face.setAppearanceReference(fmeMatRef, FME_TRUE);
-         face.setAppearanceReference(fmeMatRef, FME_FALSE);
-         //face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
-      }
+      // TODO: I'm not sure if this material should be on both sides.
+      face.setAppearanceReference(fmeMatRef, FME_TRUE);
+      face.setAppearanceReference(fmeMatRef, FME_FALSE);
+      //face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
    }
 }
 
@@ -2188,77 +2060,5 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName,
    newReader = nullptr;
 
    return FME_SUCCESS;
-}
-
-void FMECityJSONReader::unrollReferences2(json::value_type& references,
-                                          json::value_type& boundaries,
-                                          RefVec2& refsPerBoundary)
-{
-   // Does this have any texture data attached?
-   if (not references.is_null())
-   {
-      for (int i = 0; i < boundaries.size(); i++)
-      {
-         RefVec refs;
-         for (json::iterator it = references.begin(); it != references.end(); ++it)
-         {
-            refs.push_back(it.value()["values"][i]);
-         }
-         refsPerBoundary.push_back(refs);
-      }
-   }
-}
-
-void FMECityJSONReader::unrollReferences3(json::value_type& references,
-                                          json::value_type& boundaries,
-                                          RefVec3& refsPerBoundaryPerShell)
-{
-   // Does this have any texture data attached?
-   if (not references.is_null())
-   {
-      for (int i = 0; i < boundaries.size(); i++)
-      {
-         RefVec2 refsPerBoundary;
-         for (int j = 0; j < boundaries[i].size(); j++)
-         {
-            RefVec refs;
-            for (json::iterator it = references.begin(); it != references.end(); ++it)
-            {
-               refs.push_back(it.value()["values"][i][j]);
-            }
-            refsPerBoundary.push_back(refs);
-         }
-         refsPerBoundaryPerShell.push_back(refsPerBoundary);
-      }
-   }
-}
-
-void FMECityJSONReader::unrollReferences4(json::value_type& references,
-                                          json::value_type& boundaries,
-                                          RefVec4& refsPerBoundaryPerShellperSolid)
-{
-   // Does this have any texture data attached?
-   if (not references.is_null())
-   {
-      for (int i = 0; i < boundaries.size(); i++)
-      {
-         RefVec3 refsPerBoundaryPerShell;
-         for (int j = 0; j < boundaries[i].size(); j++)
-         {
-            RefVec2 refsPerBoundary;
-            for (int k = 0; k < boundaries[i][j].size(); k++)
-            {
-               RefVec rRefs;
-               for (json::iterator it = references.begin(); it != references.end(); ++it)
-               {
-                  rRefs.push_back(it.value()["values"][i][j][k]);
-               }
-               refsPerBoundary.push_back(rRefs);
-            }
-            refsPerBoundaryPerShell.push_back(refsPerBoundary);
-         }
-         refsPerBoundaryPerShellperSolid.push_back(refsPerBoundaryPerShell);
-      }
-   }
 }
 
