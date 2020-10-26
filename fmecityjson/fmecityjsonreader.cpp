@@ -480,7 +480,7 @@ FME_Status FMECityJSONReader::readTextures()
             }
 
             FME_Status badLuck = readRaster(fullFileName, raster, rasterType);
-            if (badLuck) return badLuck;
+            //if (badLuck) return badLuck;
 
             // Set the "name".  We'll use that as the name of the appearance.
             iName = std::filesystem::path(fullFileName).stem().string();
