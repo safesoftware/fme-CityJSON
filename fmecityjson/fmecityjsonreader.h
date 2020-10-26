@@ -194,9 +194,9 @@ private:
 
    void readMetadata();
 
-   void readMaterials();
+   FME_Status readMaterials();
 
-   void readTextures();
+   FME_Status readTextures();
 
    void readTextureVertices();
 

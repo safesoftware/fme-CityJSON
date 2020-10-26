@@ -379,15 +379,17 @@ FME_Status FMECityJSONReader::open(const char* datasetName, const IFMEStringArra
 
    readMetadata();
 
-   readMaterials();
+   FME_Status badLuck = readMaterials();
+   if (badLuck) return badLuck;
 
-   readTextures();
+   badLuck = readTextures();
+   if (badLuck) return badLuck;
 
    readTextureVertices();
 
    // These need to be read in after all the appearances/textures/materials have been populated.
-   FME_Status badLuck = readGeometryDefinitions();
-   if (FME_SUCCESS != badLuck) return badLuck;
+   badLuck = readGeometryDefinitions();
+   if (badLuck) return badLuck;
 
    // Start by pointing to the first CityObject to read
    nextObject_     = inputJSON_.at("CityObjects").begin();
@@ -420,7 +422,7 @@ void FMECityJSONReader::readTextureVertices()
 }
 
 //===========================================================================
-void FMECityJSONReader::readTextures()
+FME_Status FMECityJSONReader::readTextures()
 {
    // Check for textures in the file
    try
@@ -478,7 +480,7 @@ void FMECityJSONReader::readTextures()
             }
 
             FME_Status badLuck = readRaster(fullFileName, raster, rasterType);
-            // TODO: handle badLuck
+            if (badLuck) return badLuck;
 
             // Set the "name".  We'll use that as the name of the appearance.
             iName = std::filesystem::path(fullFileName).stem().string();
@@ -491,8 +493,8 @@ void FMECityJSONReader::readTextures()
             // Add the Raster to the FME Library
             FME_UInt32 rasterRef(0);
             FME_Status badLuck = gFMESession->getLibrary()->addRaster(rasterRef, raster);
-            // TODO: handle badLuck
-            raster             = nullptr; // We no longer have ownership.
+            if (badLuck) return badLuck;
+            raster = nullptr; // We no longer have ownership.
             tex->setRasterReference(rasterRef);
          }
 
@@ -539,8 +541,8 @@ void FMECityJSONReader::readTextures()
          // Add the Texture to the FME Library
          FME_UInt32 textureRef(0);
          FME_Status badLuck = gFMESession->getLibrary()->addTexture(textureRef, tex);
-         // TODO: handle badLuck
-         tex                = nullptr; // We no longer have ownership.
+         if (badLuck) return badLuck;
+         tex = nullptr; // We no longer have ownership.
 
          // Set the texture on a new Appearance
          IFMEAppearance* app = fmeGeometryTools_->createAppearance();
@@ -558,13 +560,14 @@ void FMECityJSONReader::readTextures()
          // Add the Appearance to the FME Library
          FME_UInt32 appRef(0);
          badLuck = gFMESession->getLibrary()->addAppearance(appRef, app);
-         app     = nullptr; // We no longer have ownership.
+         if (badLuck) return badLuck;
+         app = nullptr; // We no longer have ownership.
 
          // Add the appearance (with texture) reference to the lookup table
          texturesMap_.insert({i, appRef});
       }
 
-      // TODO: What is the "default"?  (Not sure where to store this in FME yet.)
+      // TODO: issue 71: What is the "default"?  (Not sure where to store this in FME yet.)
       if (inputJSON_.at("appearance").contains("default-theme-texture"))
       {
          defaultThemeTexture_ =
@@ -575,10 +578,11 @@ void FMECityJSONReader::readTextures()
    {
       gLogFile->logMessageString("The file does not contain any texture definitions.", FME_INFORM);
    }
+   return FME_SUCCESS;
 }
 
 //===========================================================================
-void FMECityJSONReader::readMaterials()
+FME_Status FMECityJSONReader::readMaterials()
 {
    // Check for materials in the file
    try
@@ -651,8 +655,8 @@ void FMECityJSONReader::readMaterials()
 
          // Add the Material to the FME Library
          FME_Status badLuck = gFMESession->getLibrary()->addAppearance(materialRef, app);
-         // TODO: handle badLuck
-         app                = nullptr; // We no longer have ownership.
+         if (badLuck) return badLuck;
+         app = nullptr; // We no longer have ownership.
 
          // Add the material reference to the lookup table
          materialsMap_.insert({i, materialRef});
@@ -671,6 +675,7 @@ void FMECityJSONReader::readMaterials()
    {
       gLogFile->logMessageString("The file does not contain any material definitions.", FME_INFORM);
    }
+   return FME_SUCCESS;
 }
 
 //===========================================================================
@@ -1128,13 +1133,14 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
       json::value_type textureRefsToUse(json{nullptr});
       if (not textures.is_null())
       {
-         // TODO: I guess here we could use the textureThemes to decide how to attach them, or which
-         // to use.  For now I think FME can only store one.
+         // TODO: issue 71: I guess here we could use the textureThemes to decide 
+         // how to attach them, or which to use.
+         // For now I think FME can only store one.
          // As an arbitrary choice, for now, let's just pick the first one.
          std::string themeToUse = textures.begin().key();
          textureRefsToUse       = textures.begin().value()["values"];
 
-         // TODO: Texture Themes are not put on the feature or geometry anywhere.
+         // TODO: issue 72: Texture Themes are not put on the feature or geometry anywhere.
          //       Is this really not needed?  Maybe it is only used in some
          //       future where the user has input on which to use.
       }
@@ -1144,13 +1150,14 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
       json::value_type materialRefsToUse(json{nullptr});
       if (not materials.is_null())
       {
-         // TODO: I guess here we could use the materialNames to decide how to attach them, or which
-         // to use.  For now I think FME can only store one.
+         // TODO: issue 71: I guess here we could use the materialNames to decide
+         // how to attach them, or which to use.
+         // For now I think FME can only store one.
          // As an arbitrary choice, for now, let's just pick the first one.
          std::string nameToUse = materials.begin().key();
          materialRefsToUse     = materials.begin().value()["values"];
 
-         // TODO: Material Names are not put on the feature or geometry anywhere.
+         // TODO: issue 72: Material Names are not put on the feature or geometry anywhere.
          //       Is this really not needed?  Maybe it is only used in some
          //       future where the user has input on which to use.
       }
@@ -1384,6 +1391,15 @@ IFMEFace* FMECityJSONReader::createOneSurface(json::value_type& textureRefs,
    // Add traits onto the face.
    parseSemantics(*face, semanticSrf);
 
+   // TODO: issue 73: In the case where CityJSON has both textures and materials
+   // for this geometry, the code above will add the FMEAppearance for the texture
+   // and this code below will replace that with an FMEApeparance for the material.
+   // So basically the texture info is dropped.  I'm not sure what to do here, but
+   // one solution would be to *add* the two together into a new FMEApeparance that
+   // has both, and use that.  Might need to have a dictionary mapping a 
+   // (textureRef,materialRef) pair to appearanceRef so that these pairs can be
+   // reused.
+
    // Add materials to the face
    parseMaterials(*face, materialRefs);
 
@@ -1412,8 +1428,8 @@ IFMEFace* FMECityJSONReader::parseSurfaceBoundaries(json::value_type& surface,
    // Set the texture/appearance
    if (not appearanceRefs.empty())
    {
-      // TODO: I'm not sure if this texture should be on both sides.
-      // TODO: I'm not sure if rings can refer to different appearances, but if so,
+      // TODO: issue 74: I'm not sure if this texture should be on both sides.
+      // TODO: issue 75: I'm not sure if rings can refer to different appearances, but if so,
       //       which would we use?  I am assuming they are all the same and pick the
       //       appearance from the outer ring "0".
       face->setAppearanceReference(appearanceRefs[0], FME_TRUE);
@@ -1492,7 +1508,7 @@ void FMECityJSONReader::parseMaterials(IFMEFace& face, json::value_type& materia
    {
       FME_UInt32 fmeMatRef = materialsMap_[materialRef];
 
-      // TODO: I'm not sure if this material should be on both sides.
+      // TODO: issue 74: I'm not sure if this material should be on both sides.
       face.setAppearanceReference(fmeMatRef, FME_TRUE);
       face.setAppearanceReference(fmeMatRef, FME_FALSE);
       //face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
@@ -2051,7 +2067,7 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName,
 
    // Close the reader and *ignore* any errors.
    badLuck = newReader->close();
-   // TODO: handle badLuck
+   if (badLuck) return badLuck;
 
    // clean up
    gFMESession->destroyFeature(textureFeature);
