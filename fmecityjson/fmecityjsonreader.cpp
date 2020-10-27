@@ -647,7 +647,7 @@ FME_Status FMECityJSONReader::readMaterials()
          // Set the "transparency"
          if (not materials[i]["transparency"].is_null())
          {
-            app->setAlpha(1.0 - materials[i]["transparency"]);
+            app->setAlpha(1.0 - FME_Real64(materials[i]["transparency"]));
          }
 
          // Set the "isSmooth"
@@ -1523,7 +1523,8 @@ void FMECityJSONReader::parseMultiLineString(IFMEMultiCurve* mlinestring,
    {
       IFMELine* line = fmeGeometryTools_->createLine();
       std::optional<FME_UInt32> unusedRef;
-      parseLineString(line, unusedRef, linestring, vertices, json{nullptr});
+      json::value_type textureRefs(json{nullptr});
+      parseLineString(line, unusedRef, linestring, vertices, textureRefs);
       mlinestring->appendPart(line);
    }
 }
