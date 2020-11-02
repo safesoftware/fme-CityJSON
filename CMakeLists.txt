@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(fme_CityJSON)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
 add_library(cityjson SHARED
         ${CMAKE_SOURCE_DIR}/fmecityjson/fmecityjsonentrypoints.cpp
@@ -34,7 +34,6 @@ install(TARGETS cityjson DESTINATION ${FME_DEV_HOME}/plugins
         PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE
                     GROUP_READ GROUP_EXECUTE
                     WORLD_READ WORLD_EXECUTE)
-install(FILES cityjson.db DESTINATION ${FME_DEV_HOME}/formatsinfo)
 install(FILES cityjson.fmf DESTINATION ${FME_DEV_HOME}/metafile)
 
 #add_executable(test fmecityjson/test.cpp)
