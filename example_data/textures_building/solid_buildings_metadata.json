@@ -3284,6 +3284,23 @@
 			435672.132,
 			15.441
 		],
+		"cityfeatureMetadata": {
+            "Building": {
+                "uniqueFeatureCount": 1,
+                "aggregateFeatureCount": 2,
+                "presentLoDs": {
+                    "1.2": 1,
+                    "1.3": 1
+                }
+            }
+        },
+        "presentLoDs": {
+            "1.2": 1,
+            "1.3": 1
+        },
+        "thematicModels": [
+            "Building"
+        ],
 		"datasetTitle": "3D city model of Chibougamau, Canada",
 		"datasetReferenceDate": "1977-02-28",
 		"geographicLocation": "Chibougamau, Québec, Canada",
