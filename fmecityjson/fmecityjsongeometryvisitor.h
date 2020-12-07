@@ -265,6 +265,13 @@ private:
    // This function logs the values of that IFMEArc.
    FME_Status visitArcB3P(const IFMEArc& arc);
 
+   //---------------------------------------------------------------------
+   // This allows easy access to turn on/off debug logging throughout this class.
+   void logDebugMessage(const std::string& message)
+   {
+      // You could just comment this in/out to control messeges.
+      //logFile_->logMessageString(message.c_str());
+   }
 
    // The fmeGeometryTools member stores a pointer to an IFMEGeometryTools
    // object that is used to create IFMEGeometries.
@@ -273,6 +280,7 @@ private:
    // The fmeSession_ member stores a pointer to an IFMESession object
    // which performs the services on the FME Objects.
    IFMESession* fmeSession_;
+   IFMELogFile* logFile_;
 
    //---------- private data members
 
