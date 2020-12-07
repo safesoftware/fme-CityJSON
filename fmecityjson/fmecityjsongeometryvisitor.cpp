@@ -1378,3 +1378,12 @@ FME_Status FMECityJSONGeometryVisitor::visitFeatureTable(const IFMEFeatureTable&
 {
    return FME_SUCCESS;
 }
+
+//=====================================================================
+FME_Status FMECityJSONGeometryVisitor::visitVoxelGrid(const IFMEVoxelGrid& /*voxelGrid*/)
+{
+   //TODO: [FMEENGINE-63998] This method should be written.
+   return FME_SUCCESS;
+}
+
+

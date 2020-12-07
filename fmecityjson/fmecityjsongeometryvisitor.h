@@ -43,6 +43,7 @@
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
+class IFMEVoxelGrid;
 class IFMESession;
 
 // This returns a string that contains the geometry of a feature passed in.
@@ -194,6 +195,10 @@ public:
    //----------------------------------------------------------------------
    // Visitor logs the values of the passed in IFMEFeatureTable geometry object.
    FME_Status visitFeatureTable(const IFMEFeatureTable& featureTable) override;
+   
+   //----------------------------------------------------------------------
+   // Visitor logs the values of the passed in IFMEVoxelGrid geometry object.
+   FME_Status visitVoxelGrid(const IFMEVoxelGrid& voxelGrid);
 
    //----------------------------------------------------------------------
    // get the JSON object for the geometry (without the "lod")
