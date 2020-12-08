@@ -133,13 +133,15 @@ const std::map< std::string, std::vector< std::string > > FMECityJSONGeometryVis
 
 //===========================================================================
 // Constructor.
-FMECityJSONGeometryVisitor::FMECityJSONGeometryVisitor(const IFMEGeometryTools* geomTools, IFMESession* session)
-:
+FMECityJSONGeometryVisitor::FMECityJSONGeometryVisitor(const IFMEGeometryTools* geomTools,
+                                                       IFMESession* session,
+                                                       bool remove_duplicates)
+   :
    fmeGeometryTools_(geomTools),
-   fmeSession_(session)
+   fmeSession_(session),
+   remove_duplicates_(remove_duplicates)
 {
    logFile_ = session->logFile();
-   offset_ = 0;
 }
 
 //===========================================================================
@@ -156,16 +158,11 @@ json FMECityJSONGeometryVisitor::getGeomJSON()
    return outputgeom_;
 }
 
-std::vector< std::vector< double > > FMECityJSONGeometryVisitor::getGeomVertices()
+const VertexPool& FMECityJSONGeometryVisitor::getGeomVertices()
 {
    return vertices_;
 }
 
-
-void FMECityJSONGeometryVisitor::setVerticesOffset(long unsigned offset)
-{
-   offset_ = offset;
-}
 
 bool FMECityJSONGeometryVisitor::semanticTypeAllowed(std::string trait)
 {
@@ -221,7 +218,6 @@ json FMECityJSONGeometryVisitor::replaceEmptySurface(std::vector<json> semanticS
 void FMECityJSONGeometryVisitor::reset()
 {
    outputgeom_.clear();
-   vertices_.clear();
    surfaces_.clear();
    semanticValues_.clear();
    tmpRing_.clear();
@@ -230,6 +226,41 @@ void FMECityJSONGeometryVisitor::reset()
    tmpSolid_.clear();
    tmpMultiSolid_.clear();
 }
+
+// This will make sure we don't add any vertex twice.
+unsigned long FMECityJSONGeometryVisitor::addVertex(const FMECoord3D& vertex)
+{
+   // This will be the index in the vertex pool if it is new
+   unsigned long index(vertices_.size());
+
+   // A little more bookkeeping if we want to optimize the vertex pool
+   // and not have duplicates.
+   if (false)//(remove_duplicates_)
+   {
+      // Have we encountered this vertex before?
+      auto [entry, vertexAdded] = vertexToIndex_.try_emplace(vertex, index);
+      if (!vertexAdded) // We already have this in our vertex pool
+      {
+         index = entry->second;
+      }
+      else // We haven't seen this before, so insert it into the pool.
+      {
+         vertices_.push_back({vertex.x, vertex.y, vertex.z});
+
+         // index is already set correctly.
+      }
+   }
+   else
+   {
+      vertices_.push_back({vertex.x, vertex.y, vertex.z});
+
+      // index is already set correctly.
+   }
+   return index;
+}
+
+
+
 
 //=====================================================================
 //
@@ -275,13 +306,8 @@ FME_Status FMECityJSONGeometryVisitor::visitPoint(const IFMEPoint& point)
    logDebugMessage(std::string(kMsgVisiting) + std::string("point"));
 
    tmpRing_.clear();
-   std::vector<double> v;
-   v.push_back(point.getX());
-   v.push_back(point.getY());
-   v.push_back(point.getZ());
-   unsigned long a = vertices_.size();
-   tmpRing_.push_back(a + offset_);
-   vertices_.push_back(v);
+   unsigned long index = addVertex({point.getX(), point.getY(), point.getZ()});
+   tmpRing_.push_back(index);
 
    outputgeom_ = json::object();
    outputgeom_["type"] = "MultiPoint";
@@ -304,13 +330,8 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiPoint(const IFMEMultiPoint& mul
    while (iterator->next())
    {
       const IFMEPoint* point = iterator->getPart();
-      std::vector<double> v;
-      v.push_back(point->getX());
-      v.push_back(point->getY());
-      v.push_back(point->getZ());
-      unsigned long a = vertices_.size();
-      tmpRing_.push_back(a + offset_);
-      vertices_.push_back(v);
+      unsigned long index    = addVertex({point->getX(), point->getY(), point->getZ()});
+      tmpRing_.push_back(index);
    }
    // We are done with the iterator, so destroy it
    multipoint.destroyIterator(iterator);
@@ -589,18 +610,13 @@ FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
 
    tmpRing_.clear();
    //-- special case for line, otherwise needs to be called each time this 
-   //-- function is called, ie for each suface of a solid for instance...
+   //-- function is called, ie for each surface of a solid for instance...
    if (geomType_ == "line") {
       for (int i = 0; i < line.numPoints(); i++) {
-         FMECoord3D coords;
-         line.getPointAt3D(i, coords);
-         std::vector< double > v;
-         v.push_back(coords.x);
-         v.push_back(coords.y);
-         v.push_back(coords.z);
-         unsigned long a = vertices_.size();
-         tmpRing_.push_back(a + offset_);
-         vertices_.push_back(v);
+         FMECoord3D point;
+         line.getPointAt3D(i, point);
+         unsigned long index = addVertex(point);
+         tmpRing_.push_back(index);
       }
       tmpFace_.clear();
       tmpFace_.push_back(tmpRing_);
@@ -610,15 +626,10 @@ FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
    } 
    else {
       for (int i = 0; i < line.numPoints()-1; i++) {
-         FMECoord3D coords;
-         line.getPointAt3D(i, coords);
-         std::vector< double > v;
-         v.push_back(coords.x);
-         v.push_back(coords.y);
-         v.push_back(coords.z);
-         unsigned long a = vertices_.size();
-         tmpRing_.push_back(a + offset_);
-         vertices_.push_back(v);
+         FMECoord3D point;
+         line.getPointAt3D(i, point);
+         unsigned long index = addVertex(point);
+         tmpRing_.push_back(index);
       }
    }
    return FME_SUCCESS;
@@ -1031,33 +1042,26 @@ FME_Status FMECityJSONGeometryVisitor::visitBox(const IFMEBox& box)
 //
 FME_Status FMECityJSONGeometryVisitor::visitExtrusion(const IFMEExtrusion& extrusion)
 {
+   FME_Status badNews;
 
-   logFile_->logMessageString("IFMEExtrusion geometry is not allowed, use a GeometryCoercer.", FME_WARN);
-   return FME_FAILURE;
+   logDebugMessage(std::string(kMsgStartVisiting) + std::string("extrusion"));
 
-   // FME_Status badNews;
+   // This is kind of taking a shortcut.  Many formats do not support Extrusion, so they convert it
+   // first. Convert the IFMEExtrusion to a IFMEBRepSolid
+   const IFMEBRepSolid* brepSolid = extrusion.getAsBRepSolid();
 
-   // logDebugMessage(std::string(kMsgStartVisiting) + std::string("extrusion"));
+   logDebugMessage(std::string(kMsgVisiting) + std::string("extrusion as brep solid"));
 
-   // // Get the base of the extrusion
-   // logDebugMessage(std::string(kMsgVisiting) + std::string("face"));
+   // re-visit the solid geometry
+   badNews = brepSolid->acceptGeometryVisitorConst(*this);
+   if (badNews)
+   {
+      return FME_FAILURE;
+   }
 
-   // const IFMEFace* extrusionBase = extrusion.getBaseAsFace();
-   // if (extrusionBase == nullptr)
-   // {
-   //    // A base is needed
-   //    return FME_FAILURE;
-   // }
-   // // re-visit the base
-   // badNews = extrusionBase->acceptGeometryVisitorConst(*this);
-   // if (badNews)
-   // {
-   //    return FME_FAILURE;
-   // }
+   logDebugMessage(std::string(kMsgEndVisiting) + std::string("extrusion"));
 
-   // logDebugMessage(std::string(kMsgEndVisiting) + std::string("extrusion"));
-
-   // return FME_SUCCESS;
+   return FME_SUCCESS;
 }
 
 //=====================================================================
@@ -1179,9 +1183,28 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
 //
 FME_Status FMECityJSONGeometryVisitor::visitRectangleFace(const IFMERectangleFace& rectangle)
 {
-   logDebugMessage(std::string(kMsgVisiting) + std::string("rectangle face"));
-   logFile_->logMessageString((std::string("rectangle face not supported")).c_str());
-   return FME_FAILURE;
+   FME_Status badNews;
+
+   logDebugMessage(std::string(kMsgStartVisiting) + std::string("rectangle face"));
+
+   // This is kind of taking a shortcut.  Many formats do not support rectangle face, so they convert it
+   // first. Convert the IFMERectangleFace to a IFMEFace
+   IFMEFace* face = rectangle.getAsFaceCopy();
+
+   logDebugMessage(std::string(kMsgVisiting) + std::string("rectangle face as face"));
+
+   // re-visit the solid geometry
+   badNews = face->acceptGeometryVisitorConst(*this);
+   // Done with the face
+   face->destroy(); face = nullptr;
+   if (badNews)
+   {
+      return FME_FAILURE;
+   }
+
+   logDebugMessage(std::string(kMsgEndVisiting) + std::string("rectangle face"));
+
+   return FME_SUCCESS;
 }
 
 //=====================================================================
@@ -1351,15 +1374,13 @@ FME_Status FMECityJSONGeometryVisitor::visitCSGSolid(const IFMECSGSolid& csgSoli
 
    // re-visit the solid geometry
    badNews = geomCSGSolid->acceptGeometryVisitorConst(*this);
+   // Done with the geomCSGSolid
+   geomCSGSolid->destroy(); geomCSGSolid = nullptr;
    if (badNews)
    {
-      // Destroy the geomCSGSolid before returning
-      geomCSGSolid->destroy(); geomCSGSolid = nullptr;
       return FME_FAILURE;
    }
 
-   // Done with the geomCSGSolid
-   geomCSGSolid->destroy(); geomCSGSolid = nullptr;
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("CSG solid"));
    

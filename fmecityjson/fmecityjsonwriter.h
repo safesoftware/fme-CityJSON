@@ -49,6 +49,8 @@
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
+#include "fmecityjsongeometryvisitor.h"
+
 // Forward declarations
 class IFMEFeature;
 class IFMEFeatureVector;
@@ -201,7 +203,7 @@ private:
 
    std::ofstream                                  outputFile_;
    json                                           outputJSON_;
-   std::vector< std::vector< double > >           vertices_;
+   VertexPool                                     vertices_;
    std::map<std::string, std::map<std::string, std::string> >  attrToWrite_;
 
    std::vector<std::string>                       cityjsonTypes_;

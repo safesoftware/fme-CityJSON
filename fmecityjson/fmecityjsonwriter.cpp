@@ -150,7 +150,7 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    remove_duplicates_ = false;
    if (s1.compare("Yes") == 0)
    {
-    remove_duplicates_ = true;
+      remove_duplicates_ = true;
    }
 
    //-- output version?
@@ -171,7 +171,7 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    fmeGeometryTools_ = gFMESession->getGeometryTools();
 
    // Create visitor to visit feature geometries
-   visitor_ = new FMECityJSONGeometryVisitor(fmeGeometryTools_, gFMESession);
+   visitor_ = new FMECityJSONGeometryVisitor(fmeGeometryTools_, gFMESession, compress_);
 
    dataset_ = datasetName;
 
@@ -268,7 +268,14 @@ FME_Status FMECityJSONWriter::close()
    // -----------------------------------------------------------------------
    // gLogFile->logMessageString("close() !!!", FME_WARN);
 
-   
+   // Let's write out any vertices we have accumulated from the geometries we
+   // have already created.
+   if (visitor_)
+   {
+      const VertexPool& vtmp = (visitor_)->getGeomVertices();
+      vertices_.insert(vertices_.end(), vtmp.begin(), vtmp.end());
+   }
+
    if (vertices_.empty() == false)
    {
       // Let's update the metadata for the bounds of the actual data.
@@ -276,14 +283,14 @@ FME_Status FMECityJSONWriter::close()
       std::optional<double> minx, miny, minz, maxx, maxy, maxz;
       for (auto& coord : vertices_)
       {
-         if (!minx || coord[0] < minx) minx = coord[0];
-         if (!maxx || coord[0] > maxx) maxx = coord[0];
-         if (!miny || coord[1] < miny) miny = coord[1];
-         if (!maxy || coord[1] > maxy) maxy = coord[1];
-         if (coord.size() == 3) // have z
+         if (!minx || std::get<0>(coord) < minx) minx = std::get<0>(coord);
+         if (!maxx || std::get<0>(coord) > maxx) maxx = std::get<0>(coord);
+         if (!miny || std::get<1>(coord) < miny) miny = std::get<1>(coord);
+         if (!maxy || std::get<1>(coord) > maxy) maxy = std::get<1>(coord);
+         if (!std::isnan(std::get<2>(coord))) // have z
          {
-            if (!minz || coord[2] < minz) minz = coord[2];
-            if (!maxz || coord[2] > maxz) maxz = coord[2];
+            if (!minz || std::get<2>(coord) < minz) minz = std::get<2>(coord);
+            if (!maxz || std::get<2>(coord) > maxz) maxz = std::get<2>(coord);
          }
       }
 
@@ -695,11 +702,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    FME_Boolean isgeomnull = geometry->canCastAs<IFMENull*>();
    if (isgeomnull == false)
    {
-
-      //-- update the offset (for writing vertices in the global list of CityJSON)
-      //-- in the visitor.
-      (visitor_)->setVerticesOffset(vertices_.size());
-
       //-- fetch geom type to simplify the geomvisitor
       FME_Boolean isgeomline = geometry->canCastAs<IFMELine*>();
       if (isgeomline == FME_TRUE) {
@@ -740,10 +742,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       if (!fgeomjson.empty()) {
          outputJSON_["CityObjects"][fids]["geometry"].push_back(fgeomjson);
       }
-
-      std::vector<std::vector<double>> vtmp = (visitor_)->getGeomVertices();
-      vertices_.insert(vertices_.end(), vtmp.begin(), vtmp.end());
-      // gLogFile->logMessageString("==> 3", FME_WARN);
 
       //-- reset the internal DS for one feature
       (visitor_)->reset();
