@@ -135,11 +135,13 @@ const std::map< std::string, std::vector< std::string > > FMECityJSONGeometryVis
 // Constructor.
 FMECityJSONGeometryVisitor::FMECityJSONGeometryVisitor(const IFMEGeometryTools* geomTools,
                                                        IFMESession* session,
-                                                       bool remove_duplicates)
+                                                       bool remove_duplicates,
+                                                       int important_digits)
    :
    fmeGeometryTools_(geomTools),
    fmeSession_(session),
-   remove_duplicates_(remove_duplicates)
+   remove_duplicates_(remove_duplicates),
+   important_digits_(important_digits)
 {
    logFile_ = session->logFile();
 }
@@ -163,6 +165,20 @@ const VertexPool& FMECityJSONGeometryVisitor::getGeomVertices()
    return vertices_;
 }
 
+void FMECityJSONGeometryVisitor::getGeomBounds(std::optional<double>& minx,
+                                               std::optional<double>& miny,
+                                               std::optional<double>& minz,
+                                               std::optional<double>& maxx,
+                                               std::optional<double>& maxy,
+                                               std::optional<double>& maxz)
+{
+   minx = minx_;
+   miny = miny_;
+   minz = minz_;
+   maxx = maxx_;
+   maxy = maxy_;
+   maxz = maxz_;
+}
 
 bool FMECityJSONGeometryVisitor::semanticTypeAllowed(std::string trait)
 {
@@ -227,32 +243,83 @@ void FMECityJSONGeometryVisitor::reset()
    tmpMultiSolid_.clear();
 }
 
+// Converts a point into a string
+std::string get_key(const FMECoord3D& vertex, int precision)
+{
+   char* buf = new char[200];
+   std::stringstream ss;
+   ss << "%." << precision << "f "
+      << "%." << precision << "f "
+      << "%." << precision << "f";
+   std::sprintf(buf, ss.str().c_str(), vertex.x, vertex.y, vertex.z);
+   std::string r(buf);
+   return r;
+}
+
+void tokenize(const std::string& str, std::vector<std::string>& tokens)
+{
+   std::string::size_type lastPos = str.find_first_not_of(" ", 0);
+   std::string::size_type pos     = str.find_first_of(" ", lastPos);
+   while (std::string::npos != pos || std::string::npos != lastPos)
+   {
+      tokens.push_back(str.substr(lastPos, pos - lastPos));
+      lastPos = str.find_first_not_of(" ", pos);
+      pos     = str.find_first_of(" ", lastPos);
+   }
+}
+
+void FMECityJSONGeometryVisitor::acceptVertex(const std::string& vertex_string)
+{
+   // Sadly, we need to calculate our bounds from the stringified vertex we
+   // are using.  So back to float!
+   std::vector<std::string> ls;
+   tokenize(vertex_string, ls);
+   double x = std::stod(ls[0]);
+   double y = std::stod(ls[1]);
+   double z = std::stod(ls[2]);
+
+   if (!minx_ || x < minx_) minx_ = x;
+   if (!maxx_ || x > maxx_) maxx_ = x;
+   if (!miny_ || y < miny_) miny_ = y;
+   if (!maxy_ || y > maxy_) maxy_ = y;
+   if (!std::isnan(z)) // have z
+   {
+      if (!minz_ || z < minz_) minz_ = z;
+      if (!maxz_ || z > maxz_) maxz_ = z;
+   }
+
+   vertices_.push_back({x, y, z});
+}
+
 // This will make sure we don't add any vertex twice.
 unsigned long FMECityJSONGeometryVisitor::addVertex(const FMECoord3D& vertex)
 {
+   // This is the vertex, as a string, which we'll use.
+   std::string vertex_string = get_key(vertex, important_digits_);
+
    // This will be the index in the vertex pool if it is new
    unsigned long index(vertices_.size());
 
    // A little more bookkeeping if we want to optimize the vertex pool
    // and not have duplicates.
-   if (false)//(remove_duplicates_)
+   if (remove_duplicates_)
    {
       // Have we encountered this vertex before?
-      auto [entry, vertexAdded] = vertexToIndex_.try_emplace(vertex, index);
+      auto [entry, vertexAdded] = vertexToIndex_.try_emplace(vertex_string, index);
       if (!vertexAdded) // We already have this in our vertex pool
       {
          index = entry->second;
       }
       else // We haven't seen this before, so insert it into the pool.
       {
-         vertices_.push_back({vertex.x, vertex.y, vertex.z});
+         acceptVertex(vertex_string);
 
          // index is already set correctly.
       }
    }
    else
    {
-      vertices_.push_back({vertex.x, vertex.y, vertex.z});
+      acceptVertex(vertex_string);
 
       // index is already set correctly.
    }

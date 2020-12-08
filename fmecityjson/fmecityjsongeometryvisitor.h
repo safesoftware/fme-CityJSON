@@ -39,6 +39,7 @@
 #include <igeometryvisitor.h>
 
 #include <vector>
+#include <optional>
 
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
@@ -54,7 +55,10 @@ public:
 
    //---------------------------------------------------------------------
    // Constructor.
-   FMECityJSONGeometryVisitor(const IFMEGeometryTools* geomTools, IFMESession* session, bool remove_duplicates);
+   FMECityJSONGeometryVisitor(const IFMEGeometryTools* geomTools,
+                              IFMESession* session,
+                              bool remove_duplicates,
+                              int important_digits);
 
    //---------------------------------------------------------------------
    // Destructor.
@@ -208,7 +212,16 @@ public:
    //----------------------------------------------------------------------
    // get the array of vertices for the geometry
    const VertexPool& getGeomVertices();
-   
+
+   //----------------------------------------------------------------------
+   // get bounds of vertices for the geometry
+   void getGeomBounds(std::optional<double>& minx,
+                      std::optional<double>& miny,
+                      std::optional<double>& minz,
+                      std::optional<double>& maxx,
+                      std::optional<double>& maxy,
+                      std::optional<double>& maxz);
+
    //----------------------------------------------------------------------
    // check if the surface semantics type is allowed for this CityObjectType
    bool semanticTypeAllowed(std::string trait);
@@ -264,7 +277,8 @@ private:
    // The vertex is added to the vertex pool.  It will not add duplicates.
    // The index of the vertex in the pool is returned.
    unsigned long addVertex(const FMECoord3D& vertex);
-   
+   void acceptVertex(const std::string& vertex_string);
+
    //---------------------------------------------------------------------
    // This allows easy access to turn on/off debug logging throughout this class.
    void logDebugMessage(const std::string& message)
@@ -288,6 +302,7 @@ private:
    std::string geomType_;
    json outputgeom_;
    bool remove_duplicates_; 
+   int important_digits_; 
 
    //-- semantics of surfaces
    std::vector< json > surfaces_; //-- all the surfaces (which are json object; same ones are merged)
@@ -305,8 +320,10 @@ private:
    std::vector< std::vector< std::vector< std::vector< std::vector< unsigned long> > > > > tmpMultiSolid_;  //-- level 5
 
    // Maps a vertex to a specific index in the vertex pool.
-   std::map<FMECoord3D, unsigned long> vertexToIndex_;
+   std::unordered_map<std::string, unsigned long> vertexToIndex_;
    VertexPool vertices_;
+   std::optional<double> minx_, miny_, minz_, maxx_, maxy_, maxz_;
+
 };
 
 #endif

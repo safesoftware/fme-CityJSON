@@ -192,10 +192,8 @@ private:
    // Represents the schema feature on advanced writing.
    IFMEFeatureVector* schemaFeatures_;
 
-   //-- Used for removing duplicate vertices from the CityJSON file
-   int  duplicate_vertices();
-   void tokenize(const std::string& str, std::vector<std::string>& tokens);
-   void update_to_new_ids(std::vector<unsigned long> &newids);
+   //-- Used for compressing/quantizing vertices from the CityJSON file
+   void compressAndOutputVertices(double minx, double miny, double minz);
 
    // -----------------------------------------------------------------------
    // Insert additional private data members here
