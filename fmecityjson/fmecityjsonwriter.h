@@ -49,6 +49,8 @@
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
+#include "fmecityjsongeometryvisitor.h"
+
 // Forward declarations
 class IFMEFeature;
 class IFMEFeatureVector;
@@ -190,10 +192,8 @@ private:
    // Represents the schema feature on advanced writing.
    IFMEFeatureVector* schemaFeatures_;
 
-   //-- Used for removing duplicate vertices from the CityJSON file
-   int  duplicate_vertices();
-   void tokenize(const std::string& str, std::vector<std::string>& tokens);
-   void update_to_new_ids(std::vector<unsigned long> &newids);
+   //-- Used for compressing/quantizing vertices from the CityJSON file
+   void compressAndOutputVertices(double minx, double miny, double minz);
 
    // -----------------------------------------------------------------------
    // Insert additional private data members here
@@ -201,7 +201,7 @@ private:
 
    std::ofstream                                  outputFile_;
    json                                           outputJSON_;
-   std::vector< std::vector< double > >           vertices_;
+   VertexPool                                     vertices_;
    std::map<std::string, std::map<std::string, std::string> >  attrToWrite_;
 
    std::vector<std::string>                       cityjsonTypes_;

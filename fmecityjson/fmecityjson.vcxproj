@@ -166,14 +166,12 @@
     <ClCompile Include="fmecityjsonentrypoints.cpp" />
     <ClCompile Include="fmecityjsonreader.cpp" />
     <ClCompile Include="fmecityjsonwriter.cpp" />
-    <ClCompile Include="Point3.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fmecityjsongeometryvisitor.h" />
     <ClInclude Include="fmecityjsonpriv.h" />
     <ClInclude Include="fmecityjsonreader.h" />
     <ClInclude Include="fmecityjsonwriter.h" />
-    <ClInclude Include="Point3.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="fmecityjson.rc" />
