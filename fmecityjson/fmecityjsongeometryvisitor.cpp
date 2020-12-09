@@ -57,6 +57,7 @@
 #include <igeometryiterator.h>
 #include <iline.h>
 #include <ilogfile.h>
+#include <imesh.h>
 #include <imultiarea.h>
 #include <imulticurve.h>
 #include <imultipoint.h>
@@ -1199,6 +1200,46 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
    return FME_SUCCESS;
 }
 
+FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(const IFMECompositeSurface& compositeSurface)
+{
+   FME_Status badNews;
+   IFMESurfaceIterator* iterator = compositeSurface.getIterator();
+   while (iterator->next())
+   {
+      // Get the next surface
+      const IFMESurface* surface = iterator->getPart();
+
+      // Can't deal with multiple levels of nesting, so let's break that down.
+      if (surface->canCastAs<const IFMECompositeSurface*>())
+      {
+         badNews = visitCompositeSurfaceParts(*(surface->castAs<const IFMECompositeSurface*>()));
+         if (badNews) return FME_FAILURE;
+      }
+      else
+      {
+         logDebugMessage(std::string(kMsgVisiting) + std::string("surface"));
+
+         // re-visit the surface geometry
+         badNews = surface->acceptGeometryVisitorConst(*this);
+         if (badNews)
+         {
+            // Destroy iterator before leaving
+            compositeSurface.destroyIterator(iterator);
+            return FME_FAILURE;
+         }
+         if (tmpFace_.size() > 0)
+         {
+            tmpMultiFace_.push_back(tmpFace_);
+         }
+      }
+   }
+
+   // Done with the iterator
+   compositeSurface.destroyIterator(iterator);
+
+   return FME_SUCCESS;
+}
+
 //=====================================================================
 //
 FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMECompositeSurface& compositeSurface)
@@ -1206,29 +1247,10 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
    tmpMultiFace_.clear();
    semanticValues_.clear();
 
-   FME_Status badNews;
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("CompositeSurface"));
    // Create an iterator to loop through all the surfaces this multi surface contains
-   IFMESurfaceIterator* iterator = compositeSurface.getIterator();
-   while (iterator->next())
-   {
-      // Get the next surface
-      const IFMESurface* surface = iterator->getPart();
-
-      logDebugMessage(std::string(kMsgVisiting) + std::string("surface"));
-
-      // re-visit the surface geometry
-      badNews = surface->acceptGeometryVisitorConst(*this);
-      if (badNews)
-      {
-         // Destroy iterator before leaving
-         compositeSurface.destroyIterator(iterator);
-         return FME_FAILURE;
-      }
-      if (tmpFace_.size() > 0) {
-        tmpMultiFace_.push_back(tmpFace_);
-      }
-   }
+   FME_Status badNews = visitCompositeSurfaceParts(compositeSurface);
+   if (badNews) return FME_FAILURE;
 
    outputgeom_ = json::object();
    outputgeom_["type"] = "CompositeSurface";
@@ -1239,9 +1261,6 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
       outputgeom_["semantics"]["surfaces"] = surfaces_;
       outputgeom_["semantics"]["values"] = semanticValues_;
    }
-
-   // Done with the iterator
-   compositeSurface.destroyIterator(iterator);
 
    return FME_SUCCESS;
 }
@@ -1458,7 +1477,28 @@ FME_Status FMECityJSONGeometryVisitor::visitCSGSolid(const IFMECSGSolid& csgSoli
 //
 FME_Status FMECityJSONGeometryVisitor::visitMesh( const IFMEMesh& mesh )
 {
-   //TODO: 22012 This method should be written.
+   FME_Status badNews;
+
+   logDebugMessage(std::string(kMsgStartVisiting) + std::string("mesh"));
+
+   // This is kind of taking a shortcut.  Many formats do not support Mesh, so they convert it
+   // first. Convert the IFMEMesh to either an IFMECompositeSurface.
+   const IFMECompositeSurface* geomCompositeSurface = mesh.getAsCompositeSurface();
+
+   logDebugMessage(std::string(kMsgVisiting) + std::string("mesh as composite surface"));
+
+   // re-visit the composite surface geometry
+   badNews = geomCompositeSurface->acceptGeometryVisitorConst(*this);
+   // Done with the geomCompositeSurface
+   geomCompositeSurface->destroy();
+   geomCompositeSurface = nullptr;
+   if (badNews)
+   {
+      return FME_FAILURE;
+   }
+
+   logDebugMessage(std::string(kMsgEndVisiting) + std::string("mesh"));
+
    return FME_SUCCESS;
 }
 

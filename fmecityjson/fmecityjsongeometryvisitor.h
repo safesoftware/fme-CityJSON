@@ -274,6 +274,11 @@ private:
    FME_Status visitArcB3P(const IFMEArc& arc);
 
    //---------------------------------------------------------------------
+   // We can't have nested composite surfaces, so we need to flatten
+   // them down to one level of heirarchy.
+   FME_Status visitCompositeSurfaceParts(const IFMECompositeSurface& compositeSurface);
+
+   //---------------------------------------------------------------------
    // The vertex is added to the vertex pool.  It will not add duplicates.
    // The index of the vertex in the pool is returned.
    unsigned long addVertex(const FMECoord3D& vertex);
