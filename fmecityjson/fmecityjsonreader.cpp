@@ -1125,7 +1125,7 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
    {
       std::string geometryType, geometryLodValue;
       std::string geometryLodName = "cityjson_lod"; // geometry Trait name
-      json::value_type boundaries = currentGeometry.at("boundaries");
+      json::value_type boundaries = currentGeometry["boundaries"];
       json::value_type semantics  = currentGeometry["semantics"];
 
       // Does this have any texture data attached?
@@ -1163,7 +1163,10 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
       }
 
       // geometry type and level of detail
-      geometryType = currentGeometry.at("type").get<std::string>();
+      if (!currentGeometry["type"].empty())
+      {
+         geometryType = currentGeometry["type"].get<std::string>();
+      }
       if (geometryType != "GeometryInstance")
       {
          geometryLodValue = lodToString(currentGeometry);
