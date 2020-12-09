@@ -59,6 +59,8 @@ class IFMEGeometryTools;
 class FMECityJSONGeometryVisitor;
 class IFMEBRepSolid;
 
+const static std::string kGeneratedFidPrefix = "FME-";
+
 class FMECityJSONWriter : public IFMEWriter
 {
 
@@ -164,6 +166,11 @@ private:
    // collect information from a metadata feature.
    FME_Status handleMetadataFeature(const IFMEFeature& feature);
 
+   //-- Used for compressing/quantizing vertices from the CityJSON file
+   void compressAndOutputVertices(double minx, double miny, double minz);
+
+   void generateUniqueFID(std::string& fids);
+
 
    // Data members
 
@@ -192,25 +199,25 @@ private:
    // Represents the schema feature on advanced writing.
    IFMEFeatureVector* schemaFeatures_;
 
-   //-- Used for compressing/quantizing vertices from the CityJSON file
-   void compressAndOutputVertices(double minx, double miny, double minz);
-
    // -----------------------------------------------------------------------
    // Insert additional private data members here
    // -----------------------------------------------------------------------
 
-   std::ofstream                                  outputFile_;
-   json                                           outputJSON_;
-   VertexPool                                     vertices_;
-   std::map<std::string, std::map<std::string, std::string> >  attrToWrite_;
+   std::ofstream outputFile_;
+   json outputJSON_;
+   VertexPool vertices_;
+   std::map<std::string, std::map<std::string, std::string>> attrToWrite_;
 
-   std::vector<std::string>                       cityjsonTypes_;
+   std::vector<std::string> cityjsonTypes_;
 
-   std::string                                    cityjson_version_; 
-   bool                                           remove_duplicates_; 
-   bool                                           compress_; 
-   int                                            important_digits_; 
+   std::string cityjson_version_;
+   bool remove_duplicates_;
+   bool compress_;
+   int important_digits_; 
 
+   std::set<std::string> usedFids_;
+   bool alreadyLoggedMissingFid_;
+   int nextGoodFidCount_;
 };
 
 #endif
