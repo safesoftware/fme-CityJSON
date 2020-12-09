@@ -109,7 +109,9 @@ FMECityJSONWriter::FMECityJSONWriter(const char* writerTypeName, const char* wri
    dataset_(""),
    fmeGeometryTools_(nullptr),
    visitor_(nullptr),
-   schemaFeatures_(nullptr)
+   schemaFeatures_(nullptr),
+   alreadyLoggedMissingFid_(false),
+   nextGoodFidCount_(1)
 {
 }
 
@@ -393,15 +395,75 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       return handleMetadataFeature(feature);
    }
 
+   //--------------------------------------------------------------------
    //-- write fid for CityObject
-   //-- FAILURE if not one of these
+   //  This is a bit of a tricky situation.  CityJSON requires a unique
+   //  'fid' ID on each and every feature.  We cannot continue if we do not
+   //  have this.  But we want to be as helpful as possible to users who may
+   //  not really know what they are doing or how to fix things as well.
+   //  So we are going to take this lenient, hybrid approach.
+   //  1) If a feature has a 'fid', we'll try and use it.  We will
+   //     check for already used values and warn if it is a duplicate.
+   //     If we have a duplicate fid, we'll continue on
+   //     as if it did not have one set.
+   //  2) If a featured does not have a 'fid', we'll warn and auto-generate
+   //     one ourselves.  A quick way of making sure we get a new unique value is
+   //     to just remember the max fid we have seen so far and increment it by one.
+   // Note: If users put good, clean fid values on the features themselves, #1
+   //       Will be quick and easy.  If users do not put any fid values on themselves,
+   //       #2 will be quick and easy (and sensible).  The rough part is if folks start
+   //       sending in features with duplicate fids or with some existing and some missing.
+   //       We will warn a lot, and try to patch things up, but it might get messy.
+   //       I think this is a good compromise, and I hope the latter case is not common.
    IFMEString* fidsFME = gFMESession->createString();
-   if (feature.getAttribute("fid", *fidsFME) == FME_FALSE) 
+   std::string fids;
+   if (feature.getAttribute("fid", *fidsFME) == FME_TRUE)
    {
-      gLogFile->logMessageString("CityJSON features must have an attribute named 'fid' to uniquely identify them.", FME_WARN );
-      return FME_FAILURE;
+      fids.assign(fidsFME->data(), fidsFME->length());
+      // Case 1 - we got a fid.  Let's see if it is unique.
+
+      if (usedFids_.insert(fids).second)
+      {
+         // We found a nice, unique fid.
+         // Let's just parse it a bit to see if it would clash with the
+         // unique set we _would_ be building if we ever need to generate one.
+         if (fids.compare(0, kGeneratedFidPrefix.size(), kGeneratedFidPrefix) == 0)
+         {
+            // Well, it starts the same... 
+            std::string suffix = fids.substr(kGeneratedFidPrefix.size());
+            int countVal = std::stoi(suffix); // Will return 0 if it is not an integer
+            if (countVal > 0)
+            {
+               // Yikes!  It fits exactly the format of our generated fids!
+               // Let's reset the latest seen count to this number so we don't make
+               // duplicates.
+               nextGoodFidCount_ = std::max(countVal+1, nextGoodFidCount_);
+            }
+         }
+      }
+      else
+      {
+         // Ah, it is a duplicate.  Gotta get a fresh one.
+         std::string errorMsg = "CityJSON features must have an attribute named 'fid' to uniquely identify them.  Duplicate value '" +
+                                 fids + "' found.  Generating a unique fid' instead and continuing.";
+         gLogFile->logMessageString(errorMsg.c_str(), FME_WARN);
+
+         generateUniqueFID(fids);
+      }
    }
-   std::string fids(fidsFME->data(), fidsFME->length());
+   else
+   {
+      // We don't have any 'fid'.  :(
+      // Let's only log this message once.
+      if (!alreadyLoggedMissingFid_)
+      {
+         gLogFile->logMessageString("CityJSON features must have an attribute named 'fid' to uniquely identify them.  Generating a unique fid' and continuing.", FME_WARN);
+         alreadyLoggedMissingFid_ = true;
+      }
+      generateUniqueFID(fids);
+   }
+
+   //--------------------------------------------------------------------
 
    if (!outputJSON_["CityObjects"].is_object())
    {
@@ -934,4 +996,9 @@ void FMECityJSONWriter::compressAndOutputVertices(double minx, double miny, doub
    outputJSON_["transform"]["translate"] = {minx, miny, minz};
 }
 
+void FMECityJSONWriter::generateUniqueFID(std::string& fids)
+{
+   fids = kGeneratedFidPrefix + std::to_string(nextGoodFidCount_);
+   nextGoodFidCount_++;
+}
 
