@@ -1286,7 +1286,7 @@ void FMECityJSONReader::parseMultiCompositeSolid(MCSolid multiCompositeSolid,
    {
       IFMEBRepSolid* BSolid = parseSolid(boundaries[i],
                                          semantics,
-                                         fetchSemanticsValues(semantics),
+                                         &((*fetchSemanticsValues(semantics))[i]),
                                          (textureRefs.is_null() ? textureRefs : textureRefs[i]),
                                          (materialRefs.is_null() ? materialRefs : materialRefs[i]),
                                          vertices);
