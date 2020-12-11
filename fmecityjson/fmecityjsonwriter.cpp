@@ -772,15 +772,14 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       IFMEString* stmpFME = gFMESession->createString();
       if (geometry->getTraitString(*slod, *stmpFME) == FME_FALSE)
       {
-         std::stringstream ss;
-         ss << "The '" << feature.getFeatureType() << "' does not have the required cityjson_lod' trait.  Assuming a LOD of '2' and continuing.";
          // Let's only log this message once.
          if (!alreadyLoggedMissingLod_)
          {
+            std::stringstream ss;
+            ss << "The '" << feature.getFeatureType() << "' does not have the required cityjson_lod' trait.  Assuming a LOD of '2' and continuing.";
             gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
             alreadyLoggedMissingLod_ = true;
          }
-         gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
          stmpFME->set("2.0", 3);
       }
       std::string stemp(stmpFME->data(), stmpFME->length());

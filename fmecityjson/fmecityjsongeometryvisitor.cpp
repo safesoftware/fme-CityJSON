@@ -1083,7 +1083,28 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
 //
 FME_Status FMECityJSONGeometryVisitor::visitTriangleStrip(const IFMETriangleStrip& triangleStrip)
 {
-   logDebugMessage(std::string(kMsgVisiting) + std::string("triangle strip"));
+   FME_Status badNews;
+
+   logDebugMessage(std::string(kMsgStartVisiting) + std::string("triangle strip"));
+
+   // This is kind of taking a shortcut.  Many formats do not support triangle fan, so they convert
+   // it first. Convert the IFMETriangleStrip to a mesh, then to IFMECompositeSurface
+   IFMEMesh* mesh = fmeGeometryTools_->createTriangulatedMeshFromGeometry(triangleStrip);
+   IFMECompositeSurface* geomCompositeSurface = mesh->getAsCompositeSurface();
+
+   logDebugMessage(std::string(kMsgVisiting) + std::string("triangle strip as composite surface"));
+
+   // re-visit the solid geometry
+   badNews = geomCompositeSurface->acceptGeometryVisitorConst(*this);
+   // Done with the geomCompositeSurface and mesh
+   geomCompositeSurface->destroy(); geomCompositeSurface = nullptr;
+   mesh->destroy(); mesh = nullptr;
+   if (badNews)
+   {
+      return FME_FAILURE;
+   }
+
+   logDebugMessage(std::string(kMsgEndVisiting) + std::string("triangle strip"));
 
    return FME_SUCCESS;
 }
@@ -1092,7 +1113,28 @@ FME_Status FMECityJSONGeometryVisitor::visitTriangleStrip(const IFMETriangleStri
 //
 FME_Status FMECityJSONGeometryVisitor::visitTriangleFan(const IFMETriangleFan& triangleFan)
 {
-   logDebugMessage(std::string(kMsgVisiting) + std::string("triangle fan"));
+   FME_Status badNews;
+
+   logDebugMessage(std::string(kMsgStartVisiting) + std::string("triangle fan"));
+
+   // This is kind of taking a shortcut.  Many formats do not support triangle fan, so they convert it
+   // first. Convert the IFMETriangleFan to a mesh, then to IFMECompositeSurface
+   IFMEMesh* mesh = fmeGeometryTools_->createTriangulatedMeshFromGeometry(triangleFan);
+   IFMECompositeSurface* geomCompositeSurface = mesh->getAsCompositeSurface();
+
+   logDebugMessage(std::string(kMsgVisiting) + std::string("triangle fan as composite surface"));
+
+   // re-visit the solid geometry
+   badNews = geomCompositeSurface->acceptGeometryVisitorConst(*this);
+   // Done with the geomCompositeSurface and mesh
+   geomCompositeSurface->destroy(); geomCompositeSurface = nullptr;
+   mesh->destroy(); mesh = nullptr;
+   if (badNews)
+   {
+      return FME_FAILURE;
+   }
+
+   logDebugMessage(std::string(kMsgEndVisiting) + std::string("triangle fan"));
 
    return FME_SUCCESS;
 }
@@ -1101,7 +1143,24 @@ FME_Status FMECityJSONGeometryVisitor::visitTriangleFan(const IFMETriangleFan& t
 //
 FME_Status FMECityJSONGeometryVisitor::visitBox(const IFMEBox& box)
 {
-   logDebugMessage(std::string(kMsgVisiting) + std::string("box"));
+   FME_Status badNews;
+
+   logDebugMessage(std::string(kMsgStartVisiting) + std::string("box"));
+
+   // This is kind of taking a shortcut.  Many formats do not support Box, so they convert it
+   // first. Convert the IFMEBox to a IFMEBRepSolid
+   const IFMEBRepSolid* brepSolid = box.getAsBRepSolid();
+
+   logDebugMessage(std::string(kMsgVisiting) + std::string("box as brep solid"));
+
+   // re-visit the solid geometry
+   badNews = brepSolid->acceptGeometryVisitorConst(*this);
+   if (badNews)
+   {
+      return FME_FAILURE;
+   }
+
+   logDebugMessage(std::string(kMsgEndVisiting) + std::string("box"));
 
    return FME_SUCCESS;
 }
@@ -1483,15 +1542,14 @@ FME_Status FMECityJSONGeometryVisitor::visitMesh( const IFMEMesh& mesh )
 
    // This is kind of taking a shortcut.  Many formats do not support Mesh, so they convert it
    // first. Convert the IFMEMesh to either an IFMECompositeSurface.
-   const IFMECompositeSurface* geomCompositeSurface = mesh.getAsCompositeSurface();
+   IFMECompositeSurface* geomCompositeSurface = mesh.getAsCompositeSurface();
 
    logDebugMessage(std::string(kMsgVisiting) + std::string("mesh as composite surface"));
 
    // re-visit the composite surface geometry
    badNews = geomCompositeSurface->acceptGeometryVisitorConst(*this);
    // Done with the geomCompositeSurface
-   geomCompositeSurface->destroy();
-   geomCompositeSurface = nullptr;
+   geomCompositeSurface->destroy(); geomCompositeSurface = nullptr;
    if (badNews)
    {
       return FME_FAILURE;
