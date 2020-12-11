@@ -54,6 +54,7 @@
 #include <ireader.h>
 #include <iraster.h>
 #include <ilibrary.h>
+#include <inull.h>
 
 #include <sstream>
 #include <iomanip>
@@ -1069,6 +1070,10 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
          {
             feature.setGeometry(geom);
          }
+         else
+         {
+            feature.setGeometry(fmeGeometryTools_->createNull());
+         }
       }
 
       ++nextObject_;
@@ -1846,7 +1851,11 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature& feature, FME_Boolean& endO
             for (int i = 0; i < nrGeometries; i++)
             {
                std::string attributeName = "fme_geometry{" + std::to_string(i) + "}";
-               std::string type = cityObject.at("geometry")[i].at("type").get<std::string>();
+               std::string type;
+               if (not cityObject.at("geometry")[i]["type"].empty())
+               {
+                  type = cityObject.at("geometry")[i]["type"].get<std::string>();
+               }
                if (type == "GeometryInstance")
                {
                   int tId = cityObject.at("geometry")[i].at("template");
