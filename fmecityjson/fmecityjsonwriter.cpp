@@ -111,7 +111,8 @@ FMECityJSONWriter::FMECityJSONWriter(const char* writerTypeName, const char* wri
    visitor_(nullptr),
    schemaFeatures_(nullptr),
    alreadyLoggedMissingFid_(false),
-   nextGoodFidCount_(1)
+   nextGoodFidCount_(1),
+   alreadyLoggedMissingLod_(false)
 {
 }
 
@@ -772,10 +773,15 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       if (geometry->getTraitString(*slod, *stmpFME) == FME_FALSE)
       {
          std::stringstream ss;
-         ss << "The '" << feature.getFeatureType() << "' feature will not be written because the geometry does not have a 'cityjson_lod' trait.";
+         ss << "The '" << feature.getFeatureType() << "' does not have the required cityjson_lod' trait.  Assuming a LOD of '2' and continuing.";
+         // Let's only log this message once.
+         if (!alreadyLoggedMissingLod_)
+         {
+            gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
+            alreadyLoggedMissingLod_ = true;
+         }
          gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
-         // The 'Building' feature with geometry type 'IFMEBRepSolid' will not be written because the geometry does not have a citygml_lod_name.
-         return FME_FAILURE;
+         stmpFME->set("2.0", 3);
       }
       std::string stemp(stmpFME->data(), stmpFME->length());
 

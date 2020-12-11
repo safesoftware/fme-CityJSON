@@ -218,6 +218,8 @@ private:
    std::set<std::string> usedFids_;
    bool alreadyLoggedMissingFid_;
    int nextGoodFidCount_;
+
+   bool alreadyLoggedMissingLod_;
 };
 
 #endif
