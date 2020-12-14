@@ -247,7 +247,6 @@ public:
    // can be written
    void reset();
 
-
 private:
 
    //---------------------------------------------------------------
@@ -259,24 +258,9 @@ private:
    FMECityJSONGeometryVisitor& operator=(const FMECityJSONGeometryVisitor&);
 
    //---------------------------------------------------------------------
-   // The IFMEArc geometry object passed in here is an arc by center point.
-   // This function logs the values of that IFMEArc.
-   FME_Status visitArcBCP(const IFMEArc& arc);
-
-   //---------------------------------------------------------------------
-   // The IFMEArc geometry object passed in here is an arc by bulge.
-   // This function logs the values of that IFMEArc.
-   FME_Status visitArcBB(const IFMEArc& arc);
-
-   //---------------------------------------------------------------------
-   // The IFMEArc geometry object passed in here is an arc by 3 points.
-   // This function logs the values of that IFMEArc.
-   FME_Status visitArcB3P(const IFMEArc& arc);
-
-   //---------------------------------------------------------------------
    // We can't have nested composite surfaces, so we need to flatten
-   // them down to one level of heirarchy.
-   FME_Status visitCompositeSurfaceParts(const IFMECompositeSurface& compositeSurface);
+   // them down to one level of hierarchy.
+   FME_Status visitCompositeSurfaceParts(const IFMECompositeSurface& compositeSurface, json& jsonArray);
 
    //---------------------------------------------------------------------
    // The vertex is added to the vertex pool.  It will not add duplicates.
@@ -288,9 +272,78 @@ private:
    // This allows easy access to turn on/off debug logging throughout this class.
    void logDebugMessage(const std::string& message)
    {
-      // You could just comment this in/out to control messeges.
+      // You could just comment this in/out to control messages.
       //logFile_->logMessageString(message.c_str());
    }
+   //----------------------------------------------------------------------
+   // get the JSON object for the boundary that is "in progress"  
+   // likely from the last visit call.
+   json takeWorkingBoundary();
+
+   //----------------------------------------------------------------------
+   // If we are the first in a hierarchy, let's put out "header" info about
+   // our type, etc.  If someone's already started, we know we are just a sub-part
+   // and we'll do nothing.  We return if we are the top level or not.
+   bool claimTopLevel(const std::string& type);
+
+   //----------------------------------------------------------------------
+   // If we are the first in a hierarchy, let's put out "boundary" and "semantic" info.
+   // If we know we are just a sub-part we'll store our info away for it to use later.
+   void completedGeometry(bool topLevel, const json& boundary);
+
+   //----------------------------------------------------------------------
+   //
+   template <class T>
+   FME_Status visitCompositeOrMultiSolid(const T& compositeOrMultiSolid, const std::string& typeAsString)
+   {
+      multiSolidSemanticValues_.clear();
+
+      logDebugMessage(std::string(kMsgStartVisiting) + typeAsString);
+
+      bool topLevel = claimTopLevel(typeAsString);
+
+      // Create an iterator to loop through all the solids this multi solid contains
+      auto* iterator = compositeOrMultiSolid.getIterator();
+      auto jsonArray = json::array();
+      while (iterator->next())
+      {
+         // Get the next solid.
+         const IFMESolid* solid = iterator->getPart();
+
+         logDebugMessage(std::string(kMsgVisiting) + std::string("solid"));
+
+         // re-visit the solid geometry
+         FME_Status badNews = solid->acceptGeometryVisitorConst(*this);
+         if (badNews)
+         {
+            // Destroy iterator before leaving
+            compositeOrMultiSolid.destroyIterator(iterator);
+            return FME_FAILURE;
+         }
+
+         // Add the solid info to our boundaries.
+         jsonArray.push_back(takeWorkingBoundary());
+         multiSolidSemanticValues_.push_back(solidSemanticValues_);
+      }
+
+      completedGeometry(topLevel, jsonArray);
+
+      //-- store semantic surface information
+      if (!semanticValues_.empty())
+      {
+         outputgeom_["semantics"]["surfaces"] = replaceEmptySurface(surfaces_);
+         outputgeom_["semantics"]["values"]   = multiSolidSemanticValues_;
+      }
+
+      // Done with the iterator
+      compositeOrMultiSolid.destroyIterator(iterator);
+
+      logDebugMessage(std::string(kMsgEndVisiting) + typeAsString);
+
+      return FME_SUCCESS;
+   }
+
+
 
    // The fmeGeometryTools member stores a pointer to an IFMEGeometryTools
    // object that is used to create IFMEGeometries.
@@ -306,6 +359,7 @@ private:
    std::string featureType_;
    std::string geomType_;
    json outputgeom_;
+   json workingBoundary_;
    bool remove_duplicates_; 
    int important_digits_; 
 
@@ -320,9 +374,6 @@ private:
    //-- geometry of surfaces   
    std::vector< unsigned long > tmpRing_;                                                                   //-- level 1
    std::vector< std::vector< unsigned long> > tmpFace_;                                                     //-- level 2
-   std::vector< std::vector< std::vector< unsigned long > > > tmpMultiFace_;                                //-- level 3
-   std::vector< std::vector< std::vector< std::vector< unsigned long > > > > tmpSolid_;                     //-- level 4
-   std::vector< std::vector< std::vector< std::vector< std::vector< unsigned long> > > > > tmpMultiSolid_;  //-- level 5
 
    // Maps a vertex to a specific index in the vertex pool.
    std::unordered_map<std::string, unsigned long> vertexToIndex_;
