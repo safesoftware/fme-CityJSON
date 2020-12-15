@@ -371,10 +371,6 @@ private:
    //-- possible types; always possible to have '+MySemantics' with the '+'
    static const std::map< std::string, std::vector< std::string > > semancticsTypes_; 
 
-   //-- geometry of surfaces   
-   std::vector< unsigned long > tmpRing_;                                                                   //-- level 1
-   std::vector< std::vector< unsigned long> > tmpFace_;                                                     //-- level 2
-
    // Maps a vertex to a specific index in the vertex pool.
    std::unordered_map<std::string, unsigned long> vertexToIndex_;
    VertexPool vertices_;
