@@ -239,10 +239,6 @@ public:
    json replaceEmptySurface(std::vector<json> semanticSurface);
 
    //----------------------------------------------------------------------
-   // 
-   void setGeomType(std::string geomtype);
-
-   //----------------------------------------------------------------------
    // reset the variables vertices_ and onegeom_ so that a new geometry
    // can be written
    void reset();
@@ -296,6 +292,8 @@ private:
    template <class T>
    FME_Status visitCompositeOrMultiSolid(const T& compositeOrMultiSolid, const std::string& typeAsString)
    {
+      skipLastPointOnLine_ = true; 
+
       multiSolidSemanticValues_.clear();
 
       logDebugMessage(std::string(kMsgStartVisiting) + typeAsString);
@@ -340,6 +338,8 @@ private:
 
       logDebugMessage(std::string(kMsgEndVisiting) + typeAsString);
 
+      skipLastPointOnLine_ = false; 
+
       return FME_SUCCESS;
    }
 
@@ -357,11 +357,13 @@ private:
    //---------- private data members
 
    std::string featureType_;
-   std::string geomType_;
    json outputgeom_;
    json workingBoundary_;
    bool remove_duplicates_; 
    int important_digits_; 
+
+   // in CityJSON, the surfaces don't duplicate the last point on closed rings.
+   bool skipLastPointOnLine_;
 
    //-- semantics of surfaces
    std::vector< json > surfaces_; //-- all the surfaces (which are json object; same ones are merged)

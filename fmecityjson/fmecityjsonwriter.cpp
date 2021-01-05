@@ -750,15 +750,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    FME_Boolean isgeomnull = geometry->canCastAs<IFMENull*>();
    if (isgeomnull == false)
    {
-      //-- fetch geom type to simplify the geomvisitor
-      FME_Boolean isgeomline = geometry->canCastAs<IFMELine*>();
-      if (isgeomline == FME_TRUE) {
-         (visitor_)->setGeomType("line");
-      } else {
-         (visitor_)->setGeomType("other");
-      }
-
-
       FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
       if (badNews) {
          // There was an error in writing the geometry
