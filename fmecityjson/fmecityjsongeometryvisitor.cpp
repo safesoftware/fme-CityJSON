@@ -142,7 +142,8 @@ FMECityJSONGeometryVisitor::FMECityJSONGeometryVisitor(const IFMEGeometryTools* 
    fmeGeometryTools_(geomTools),
    fmeSession_(session),
    remove_duplicates_(remove_duplicates),
-   important_digits_(important_digits)
+   important_digits_(important_digits),
+   skipLastPointOnLine_(false)
 {
    logFile_ = session->logFile();
 }
@@ -217,10 +218,6 @@ bool FMECityJSONGeometryVisitor::semanticTypeAllowed(std::string trait)
 
 void FMECityJSONGeometryVisitor::setFeatureType(std::string type) {
   featureType_ = type;
-}
-
-void FMECityJSONGeometryVisitor::setGeomType(std::string geomtype) {
-  geomType_ = geomtype;
 }
 
 json FMECityJSONGeometryVisitor::replaceSemanticValues(std::vector<json> semanticValues) {
@@ -431,17 +428,27 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiPoint(const IFMEMultiPoint& mul
 
    bool topLevel = claimTopLevel("MultiPoint");
 
+   // Create iterator to get all point geometries
    IFMEPointIterator* iterator = multipoint.getIterator();
-   std::vector<unsigned long> pointIndexes;
+   auto jsonArray = json::array();
    while (iterator->next())
    {
-      const IFMEPoint* point = iterator->getPart();
-      pointIndexes.push_back(addVertex({point->getX(), point->getY(), point->getZ()}));
+      logDebugMessage(std::string(kMsgVisiting) + std::string("point"));
+
+      // re-visit points
+      FME_Status badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
+      if (badNews)
+      {
+         // Destroy iterator
+         multipoint.destroyIterator(iterator);
+         return FME_FAILURE;
+      }
+      jsonArray.push_back(takeWorkingBoundary());
    }
    // We are done with the iterator, so destroy it
    multipoint.destroyIterator(iterator);
 
-   completedGeometry(topLevel, pointIndexes);
+   completedGeometry(topLevel, jsonArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("multi point"));
 
@@ -485,7 +492,7 @@ FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
    bool topLevel = claimTopLevel("MultiLineString");
 
    // Do we need to skip the last point?
-   int skip = (geomType_ == "line") ? 0 : 1;
+   int skip = skipLastPointOnLine_ ? 1 : 0;
 
    auto jsonArray = json::array();
    for (int i = 0; i < line.numPoints()-skip; i++)
@@ -560,27 +567,31 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiCurve(const IFMEMultiCurve& mul
 //
 FME_Status FMECityJSONGeometryVisitor::visitMultiArea(const IFMEMultiArea& multiarea)
 {
-   FME_Status badNews;
-
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("multi area"));
+
+   bool topLevel = claimTopLevel("MultiLineString");
 
    // Create iterator to visit all areas
    IFMEAreaIterator* iterator = multiarea.getIterator();
+   auto jsonArray = json::array();
    while (iterator->next())
    {
       logDebugMessage(std::string(kMsgVisiting) + std::string("area"));
 
       // re-visit areas
-      badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
+      FME_Status badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
       if (badNews)
       {
          // Destroy iterator
          multiarea.destroyIterator(iterator);
          return FME_FAILURE;
       }
+      jsonArray.push_back(takeWorkingBoundary());
    }
    // Done with iterator, destroy it
    multiarea.destroyIterator(iterator);
+
+   completedGeometry(topLevel, jsonArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("multi area"));
 
@@ -618,6 +629,8 @@ FME_Status FMECityJSONGeometryVisitor::visitDonut(const IFMEDonut& donut)
    // Get the outer boundary
    logDebugMessage(std::string(kMsgVisiting) + std::string("outer boundary"));
 
+   bool topLevel = claimTopLevel("MultiLineString");
+
    const IFMEArea* outerBoundary = donut.getOuterBoundaryAsSimpleArea();
    if (outerBoundary == nullptr)
    {
@@ -651,8 +664,7 @@ FME_Status FMECityJSONGeometryVisitor::visitDonut(const IFMEDonut& donut)
    // Done with iterator, destroy it
    donut.destroyIterator(iterator);
 
-   // For now, let's just leave this around for our callers to use.
-   workingBoundary_ = jsonArray;
+   completedGeometry(topLevel, jsonArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("donut"));
 
@@ -663,14 +675,12 @@ FME_Status FMECityJSONGeometryVisitor::visitDonut(const IFMEDonut& donut)
 //
 FME_Status FMECityJSONGeometryVisitor::visitText(const IFMEText& text)
 {
-   FME_Status badNews;
-
    logDebugMessage(std::string(kMsgVisiting) + std::string("text"));
 
    // This IFMEGeometryVisitorConst subclass does not consume the geometry which accepts it
    IFMEPoint* point = text.getLocationAsPoint();
    // re-visit location
-   badNews = visitPoint(*point);
+   FME_Status badNews = visitPoint(*point);
    point->destroy(); point = nullptr;
 
    if (badNews)
@@ -684,26 +694,30 @@ FME_Status FMECityJSONGeometryVisitor::visitText(const IFMEText& text)
 //
 FME_Status FMECityJSONGeometryVisitor::visitMultiText(const IFMEMultiText& multitext)
 {
-   FME_Status badNews;
-
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("multi text"));
+
+   bool topLevel = claimTopLevel("MultiPoint");
 
    // Create iterator to get all text geometries
    IFMETextIterator* iterator = multitext.getIterator();
+   auto jsonArray = json::array();
    while (iterator->next())
    {
       logDebugMessage(std::string(kMsgVisiting) + std::string("text"));
 
       // re-visit next text geometry
-      badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
+      FME_Status badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
       if (badNews)
       {
          multitext.destroyIterator(iterator);
          return FME_FAILURE;
       }
+      jsonArray.push_back(takeWorkingBoundary());
    }
    // Done with iterator, destroy it
    multitext.destroyIterator(iterator);
+
+   completedGeometry(topLevel, jsonArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("multi text"));
 
@@ -729,6 +743,8 @@ FME_Status FMECityJSONGeometryVisitor::visitEllipse(const IFMEEllipse& ellipse)
       return FME_FAILURE;
    }
 
+   logDebugMessage(std::string(kMsgEndVisiting) + std::string("ellipse"));
+
    return FME_SUCCESS;
 }
 
@@ -736,6 +752,8 @@ FME_Status FMECityJSONGeometryVisitor::visitEllipse(const IFMEEllipse& ellipse)
 //
 FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
 {
+   skipLastPointOnLine_ = true;
+
    logDebugMessage(std::string(kMsgVisiting) + std::string("Face"));
 
    const IFMEArea* area = face.getAsArea();
@@ -852,6 +870,8 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
       semanticValues_.push_back(nullptr);
    }
 
+   skipLastPointOnLine_ = false;
+
    return FME_SUCCESS;
 }
 
@@ -859,6 +879,8 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
 //
 FME_Status FMECityJSONGeometryVisitor::visitTriangleStrip(const IFMETriangleStrip& triangleStrip)
 {
+   skipLastPointOnLine_ = true;
+
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("triangle strip"));
 
    // This is kind of taking a shortcut.  Many formats do not support triangle fan, so they convert
@@ -880,6 +902,8 @@ FME_Status FMECityJSONGeometryVisitor::visitTriangleStrip(const IFMETriangleStri
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("triangle strip"));
 
+   skipLastPointOnLine_ = false;
+
    return FME_SUCCESS;
 }
 
@@ -887,6 +911,8 @@ FME_Status FMECityJSONGeometryVisitor::visitTriangleStrip(const IFMETriangleStri
 //
 FME_Status FMECityJSONGeometryVisitor::visitTriangleFan(const IFMETriangleFan& triangleFan)
 {
+   skipLastPointOnLine_ = true; 
+
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("triangle fan"));
 
    // This is kind of taking a shortcut.  Many formats do not support triangle fan, so they convert it
@@ -908,6 +934,8 @@ FME_Status FMECityJSONGeometryVisitor::visitTriangleFan(const IFMETriangleFan& t
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("triangle fan"));
 
+   skipLastPointOnLine_ = false;
+
    return FME_SUCCESS;
 }
 
@@ -915,6 +943,8 @@ FME_Status FMECityJSONGeometryVisitor::visitTriangleFan(const IFMETriangleFan& t
 //
 FME_Status FMECityJSONGeometryVisitor::visitBox(const IFMEBox& box)
 {
+   skipLastPointOnLine_ = true; 
+
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("box"));
 
    // This is kind of taking a shortcut.  Many formats do not support Box, so they convert it
@@ -932,6 +962,8 @@ FME_Status FMECityJSONGeometryVisitor::visitBox(const IFMEBox& box)
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("box"));
 
+   skipLastPointOnLine_ = false; 
+
    return FME_SUCCESS;
 }
 
@@ -939,6 +971,8 @@ FME_Status FMECityJSONGeometryVisitor::visitBox(const IFMEBox& box)
 //
 FME_Status FMECityJSONGeometryVisitor::visitExtrusion(const IFMEExtrusion& extrusion)
 {
+   skipLastPointOnLine_ = true; 
+
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("extrusion"));
 
    // This is kind of taking a shortcut.  Many formats do not support Extrusion, so they convert it
@@ -956,6 +990,8 @@ FME_Status FMECityJSONGeometryVisitor::visitExtrusion(const IFMEExtrusion& extru
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("extrusion"));
 
+   skipLastPointOnLine_ = false; 
+
    return FME_SUCCESS;
 }
 
@@ -963,6 +999,8 @@ FME_Status FMECityJSONGeometryVisitor::visitExtrusion(const IFMEExtrusion& extru
 //
 FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepSolid)
 {
+   skipLastPointOnLine_ = true; 
+
    solidSemanticValues_.clear();
 
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("Solid"));
@@ -1021,12 +1059,16 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("boundary representation solid"));
 
+   skipLastPointOnLine_ = false; 
+
    return FME_SUCCESS;
 }
 
 FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
    const IFMECompositeSurface& compositeSurface, json& jsonArray)
 {
+   skipLastPointOnLine_ = true; 
+
    IFMESurfaceIterator* iterator = compositeSurface.getIterator();
    while (iterator->next())
    {
@@ -1058,6 +1100,8 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
    // Done with the iterator
    compositeSurface.destroyIterator(iterator);
 
+   skipLastPointOnLine_ = false; 
+
    return FME_SUCCESS;
 }
 
@@ -1065,6 +1109,8 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
 //
 FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMECompositeSurface& compositeSurface)
 {
+   skipLastPointOnLine_ = true; 
+
    semanticValues_.clear();
 
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("CompositeSurface"));
@@ -1084,6 +1130,8 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
       outputgeom_["semantics"]["values"] = semanticValues_;
    }
 
+   skipLastPointOnLine_ = false; 
+
    return FME_SUCCESS;
 }
 
@@ -1091,6 +1139,8 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
 //
 FME_Status FMECityJSONGeometryVisitor::visitRectangleFace(const IFMERectangleFace& rectangle)
 {
+   skipLastPointOnLine_ = true; 
+
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("rectangle face"));
 
    // This is kind of taking a shortcut.  Many formats do not support rectangle face, so they convert it
@@ -1110,6 +1160,8 @@ FME_Status FMECityJSONGeometryVisitor::visitRectangleFace(const IFMERectangleFac
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("rectangle face"));
 
+   skipLastPointOnLine_ = false; 
+
    return FME_SUCCESS;
 }
 
@@ -1117,6 +1169,8 @@ FME_Status FMECityJSONGeometryVisitor::visitRectangleFace(const IFMERectangleFac
 //
 FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface& multiSurface)
 {
+   skipLastPointOnLine_ = true; 
+
    semanticValues_.clear();
 
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("multi surface"));
@@ -1157,6 +1211,8 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("multi surface"));
 
+   skipLastPointOnLine_ = false; 
+
    return FME_SUCCESS;
 }
 
@@ -1180,6 +1236,8 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSolid(const IFMECompositeSo
 //
 FME_Status FMECityJSONGeometryVisitor::visitCSGSolid(const IFMECSGSolid& csgSolid)
 {
+   skipLastPointOnLine_ = true; 
+
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("CSG solid"));
 
    // This is kind of taking a shortcut.  Many formats do not support CSGSolid, so they convert it first.
@@ -1197,9 +1255,10 @@ FME_Status FMECityJSONGeometryVisitor::visitCSGSolid(const IFMECSGSolid& csgSoli
       return FME_FAILURE;
    }
 
-
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("CSG solid"));
    
+   skipLastPointOnLine_ = false; 
+
    return FME_SUCCESS;
 }
 
@@ -1207,6 +1266,7 @@ FME_Status FMECityJSONGeometryVisitor::visitCSGSolid(const IFMECSGSolid& csgSoli
 //
 FME_Status FMECityJSONGeometryVisitor::visitMesh( const IFMEMesh& mesh )
 {
+   skipLastPointOnLine_ = true; 
 
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("mesh"));
 
@@ -1226,6 +1286,8 @@ FME_Status FMECityJSONGeometryVisitor::visitMesh( const IFMEMesh& mesh )
    }
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("mesh"));
+
+   skipLastPointOnLine_ = false; 
 
    return FME_SUCCESS;
 }
