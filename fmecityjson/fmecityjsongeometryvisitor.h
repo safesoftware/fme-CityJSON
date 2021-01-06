@@ -37,6 +37,8 @@
 
 #include <igeometrytools.h>
 #include <igeometryvisitor.h>
+#include "fmecityjsonpriv.h"
+#include <isolid.h>
 
 #include <vector>
 #include <optional>
