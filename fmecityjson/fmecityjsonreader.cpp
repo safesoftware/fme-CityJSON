@@ -1062,6 +1062,11 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
       }
 
       // Set the geometry
+      // We loop through all the geometries of this feature.  It may have a
+      // separate geometry per LOD, but we are reading only a single requested
+      // LOD, so we should at most get one, we're assuming.  Not sure how we'd
+      // prefer to handle reading a case where it had more than one geometry with
+      // the same LOD.  Maybe aggregate them?
       for (auto& geometry : nextObject_.value()["geometry"])
       {
          // Set the geometry for the feature
@@ -1070,10 +1075,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
          {
             feature.setGeometry(geom);
          }
-         else
-         {
-            feature.setGeometry(fmeGeometryTools_->createNull());
-         }
+         // else if we get nullptr, that means it was an LOD we want to skip.
       }
 
       ++nextObject_;
