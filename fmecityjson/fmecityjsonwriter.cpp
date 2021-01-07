@@ -172,7 +172,7 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    fmeGeometryTools_ = gFMESession->getGeometryTools();
 
    // Create visitor to visit feature geometries
-   visitor_ = new FMECityJSONGeometryVisitor(fmeGeometryTools_, gFMESession, compress_, important_digits_);
+   visitor_ = new FMECityJSONGeometryVisitor(fmeGeometryTools_, gFMESession, remove_duplicates_, important_digits_);
 
    dataset_ = datasetName;
 
