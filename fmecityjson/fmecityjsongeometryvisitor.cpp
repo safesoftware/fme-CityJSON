@@ -1195,7 +1195,23 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
          multiSurface.destroyIterator(iterator);
          return FME_FAILURE;
       }
-      jsonArray.push_back(takeWorkingBoundary());
+
+      // We need to handle composite surfaces differently, as they will have
+      // another level of hierarchy we need to drop.  CityJSON does not allow 
+      // nesting in the same way FME can.
+      if (surface->canCastAs<const IFMECompositeSurface*>())
+      {
+         auto compositeSurfaceBoundaryJSON = takeWorkingBoundary();
+         for (auto& singleSurfaceBoundary : compositeSurfaceBoundaryJSON)
+         {
+            jsonArray.push_back(singleSurfaceBoundary);
+         }
+      }
+      else
+      {
+         // Just a regular single surface.
+         jsonArray.push_back(takeWorkingBoundary());
+      }
    }
 
    completedGeometry(topLevel, jsonArray);
