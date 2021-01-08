@@ -322,8 +322,25 @@ private:
          }
 
          // Add the solid info to our boundaries.
-         jsonArray.push_back(takeWorkingBoundary());
-         multiSolidSemanticValues_.push_back(solidSemanticValues_);
+         //
+         // We need to handle composite solids differently, as they will have
+         // another level of hierarchy we need to drop.  CityJSON does not allow
+         // nesting in the same way FME can.
+         if (solid->canCastAs<const IFMECompositeSolid*>())
+         {
+            auto compositeSolidBoundaryJSON = takeWorkingBoundary();
+            for (auto& singleSolidBoundary : compositeSolidBoundaryJSON)
+            {
+               jsonArray.push_back(singleSolidBoundary);
+               multiSolidSemanticValues_.push_back(solidSemanticValues_);
+            }
+         }
+         else
+         {
+            // Just a regular single solid.
+            jsonArray.push_back(takeWorkingBoundary());
+            multiSolidSemanticValues_.push_back(solidSemanticValues_);
+         }
       }
 
       completedGeometry(topLevel, jsonArray);
