@@ -761,7 +761,24 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       IFMEString* slod = gFMESession->createString();
       slod->set("cityjson_lod", 12);
       IFMEString* stmpFME = gFMESession->createString();
-      if (geometry->getTraitString(*slod, *stmpFME) == FME_FALSE)
+      bool notValidLOD(geometry->getTraitString(*slod, *stmpFME) == FME_FALSE);
+
+      // Maybe we got one, but it was not a valid number.
+      double lodAsDouble(2);
+      try
+      {
+         lodAsDouble = std::stod({stmpFME->data(), stmpFME->length()});
+      }
+      catch (const std::invalid_argument&)
+      {
+         notValidLOD = true;
+      }
+      catch (const std::out_of_range&)
+      {
+         notValidLOD = true;
+      }                                                                              
+
+      if (notValidLOD)
       {
          // Let's only log this message once.
          if (!alreadyLoggedMissingLod_)
@@ -771,14 +788,13 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
             gLogFile->logMessageString(ss.str().c_str(), FME_WARN);
             alreadyLoggedMissingLod_ = true;
          }
-         stmpFME->set("2.0", 3);
+         lodAsDouble = 2;
       }
-      std::string stemp(stmpFME->data(), stmpFME->length());
 
       //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
       json fgeomjson = (visitor_)->getGeomJSON();
       //-- TODO: write '2' or '2.0' is fine for the "lod"?
-      fgeomjson["lod"] = stod(stemp);
+      fgeomjson["lod"] = lodAsDouble;
 
       //-- write it to the JSON object
       // outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
