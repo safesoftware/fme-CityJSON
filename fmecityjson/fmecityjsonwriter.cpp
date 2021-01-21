@@ -338,6 +338,7 @@ FME_Status FMECityJSONWriter::close()
    if (schemaFeatures_)
    {
       schemaFeatures_->clearAndDestroy();
+      gFMESession->destroyFeatureVector(schemaFeatures_);
    }
    schemaFeatures_ = nullptr;
    
@@ -463,6 +464,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       }
       generateUniqueFID(fids);
    }
+   gFMESession->destroyString(fidsFME); fidsFME = nullptr;
 
    //--------------------------------------------------------------------
 
@@ -790,6 +792,8 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
          }
          lodAsDouble = 2;
       }
+      gFMESession->destroyString(stmpFME); stmpFME = nullptr;
+      gFMESession->destroyString(slod); slod = nullptr;
 
       //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
       json fgeomjson = (visitor_)->getGeomJSON();
