@@ -248,7 +248,7 @@ void FMECityJSONGeometryVisitor::reset()
 // Converts a point into a string
 std::string get_key(const FMECoord3D& vertex, int precision)
 {
-   char* buf = new char[200];
+   char buf[200];
    std::stringstream ss;
    ss << "%." << precision << "f "
       << "%." << precision << "f "
