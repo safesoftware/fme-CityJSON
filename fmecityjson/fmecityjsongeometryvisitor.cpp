@@ -209,10 +209,20 @@ bool FMECityJSONGeometryVisitor::semanticTypeAllowed(std::string trait)
          }
       }
    }
-   std::string message("CityJSON Semantic Surface Type '");
-   message += featureType_;
-   message += "' is not one of the CityJSON types(https://www.cityjson.org/specs/#semantic-surface-object) or an Extension ('+').";
-   logFile_->logMessageString(message.c_str(), FME_WARN);
+
+   // Let's see that we don't log too much
+   // we make up a key based on the feature type and semantics
+   std::string logKey = featureType_ + trait;
+   if (limitLogging_[logKey]++ < 3)
+   {
+      std::string message("CityJSON Semantic of '");
+      message += trait;
+      message += "' is not valid for Surface Type '";
+      message += featureType_;
+      message += "'.  Consult the official CityJSON types(https://www.cityjson.org/specs/#semantic-surface-object) or an Extension ('+').";
+      logFile_->logMessageString(message.c_str(), FME_WARN);
+   }
+
    return false;
 }
 

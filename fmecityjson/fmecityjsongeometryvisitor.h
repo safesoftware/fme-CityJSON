@@ -381,6 +381,9 @@ private:
    bool remove_duplicates_; 
    int important_digits_; 
 
+   // Let's track things so we don't log so much.
+   std::map<std::string, int> limitLogging_;
+
    // in CityJSON, the surfaces don't duplicate the last point on closed rings.
    bool skipLastPointOnLine_;
 
