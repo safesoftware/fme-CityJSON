@@ -744,7 +744,11 @@ FME_Status FMECityJSONReader::readGeometryDefinitions()
       }
       for (int i = 0; i < templates.size(); i++)
       {
-         IFMEGeometry* geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec);
+         // Note here we are asking to read ALL LOD geometries, as we need to fully populate the
+         // templates from the array, as they are indexed later by this order, and we can't
+         // skip any.
+         IFMEGeometry* geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec, true);
+
          FME_UInt32 geomRef(0);
          FME_Status badLuck = gFMESession->getLibrary()->addGeometryDefinition(geomRef, geom);
          if (badLuck)
@@ -1070,7 +1074,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
       for (auto& geometry : nextObject_.value()["geometry"])
       {
          // Set the geometry for the feature
-         IFMEGeometry* geom = parseCityObjectGeometry(geometry, vertices_);
+         IFMEGeometry* geom = parseCityObjectGeometry(geometry, vertices_, false);
          if (geom != nullptr)
          {
             feature.setGeometry(geom);
@@ -1126,7 +1130,8 @@ void FMECityJSONReader::parseAttributes(IFMEFeature& feature,
 }
 
 IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& currentGeometry,
-                                                         VertexPool3D& vertices)
+                                                         VertexPool3D& vertices,
+                                                         bool readGeomsForAllLOD)
 {
    if (currentGeometry.is_object())
    {
@@ -1186,7 +1191,9 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
 
       if (not geometryType.empty())
       {
-         if (geometryLodValue == lodParam_)
+         // Sometimes we are just going to "skip" reading geometries that don't match the
+         // LOD that is requested.
+         if (readGeomsForAllLOD || (geometryLodValue == lodParam_))
          {
             if (geometryType == "MultiPoint")
             {

@@ -207,7 +207,10 @@ private:
    static void parseAttributes(IFMEFeature& feature, json::iterator& it, const json::iterator& _end);
 
    // Parse a single Geometry of a CityObject
-   IFMEGeometry* parseCityObjectGeometry(json::value_type& currentGeometry, VertexPool3D& vertices);
+   // If the LOD does not match one selected, a nullptr will be returned
+   IFMEGeometry* parseCityObjectGeometry(json::value_type& currentGeometry,
+                                         VertexPool3D& vertices,
+                                         bool readGeomsForAllLOD);
 
    // Parse a Multi- or CompositeSolid
    template <typename MCSolid>
