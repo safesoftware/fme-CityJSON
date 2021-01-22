@@ -459,7 +459,7 @@ FME_Status FMECityJSONReader::readTextures()
             // We've got to make the full path, if it is relative.
             // If it starts with "http" we know it's not relative.  If it can
             // be found as a full path we'll also assume it is not relative.
-            if ((imagePath.rfind("http", 0) != 0) && (!std::filesystem::exists("imagePath")))
+            if ((imagePath.rfind("http", 0) != 0) && (!std::filesystem::exists(fullFileName)))
             {
                // Fix up the relative pathname so we can find it.
                // It is relative to the current dataset path.
@@ -480,8 +480,24 @@ FME_Status FMECityJSONReader::readTextures()
                fullFileName += imagePath;
             }
 
-            FME_Status badLuck = readRaster(fullFileName, raster, rasterType);
-            //if (badLuck) return badLuck;
+            // Let's only read it in if we think we can see it.
+            if ((imagePath.rfind("http", 0) == 0) || std::filesystem::exists(fullFileName))
+            {
+               FME_Status badLuck = readRaster(fullFileName, raster, rasterType);
+               // if (badLuck) return badLuck;
+            }
+            else
+            {
+               // Let's not log too much.
+               std::string logKey = "missing texture";
+               if (limitLogging_[logKey]++ < 10)
+               {
+                  std::string message("CityJSON Reader: The texture file '");
+                  message += fullFileName;
+                  message += "' cannot be located.  Please ensure the file exists and is accessible.";
+                  gLogFile->logMessageString(message.c_str(), FME_WARN);
+               }
+            }
 
             // Set the "name".  We'll use that as the name of the appearance.
             iName = std::filesystem::path(fullFileName).stem().string();
