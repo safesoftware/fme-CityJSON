@@ -214,6 +214,9 @@ private:
    bool remove_duplicates_;
    bool compress_;
    int important_digits_; 
+   bool pretty_print_;
+   int indent_size_;
+   bool indent_characters_tabs_;
 
    std::set<std::string> usedFids_;
    bool alreadyLoggedMissingFid_;
