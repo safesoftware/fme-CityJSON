@@ -60,6 +60,7 @@
 #include <igeometryiterator.h>
 
 #include <typeinfo>
+#include <iomanip>
 
 // These are initialized externally when a writer object is created so all
 // methods in this file can assume they are ready to use.
@@ -112,7 +113,13 @@ FMECityJSONWriter::FMECityJSONWriter(const char* writerTypeName, const char* wri
    schemaFeatures_(nullptr),
    alreadyLoggedMissingFid_(false),
    nextGoodFidCount_(1),
-   alreadyLoggedMissingLod_(false)
+   alreadyLoggedMissingLod_(false),
+   remove_duplicates_(false),
+   compress_(false),
+   important_digits_(9),
+   pretty_print_(false),
+   indent_size_(2),
+   indent_characters_tabs_(false)
 {
 }
 
@@ -141,9 +148,34 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    else 
       compress_ = false;
    
-   //-- important decimal degits?
+   //-- important decimal digits?
    gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcImportantDigits, *pv);
    important_digits_ = std::stoi(pv->data());
+
+   //-- indent size?
+   FME_Int32 indent_size(indent_size_);
+   if (FME_TRUE == gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcIndentSize, indent_size))
+   {
+      indent_size_ = indent_size;
+   }
+
+   //-- indent characters?
+   gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcIndentCharacters, *pv);
+   s1 = pv->data();
+   indent_characters_tabs_ = false;
+   if (s1.compare("Tabs") == 0)
+   {
+      indent_characters_tabs_ = true;
+   }
+
+   //-- pretty print?
+   gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcPrettyPrint, *pv);
+   s1 = pv->data();
+   pretty_print_ = false;
+   if (s1.compare("Yes") == 0)
+   {
+      pretty_print_ = true;
+   }
 
    //-- remove duplicate vertices?
    gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcRemoveDuplicates, *pv);
@@ -323,7 +355,25 @@ FME_Status FMECityJSONWriter::close()
    }
 
    //-- write to the file
-   outputFile_ << outputJSON_ << std::endl;
+   if (!outputJSON_.is_null())
+   {
+      if (pretty_print_)
+      {
+         if (indent_characters_tabs_)
+         {
+            outputFile_ << std::setw(indent_size_) << std::setfill('\t') << outputJSON_ << std::endl;
+         }
+         else
+         {
+            outputFile_ << std::setw(indent_size_) << outputJSON_ << std::endl;
+         }
+      }
+      else
+      {
+         outputFile_ << outputJSON_ << std::endl;
+      }
+   }
+
    // Log that the writer is done
    gLogFile->logMessageString((kMsgClosingWriter + dataset_).c_str());
    

@@ -59,6 +59,9 @@ const static char* const kSrcCityjsonVersion  = "_CITYJSON_VERSION";
 const static char* const kSrcRemoveDuplicates = "_REMOVE_DUPLICATES";
 const static char* const kSrcCompress         = "_USE_COMPRESSION";
 const static char* const kSrcImportantDigits  = "_IMPORTANT_DIGITS";
+const static char* const kSrcIndentSize       = "_INDENT_SIZE";
+const static char* const kSrcIndentCharacters = "_INDENT_CHARACTERS";
+const static char* const kSrcPrettyPrint      = "_PRETTY_PRINT";
 
 // Used when the writer is looking for schema features from the reader
 const static char* const kCityJSON_FME_DIRECTION    = "FME_DIRECTION";
