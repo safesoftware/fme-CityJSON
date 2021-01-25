@@ -35,8 +35,8 @@ GUI GROUP LOD_GROUP Parameters
 !----------------------------------------------------------------------
 ! Specify the fields.
 !----------------------------------------------------------------------
-DEFAULT_VALUE LOD ""
-GUI OPTIONAL TEXT LOD CityJSON Level of Detail:
+DEFAULT_VALUE LOD "best"
+GUI CHOICE LOD best%0%0.1%0.2%0.3%1%1.1%1.2%1.3%2%2.1%2.2%2.3%3%3.1%3.2%3.3 CityJSON Level of Detail to read:
 
 DEFAULT_VALUE EXPOSE_ATTRS_GROUP $(EXPOSE_ATTRS_GROUP)
 -GUI DISCLOSUREGROUP EXPOSE_ATTRS_GROUP $(FORMAT_SHORT_NAME)_EXPOSE_FORMAT_ATTRS Schema Attributes

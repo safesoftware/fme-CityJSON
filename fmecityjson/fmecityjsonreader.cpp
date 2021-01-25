@@ -763,7 +763,7 @@ FME_Status FMECityJSONReader::readGeometryDefinitions()
          // Note here we are asking to read ALL LOD geometries, as we need to fully populate the
          // templates from the array, as they are indexed later by this order, and we can't
          // skip any.
-         IFMEGeometry* geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec, true);
+         IFMEGeometry* geom = parseCityObjectGeometry(templates[i], verticesTemplatesVec, "", true);
 
          FME_UInt32 geomRef(0);
          FME_Status badLuck = gFMESession->getLibrary()->addGeometryDefinition(geomRef, geom);
@@ -859,26 +859,39 @@ void FMECityJSONReader::scanLODs()
          // The default LoD to read is the LoD of the first Geometry of the
          // first CityObject.
          std::string defaultMsg = "No value is set for the 'CityJSON Level of "
-                                  "Detail' parameter. Defaulting to: " +
-                                  lodInData_[0];
+                                  "Detail' parameter. Defaulting to: 'best'";
          gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
-         lodParam_ = lodInData_[0];
+         lodParam_ = "best";
       }
-      else if (std::find(lodInData_.begin(), lodInData_.end(), lodParam_) == lodInData_.end())
+      else if ((lodParam_ != "best") &&
+               (std::find(lodInData_.begin(), lodInData_.end(), lodParam_) == lodInData_.end()))
       {
          std::string defaultMsg = "The provided 'CityJSON Level of Detail' parameter value " +
                                   lodParam_ +
-                                  " is not present in the data. Defaulting to: " + lodInData_[0];
+                                  " is not present in the data. Defaulting to: 'best'";
          gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
-         lodParam_ = lodInData_[0];
+         lodParam_ = "best";
       }
    }
    else if (lodInData_.size() == 1)
    {
       // In case there is only one LoD in the data, we ignore the Parameter
       // even if it is set.
+      if (lodParam_ != "best")
+      {
+         gLogFile->logMessageString(("The Level of Detail requested, '" + lodParam_ + "', does not exist in this file.").c_str(), FME_INFORM);
+         gLogFile->logMessageString(("Instead, reading the only Level of Detail present in this file: " + lodInData_[0]).c_str(), FME_INFORM);
+      }
+      else
+      {
+         gLogFile->logMessageString("Reading the 'best' Level of Detail for every geometry in this file.", FME_INFORM);
+      }
       lodParam_ = lodInData_[0];
-      gLogFile->logMessageString(("Level of Detail in file: " + lodParam_).c_str(), FME_INFORM);
+   }
+
+   if (lodParam_ == "best")
+   {
+      gLogFile->logMessageString("Reading the 'best' Level of Detail for every geometry in this file.", FME_INFORM);
    }
 }
 
@@ -996,7 +1009,8 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    }
    else
    {
-      // Skipping CityObjects depending on their LoD
+      // Skipping CityObjects completely if it has no geometries of the chosen LOD.
+      if (lodParam_ != "best") // We know we will never skip a geometry in "best" mode
       {
          std::vector<bool> ignore_lod;
          std::string geometryLodValue;
@@ -1081,6 +1095,40 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
          gFMESession->destroyStringArray(parents);
       }
 
+      // Let's do a bit of work here, if we're asked to read the 'best" LOD
+      std::string LODToUse(lodParam_);
+      if (lodParam_ == "best")
+      {
+         // Build up a clean list of the LODs we have for this geometry
+         std::vector<std::string > allLODs;
+         for (auto& geometry : nextObject_.value()["geometry"])
+         {
+            if (geometry.is_object())
+            {
+               std::string geometryLodValue = lodToString(geometry);
+               try
+               {
+                  // We don't really want to use this number, but we
+                  // want to know if it *is* a number, by catching the error
+                  double lodAsDouble = std::stod(geometryLodValue);
+                  allLODs.push_back(geometryLodValue);
+               }
+               catch (const std::invalid_argument&)
+               {
+                  allLODs.push_back("");
+               }
+            }
+            else // I don't think this case can happen.
+            {
+               allLODs.push_back("");
+            }
+         }
+
+         // sort, and pick the "best" one.  It will be the last.
+         std::sort(allLODs.begin(), allLODs.end());
+         LODToUse = allLODs.back();
+      }
+
       // Set the geometry
       // We loop through all the geometries of this feature.  It may have a
       // separate geometry per LOD, but we are reading only a single requested
@@ -1090,7 +1138,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
       for (auto& geometry : nextObject_.value()["geometry"])
       {
          // Set the geometry for the feature
-         IFMEGeometry* geom = parseCityObjectGeometry(geometry, vertices_, false);
+         IFMEGeometry* geom = parseCityObjectGeometry(geometry, vertices_, LODToUse, false);
          if (geom != nullptr)
          {
             feature.setGeometry(geom);
@@ -1147,6 +1195,7 @@ void FMECityJSONReader::parseAttributes(IFMEFeature& feature,
 
 IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& currentGeometry,
                                                          VertexPool3D& vertices,
+                                                         const std::string& LODToUse,
                                                          bool readGeomsForAllLOD)
 {
    if (currentGeometry.is_object())
@@ -1209,7 +1258,7 @@ IFMEGeometry* FMECityJSONReader::parseCityObjectGeometry(json::value_type& curre
       {
          // Sometimes we are just going to "skip" reading geometries that don't match the
          // LOD that is requested.
-         if (readGeomsForAllLOD || (geometryLodValue == lodParam_))
+         if (readGeomsForAllLOD || (geometryLodValue == LODToUse))
          {
             if (geometryType == "MultiPoint")
             {
