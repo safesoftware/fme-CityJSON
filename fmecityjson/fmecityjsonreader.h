@@ -210,6 +210,7 @@ private:
    // If the LOD does not match one selected, a nullptr will be returned
    IFMEGeometry* parseCityObjectGeometry(json::value_type& currentGeometry,
                                          VertexPool3D& vertices,
+                                         const std::string& LODToUse,
                                          bool readGeomsForAllLOD);
 
    // Parse a Multi- or CompositeSolid
