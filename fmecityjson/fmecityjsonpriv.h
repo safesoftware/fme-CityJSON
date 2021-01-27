@@ -62,6 +62,7 @@ const static char* const kSrcImportantDigits  = "_IMPORTANT_DIGITS";
 const static char* const kSrcIndentSize       = "_INDENT_SIZE";
 const static char* const kSrcIndentCharacters = "_INDENT_CHARACTERS";
 const static char* const kSrcPrettyPrint      = "_PRETTY_PRINT";
+const static char* const kSrcPreferredTextureFormat = "_TEXTURE_OUTPUT_FORMAT";
 
 // Used when the writer is looking for schema features from the reader
 const static char* const kCityJSON_FME_DIRECTION    = "FME_DIRECTION";

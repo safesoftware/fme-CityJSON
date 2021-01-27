@@ -44,6 +44,7 @@
 #include <igeometry.h>
 #include <map>
 #include <set>
+#include <iwriter.h>
 
 
 #include <nlohmann/json.hpp>
@@ -169,8 +170,33 @@ private:
    //-- Used for compressing/quantizing vertices from the CityJSON file
    void compressAndOutputVertices(double minx, double miny, double minz);
 
+   //---------------------------------------------------------------
    void generateUniqueFID(std::string& fids);
 
+   //---------------------------------------------------------------
+   // We don't want to write two with the same "basename", so that is
+   // why the first is a suggestion.  We'll make it unique if we need to.
+   FME_Status writeRaster(FME_UInt32 rasterReference,
+                          const std::string& fileBaseNameSuggestion,
+                          const std::string& texturesRelativeDir,
+                          const std::string& outputDir,
+                          std::string& fileName,
+                          std::string& fileType);
+
+   //---------------------------------------------------------------
+   // This consumes the raster on failure
+   FME_Status writeWithWriter(IFMERaster*& raster,
+                              const std::string& basename,
+                              const std::string& format,
+                              const std::string& outputDir,
+                              std::string& outputFilename);
+
+   //---------------------------------------------------------------
+   std::string getUniqueFilename(const std::string& basename,
+                                 const std::string& extension);
+
+   //---------------------------------------------------------------
+   FME_Status outputAppearances();
 
    // Data members
 
@@ -221,6 +247,18 @@ private:
    std::set<std::string> usedFids_;
    bool alreadyLoggedMissingFid_;
    int nextGoodFidCount_;
+
+   // for writing rasters
+   std::map<FME_UInt32, int> textureRefsToCJIndex_;
+   std::map<FME_UInt32, std::string> rasterRefsToFileNames_;
+   int uniqueFilenameCounter_;
+
+   // A mapping from format name -> FME writer.
+   std::map<std::string, IFMEUniversalWriter*> writers_;
+   std::map<std::string, std::string> extensions_;
+
+   // option to control output texture file format
+   std::string preferredTextureFormat_;
 
    bool alreadyLoggedMissingLod_;
 };

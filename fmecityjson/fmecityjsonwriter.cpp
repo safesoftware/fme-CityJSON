@@ -58,9 +58,12 @@
 #include <inull.h>
 #include <iline.h>
 #include <igeometryiterator.h>
+#include <ilibrary.h>
+#include <irastertools.h>
 
 #include <typeinfo>
 #include <iomanip>
+#include <filesystem>
 
 // These are initialized externally when a writer object is created so all
 // methods in this file can assume they are ready to use.
@@ -119,7 +122,8 @@ FMECityJSONWriter::FMECityJSONWriter(const char* writerTypeName, const char* wri
    important_digits_(9),
    pretty_print_(false),
    indent_size_(2),
-   indent_characters_tabs_(false)
+   indent_characters_tabs_(false),
+   uniqueFilenameCounter_(1)
 {
 }
 
@@ -196,6 +200,14 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
       cityjson_version_ = "1.0.1";
    }
    
+   //-- texture output format?
+   gMappingFile->fetchWithPrefix(writerKeyword_.c_str(), writerTypeName_.c_str(), kSrcPreferredTextureFormat, *pv);
+   preferredTextureFormat_ = pv->data();
+   if (preferredTextureFormat_ == "Auto")
+   {
+      preferredTextureFormat_ = "";
+   }
+
    gFMESession->destroyString(pv);
 
    // Perform setup steps before opening file for writing
@@ -204,7 +216,8 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
    fmeGeometryTools_ = gFMESession->getGeometryTools();
 
    // Create visitor to visit feature geometries
-   visitor_ = new FMECityJSONGeometryVisitor(fmeGeometryTools_, gFMESession, remove_duplicates_, important_digits_);
+   visitor_ = new FMECityJSONGeometryVisitor(
+      fmeGeometryTools_, gFMESession, remove_duplicates_, important_digits_, textureRefsToCJIndex_);
 
    dataset_ = datasetName;
 
@@ -354,6 +367,10 @@ FME_Status FMECityJSONWriter::close()
       vertices_.clear();
    }
 
+   // Write out the appearances
+   FME_Status badLuck = outputAppearances();
+   if (badLuck != FME_SUCCESS) return badLuck;
+
    //-- write to the file
    if (!outputJSON_.is_null())
    {
@@ -372,11 +389,11 @@ FME_Status FMECityJSONWriter::close()
       {
          outputFile_ << outputJSON_ << std::endl;
       }
-   }
 
-   // Log that the writer is done
-   gLogFile->logMessageString((kMsgClosingWriter + dataset_).c_str());
-   
+      // Log that the writer is done
+      gLogFile->logMessageString((kMsgClosingWriter + dataset_).c_str());
+   }
+   outputJSON_.clear();
 
    // Delete the visitor
    if (visitor_)
@@ -394,6 +411,14 @@ FME_Status FMECityJSONWriter::close()
    
    // close the file
    outputFile_.close();
+
+   for (auto& [key, value]: writers_)
+   {
+      IFMEUniversalWriter* writer = value;
+      writer->close();
+      gFMESession->destroyWriter(writer);
+   }
+   writers_.clear();
 
    return FME_SUCCESS;
 }
@@ -1042,6 +1067,7 @@ void FMECityJSONWriter::logFMEStringArray(IFMEStringArray& stringArray)
    gLogFile->logMessageString(sample.c_str(), FME_INFORM);
 }
 
+//===========================================================================
 void FMECityJSONWriter::compressAndOutputVertices(double minx, double miny, double minz)
 {
    gLogFile->logMessageString("Compressing/quantizing vertices in the CityJSON object.");
@@ -1062,9 +1088,301 @@ void FMECityJSONWriter::compressAndOutputVertices(double minx, double miny, doub
    outputJSON_["transform"]["translate"] = {minx, miny, minz};
 }
 
+//===========================================================================
 void FMECityJSONWriter::generateUniqueFID(std::string& fids)
 {
    fids = kGeneratedFidPrefix + std::to_string(nextGoodFidCount_);
    nextGoodFidCount_++;
+}
+
+//===========================================================================
+FME_Status FMECityJSONWriter::writeRaster(FME_UInt32 rasterReference,
+                                          const std::string& fileBaseNameSuggestion,
+                                          const std::string& texturesRelativeDir,
+                                          const std::string& outputDir,
+                                          std::string& fileName,
+                                          std::string& fileType)
+{
+   IFMERaster* raster = gFMESession->getLibrary()->getRasterCopy(rasterReference);
+
+   // This is a bit confusing, so I'll put a note here:
+   // - fileType: suggestions of formats, from the GUI, are PNG/JPEG
+   // - flieType: strings returned to be used in the CityJSON file PNG/JPG (note, no "E")
+   // - writer keywords to use are PNGRASTER/JPEG
+
+   // If they are "suggesting" a type we don't support, we just will ignore their
+   // suggestion.
+   if ((fileType != "PNG") && (fileType != "JPEG"))
+   {
+      fileType = "";
+   }
+
+   // Get the original format name, if we can.
+   IFMEString* originalFormatName = gFMESession->createString();
+   raster->getSourceFormatName(*originalFormatName);
+   std::string ofn(originalFormatName->data(), originalFormatName->length());
+   gFMESession->destroyString(originalFormatName);
+
+   // If no fileType is suggested, let's try to keep what we have.
+   if (fileType.empty())
+   {
+      if (ofn == "JPEG")
+      {
+         // Let's pick the type that it already is
+         fileType = "JPG";
+      }
+      else
+      {
+         // If we still don't know what type to write out, let's just pick an arbitrary one
+         fileType = "PNG";
+      }
+   }
+   else if (fileType == "JPEG")
+   {
+      fileType = "JPG";
+   }
+
+   // JPEG doesn't like to write palettes, have Alpha band, etc. so we must resolve them here.
+   // no need to fix up a raster that is not changing format.
+   if ((ofn != "JPEG") && (fileType == "JPG"))
+   {
+      gFMESession->getRasterTools()->resolvePalettes(raster);
+      gFMESession->getRasterTools()->convertInterpretation(
+         FME_REINTERPRET_MODE_RASTER, FME_INTERPRETATION_RGB24, raster, nullptr);
+   }
+   else if ((ofn != "PNGRASTER") && (fileType == "PNG"))
+   {
+      gFMESession->getRasterTools()->convertInterpretation(
+         FME_REINTERPRET_MODE_RASTER, FME_INTERPRETATION_RGBA32, raster, nullptr);
+   }
+
+   if (rasterRefsToFileNames_.find(rasterReference) != rasterRefsToFileNames_.end())
+   {
+      std::string writtenName = rasterRefsToFileNames_[rasterReference];
+      if (writtenName.empty())
+      {
+         // Storing a null string indicates a failure to write the file.
+         fileName = "missing_raster";
+         return FME_FAILURE;
+      }
+      else
+      {
+         fileName = writtenName;
+         return FME_SUCCESS;
+      }
+   }
+
+   // We want silent logging during the writing of a texture file.
+   FME_Boolean oldSilentMode = gLogFile->getSilent();
+   gLogFile->silent(FME_TRUE); // don't forget to set this back to what it was before...
+
+      // Figure out if we can use original file basename or if we need to use the suggestion.
+   std::string basename("texture"); // the default if there is no name
+
+   // The source file name may be null if the raster is newly created.
+   IFMEString* sfn = gFMESession->createString();
+   raster->getSourceDataset(*sfn);
+   std::string origFileName = {sfn->data(), sfn->length()};
+   gFMESession->destroyString(sfn);
+
+   // Always use the source basName, if possible.
+   std::string sourceBN = std::filesystem::path(origFileName).stem().string();
+   if (!sourceBN.empty())
+   {
+      basename = sourceBN;
+   }
+   else if (!fileBaseNameSuggestion.empty())
+   {
+      basename = fileBaseNameSuggestion;
+   }
+
+   // We need to write this raster out using an
+   // FME writer. Let's use the format indicated.
+   std::string format = (fileType == "JPG") ? "JPEG" : "PNGRASTER";
+   fileName.clear();
+   FME_Status badLuck = writeWithWriter(raster, basename, format, outputDir, fileName);
+   raster = nullptr;
+
+   rasterRefsToFileNames_[rasterReference] = fileName;
+
+   gLogFile->silent(oldSilentMode);
+
+   return badLuck;
+}
+
+//------------------------------------------------------------------------------
+FME_Status FMECityJSONWriter::writeWithWriter(IFMERaster*& raster,
+                                              const std::string& basename,
+                                              const std::string& format,
+                                              const std::string& outputDir,
+                                              std::string& outputFilename)
+{
+   // Get the correct writer.
+   IFMEUniversalWriter* writer = nullptr;
+   auto it = writers_.find(format);
+   if (it != writers_.end())
+   {
+      writer = it->second;
+   }
+   else
+   {
+      // We haven't tried to make a writer for this format yet. Do it now.
+      writer = gFMESession->createWriter(format.c_str(), nullptr);
+
+      // Open this writer on our directory.
+      IFMEStringArray* directives = gFMESession->createStringArray();
+
+      FME_MsgNum msgNum = writer->open(outputDir.c_str(), *directives);
+      gFMESession->destroyStringArray(directives);
+      if (msgNum != FME_SUCCESS)
+      {
+         raster->destroy();
+         raster = nullptr;
+         gFMESession->destroyWriter(writer);
+         return FME_FAILURE;
+      }
+
+      // Place the writer in our dictionary.
+      writers_[format] = writer;
+      extensions_[format] = (format == "JPEG") ? ".jpg" : ".png";
+   }
+
+   // Make a temporary feature.
+   IFMEFeature* feature = gFMESession->createFeature();
+   feature->setGeometry(raster);
+   raster = nullptr;
+
+   // Make a unique name.
+   outputFilename = getUniqueFilename(basename, extensions_[format]);
+   feature->setFeatureType(std::filesystem::path(outputFilename).stem().string().c_str());
+
+   // Do the writing.
+   FME_MsgNum msgNum = writer->write(*feature);
+   gFMESession->destroyFeature(feature);
+
+   if (msgNum != FME_SUCCESS)
+   {
+      return FME_FAILURE;
+   }
+
+   return FME_SUCCESS;
+}
+
+std::string FMECityJSONWriter::getUniqueFilename(const std::string& basename,
+                                                 const std::string& extension)
+{
+   // This is the one we want - if it does not clash with a previous one.
+   std::string fileName = basename + extension;
+
+   // We have to alter the name if we found we used it.
+   if (std::find_if(std::begin(rasterRefsToFileNames_), std::end(rasterRefsToFileNames_), [&](auto&& p){ return p.second == fileName; }) != std::end(rasterRefsToFileNames_))
+   {
+      //basename += "_x";
+      fileName = basename + "_" + std::to_string(uniqueFilenameCounter_++) + extension;
+   }
+
+   return fileName;
+}
+
+//===========================================================================
+FME_Status FMECityJSONWriter::outputAppearances()
+{
+   if (!textureRefsToCJIndex_.empty())
+   {
+      // we need to know what order to write out the texture References
+      std::map<int, FME_UInt32> CJIndexToTexRef;
+      for (auto& refIndex : textureRefsToCJIndex_)
+      {
+         CJIndexToTexRef[refIndex.second] = refIndex.first;
+      }
+
+      // Get textures directory name and location
+      std::string texturesRelativeDir; // no trailing slash
+      std::string texturesFullDir;     // no trailing slash
+
+      texturesRelativeDir = std::filesystem::path(dataset_).stem().string() + "_textures";
+      texturesFullDir     = std::filesystem::path(dataset_).parent_path().string() + '/' + texturesRelativeDir;
+
+      json allTextures;
+      for (auto& indexRef : CJIndexToTexRef)
+      {
+         FME_UInt32 textureRef = indexRef.second;
+
+         // Get the Raster reference from the texture.
+         IFMETexture* tex = gFMESession->getLibrary()->getTextureCopy(textureRef);
+
+         std::string fileName;
+         std::string fileType(preferredTextureFormat_);
+         FME_UInt32 rasterRef(0);
+         if (FME_FALSE == tex->getRasterReference(rasterRef))
+         {
+            // We shouldn't get here.  We have got no raster to write
+            // but we still need to fill an entry in the texture array.
+            fileName = "missing_raster";
+            fileType = "PNG";
+         }
+         else
+         {
+            // We'll get back the name and type that was written out
+            // Let's try to write it out with the original filename if we can,
+            // but if not, start with "texture.png" etc.
+            FME_Status badLuck = writeRaster(
+               rasterRef, "texture", texturesRelativeDir, texturesFullDir, fileName, fileType);
+            if (badLuck != FME_SUCCESS) return badLuck;
+         }
+
+         json textureJSON;
+         textureJSON["image"] = texturesRelativeDir + '/' + fileName;
+         textureJSON["type"] = fileType;
+
+         FME_TextureWrap wrapStyle;
+         tex->getTextureWrap(wrapStyle);
+         switch (wrapStyle)
+         {
+            case FME_TEXTURE_REPEAT_BOTH:
+            case FME_TEXTURE_CLAMP_U_REPEAT_V: // Can't really represent this so we'll pick "wrap"
+            case FME_TEXTURE_REPEAT_U_CLAMP_V: // Can't really represent this so we'll pick "wrap"
+               textureJSON["wrapMode"] = "wrap";
+               break;
+            case FME_TEXTURE_CLAMP_BOTH:
+               textureJSON["wrapMode"] = "clamp";
+               break;
+            case FME_TEXTURE_MIRROR:
+               textureJSON["wrapMode"] = "mirror";
+               break;
+            case FME_TEXTURE_BORDER_FILL:
+               textureJSON["wrapMode"] = "border";
+               break;
+            case FME_TEXTURE_NONE:
+            default: 
+               textureJSON["wrapMode"] = "none";
+               break;
+         }
+
+         // TODO: figure out how we should support "textureType"
+         //textureJSON["textureType"] = "unknown";
+
+         FME_Real64 r, g, b;
+         if (FME_TRUE == tex->getBorderColor(r, g, b))
+         {
+            std::vector<double> rgba{ r, g, b, 1.0 };
+            textureJSON["borderColor"] = rgba;
+         }
+
+         gFMESession->getGeometryTools()->destroyTexture(tex); tex = nullptr;
+
+         // Add this to our array
+         allTextures += textureJSON;
+      }
+      
+      if (!allTextures.is_null())
+      {
+         outputJSON_["appearance"]["textures"] = allTextures;
+      }
+
+      // We're done with this
+      textureRefsToCJIndex_.clear();
+   }
+   return FME_SUCCESS;
 }
 

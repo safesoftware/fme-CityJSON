@@ -80,6 +80,7 @@
 #include <itextiterator.h>
 #include <itrianglefan.h>
 #include <itrianglestrip.h>
+#include <ilibrary.h>
 
 #include <string>
 
@@ -137,13 +138,15 @@ const std::map< std::string, std::vector< std::string > > FMECityJSONGeometryVis
 FMECityJSONGeometryVisitor::FMECityJSONGeometryVisitor(const IFMEGeometryTools* geomTools,
                                                        IFMESession* session,
                                                        bool remove_duplicates,
-                                                       int important_digits)
+                                                       int important_digits,
+                                                       std::map<FME_UInt32, int>& textureRefsToCJIndex)
    :
    fmeGeometryTools_(geomTools),
    fmeSession_(session),
    remove_duplicates_(remove_duplicates),
    important_digits_(important_digits),
-   skipLastPointOnLine_(false)
+   skipLastPointOnLine_(false),
+   textureRefsToCJIndex_(textureRefsToCJIndex)
 {
    logFile_ = session->logFile();
 }
@@ -793,6 +796,37 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
       jsonArray = jsonArray2;
    }
    completedGeometry(topLevel, jsonArray);
+
+   // Let's deal with appearances, if we have any.
+   // Note: we only look at the front, because CityJSON does not
+   // have the ability to store back textures.
+   FME_UInt32 frontAppRef(0);
+   int cityJSONTexIndex(0);
+   if (face.getAppearanceReference(frontAppRef, FME_TRUE) == FME_TRUE)
+   {
+      // Is this appearance a texture or a material?
+      IFMEAppearance* app = fmeSession_->getLibrary()->getAppearanceCopy(frontAppRef);
+      FME_UInt32 texRef(0);
+      if (FME_TRUE == app->getTextureReference(texRef))
+      {
+         // We've got a texture.
+         // One we've never seen before?
+         auto refIndex = textureRefsToCJIndex_.find(texRef);
+         if (refIndex == textureRefsToCJIndex_.end())
+         {
+            // Storing an increasing number means we'll get the right
+            // index later.
+            cityJSONTexIndex              = textureRefsToCJIndex_.size();
+            textureRefsToCJIndex_[texRef] = cityJSONTexIndex;
+         }
+         else
+         {
+            cityJSONTexIndex = refIndex->second;
+         }
+      }
+
+      fmeGeometryTools_->destroyAppearance(app); app = nullptr;
+   }
 
    //-- fetch the semantic surface type of the geometry
    // Check if the semantics type is allowed

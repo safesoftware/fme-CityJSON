@@ -60,7 +60,8 @@ public:
    FMECityJSONGeometryVisitor(const IFMEGeometryTools* geomTools,
                               IFMESession* session,
                               bool remove_duplicates,
-                              int important_digits);
+                              int important_digits,
+                              std::map<FME_UInt32, int>& textureRefsToCJIndex);
 
    //---------------------------------------------------------------------
    // Destructor.
@@ -394,6 +395,9 @@ private:
    std::vector< json > multiSolidSemanticValues_;
    //-- possible types; always possible to have '+MySemantics' with the '+'
    static const std::map< std::string, std::vector< std::string > > semancticsTypes_; 
+
+   // Keeping track of textures in appearances
+   std::map<FME_UInt32, int>& textureRefsToCJIndex_;
 
    // Maps a vertex to a specific index in the vertex pool.
    std::unordered_map<std::string, unsigned long> vertexToIndex_;
