@@ -262,7 +262,9 @@ private:
    //---------------------------------------------------------------------
    // We can't have nested composite surfaces, so we need to flatten
    // them down to one level of hierarchy.
-   FME_Status visitCompositeSurfaceParts(const IFMECompositeSurface& compositeSurface, json& jsonArray);
+   FME_Status visitCompositeSurfaceParts(const IFMECompositeSurface& compositeSurface,
+                                         json& jsonArray,
+                                         json& jsonTCArray);
 
    //---------------------------------------------------------------------
    // The vertex is added to the vertex pool.  It will not add duplicates.

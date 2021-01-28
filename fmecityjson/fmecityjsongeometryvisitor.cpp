@@ -1252,7 +1252,7 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
 }
 
 FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
-   const IFMECompositeSurface& compositeSurface, json& jsonArray)
+   const IFMECompositeSurface& compositeSurface, json& jsonArray, json& jsonTCArray)
 {
    skipLastPointOnLine_ = true; 
 
@@ -1265,7 +1265,7 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
       // Can't deal with multiple levels of nesting, so let's break that down.
       if (surface->canCastAs<const IFMECompositeSurface*>())
       {
-         FME_Status badNews = visitCompositeSurfaceParts(*(surface->castAs<const IFMECompositeSurface*>()), jsonArray);
+         FME_Status badNews = visitCompositeSurfaceParts(*(surface->castAs<const IFMECompositeSurface*>()), jsonArray, jsonTCArray);
          if (badNews) return FME_FAILURE;
       }
       else
@@ -1281,6 +1281,8 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
             return FME_FAILURE;
          }
          jsonArray.push_back(takeWorkingBoundary());
+         // Do we need to gather up the textures?
+         jsonTCArray.push_back(takeWorkingTexCoords());
       }
    }
 
@@ -1306,10 +1308,11 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
 
    // Create an iterator to loop through all the surfaces this multi surface contains
    auto jsonArray = json::array();
-   FME_Status badNews = visitCompositeSurfaceParts(compositeSurface, jsonArray);
+   json jsonTCArray = json::array();
+   FME_Status badNews = visitCompositeSurfaceParts(compositeSurface, jsonArray, jsonTCArray);
    if (badNews) return FME_FAILURE;
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    //-- store semantic surface information
    if (!semanticValues_.empty()) {
@@ -1367,6 +1370,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
    // Create an iterator to loop through all the surfaces this multi surface contains
    IFMESurfaceIterator* iterator = multiSurface.getIterator();
    auto jsonArray = json::array();
+   json jsonTCArray = json::array();
    while (iterator->next())
    {
       // Get the next surface
@@ -1393,15 +1397,23 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
          {
             jsonArray.push_back(singleSurfaceBoundary);
          }
+         // Do we need to gather up the textures?
+         auto compositeSurfaceTCJSON = takeWorkingTexCoords();
+         for (auto& singleSurfaceTC : compositeSurfaceTCJSON)
+         {
+            jsonTCArray.push_back(singleSurfaceTC);
+         }
       }
       else
       {
          // Just a regular single surface.
          jsonArray.push_back(takeWorkingBoundary());
+         // Do we need to gather up the textures?
+         jsonTCArray.push_back(takeWorkingTexCoords());
       }
    }
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    //-- store semantic surface information
    if (!semanticValues_.empty()) {

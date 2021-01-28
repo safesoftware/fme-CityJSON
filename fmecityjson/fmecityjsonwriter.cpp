@@ -818,16 +818,19 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 //-- GEOMETRIES -----
 
    //-- extract the geometries from the feature
-   const IFMEGeometry* geometry = (const_cast<IFMEFeature&>(feature)).getGeometry();
+   const IFMEGeometry& geometry = feature.geometry();
 
+   // CityJSON must explicitly set texture references on each level of the
+   // heirarchy, so we must resolve any inheritance that might exist.
+   resolveTextureInheritance(geometry);
 
    //-- do no process geometry if none, this is allowed in CityJSON
    //-- a CO without geometry still has to have an empty array "geometry": []
    outputJSON_["CityObjects"][fids]["geometry"] = json::array();
-   FME_Boolean isgeomnull = geometry->canCastAs<IFMENull*>();
+   FME_Boolean isgeomnull = geometry.canCastAs<IFMENull*>();
    if (isgeomnull == false)
    {
-      FME_Status badNews = geometry->acceptGeometryVisitorConst(*visitor_);
+      FME_Status badNews = geometry.acceptGeometryVisitorConst(*visitor_);
       if (badNews) {
          // There was an error in writing the geometry
          gLogFile->logMessageString(kMsgWriteError);
@@ -838,7 +841,7 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       IFMEString* slod = gFMESession->createString();
       slod->set("cityjson_lod", 12);
       IFMEString* stmpFME = gFMESession->createString();
-      bool notValidLOD(geometry->getTraitString(*slod, *stmpFME) == FME_FALSE);
+      bool notValidLOD(geometry.getTraitString(*slod, *stmpFME) == FME_FALSE);
 
       // Maybe we got one, but it was not a valid number.
       double lodAsDouble(2);
@@ -872,13 +875,21 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
       //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
       json fgeomjson = (visitor_)->getGeomJSON();
-      //-- TODO: write '2' or '2.0' is fine for the "lod"?
-      fgeomjson["lod"] = lodAsDouble;
+      json ftcjson = (visitor_)->getTexCoordsJSON();
 
       //-- write it to the JSON object
       // outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
-      if (!fgeomjson.empty()) {
+      if (!fgeomjson.empty()) 
+      {
+         //-- TODO: write '2' or '2.0' is fine for the "lod"?
+         fgeomjson["lod"] = lodAsDouble;
+
          outputJSON_["CityObjects"][fids]["geometry"].push_back(fgeomjson);
+
+         if (!ftcjson.is_null())
+         {
+            outputJSON_["appearance"]["vertices-texture"] = ftcjson;
+         }
       }
 
       //-- reset the internal DS for one feature
@@ -1386,3 +1397,21 @@ FME_Status FMECityJSONWriter::outputAppearances()
    return FME_SUCCESS;
 }
 
+//===========================================================================
+void FMECityJSONWriter::resolveTextureInheritance(const IFMEGeometry& geometry)
+{
+   // First, doing this actually violates the "const" on the geometry object we have.
+   // But we know we are not doing anything tricky, so let's cast that away.
+   // This avoids us needing to make a copy.
+   IFMEGeometry* nonConstGeom = const_cast<IFMEGeometry*>(&geometry);
+
+   // Only some of the geometries are nested, so we only need to resolve references in those.
+   if (nonConstGeom->canCastAs<IFMEMultiSurface*>())
+   {
+      nonConstGeom->castAs<IFMEMultiSurface*>()->resolvePartDefaults();
+   }
+   else if (nonConstGeom->canCastAs<IFMECompositeSurface*>())
+   {
+      nonConstGeom->castAs<IFMECompositeSurface*>()->resolvePartDefaults();
+   }
+}
