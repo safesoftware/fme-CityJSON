@@ -149,6 +149,10 @@ FMECityJSONGeometryVisitor::FMECityJSONGeometryVisitor(const IFMEGeometryTools* 
    textureRefsToCJIndex_(textureRefsToCJIndex)
 {
    logFile_ = session->logFile();
+   uCoordDesc_ = session->createString();
+   uCoordDesc_->set(kFME_texture_coordinate_u, (FME_UInt32)strlen(kFME_texture_coordinate_u));
+   vCoordDesc_ = session->createString();
+   vCoordDesc_->set(kFME_texture_coordinate_v, (FME_UInt32)strlen(kFME_texture_coordinate_v));
 }
 
 //===========================================================================
@@ -158,12 +162,32 @@ FMECityJSONGeometryVisitor::~FMECityJSONGeometryVisitor()
    //------------------------------------------------------------------------
    // Perform any necessary cleanup
    //------------------------------------------------------------------------
+
+   fmeSession_->destroyString(uCoordDesc_); uCoordDesc_ = nullptr;
+   fmeSession_->destroyString(vCoordDesc_); vCoordDesc_ = nullptr;
+
 }
 
 json FMECityJSONGeometryVisitor::getGeomJSON()
 {
    json retVal = outputgeom_;
    outputgeom_.clear();
+   return retVal;
+}
+
+json FMECityJSONGeometryVisitor::getTexCoordsJSON()
+{
+   json retVal;
+   // This holds an array of strings, but each string is a (nested) JSON array.
+   if (!textureCoords_.empty())
+   {
+      retVal = json::array();
+      for (auto& oneElement : textureCoords_)
+      {
+         retVal.push_back(json::parse(oneElement));
+      }
+   }
+   textureCoords_.clear();
    return retVal;
 }
 
@@ -174,9 +198,21 @@ json FMECityJSONGeometryVisitor::takeWorkingBoundary()
    return retVal;
 }
 
+json FMECityJSONGeometryVisitor::takeWorkingTexCoords()
+{
+   json retVal = workingTexCoords_;
+   workingTexCoords_.clear();
+   return retVal;
+}
+
 const VertexPool& FMECityJSONGeometryVisitor::getGeomVertices()
 {
    return vertices_;
+}
+
+const TexCoordPool& FMECityJSONGeometryVisitor::getTextureCoords()
+{
+   return textureCoords_;
 }
 
 void FMECityJSONGeometryVisitor::getGeomBounds(std::optional<double>& minx,
@@ -256,20 +292,49 @@ void FMECityJSONGeometryVisitor::reset()
    outputgeom_.clear();
    surfaces_.clear();
    semanticValues_.clear();
+   workingBoundary_.clear();
+   workingTexCoords_.clear();
+}
+
+// Converts a value into a string
+std::string get_key(FME_Real64 val, int precision)
+{
+   char buf[200];
+   std::stringstream ss;
+   ss << "%." << precision << "f";
+   std::sprintf(buf, ss.str().c_str(), val);
+   std::string r(buf);
+
+   // Pretty it up a bit if it has a decimal place (remove trailing zeros)
+   if (r.find('.') != std::string::npos)
+   {
+      // Remove trailing 0s
+      r = r.substr(0, r.find_last_not_of('0') + 1);
+      // If the decimal point is now the last character, remove that as well
+      if (r.find('.') == r.size() - 1)
+      {
+         r = r.substr(0, r.size() - 1);
+      }
+   }
+
+   return r;
 }
 
 // Converts a point into a string
 std::string get_key(const FMECoord3D& vertex, int precision)
 {
-   char buf[200];
-   std::stringstream ss;
-   ss << "%." << precision << "f "
-      << "%." << precision << "f "
-      << "%." << precision << "f";
-   std::sprintf(buf, ss.str().c_str(), vertex.x, vertex.y, vertex.z);
-   std::string r(buf);
-   return r;
+   return (get_key(vertex.x, precision) + ' ' + 
+           get_key(vertex.y, precision) + ' ' +
+           get_key(vertex.z, precision));
 }
+
+std::string get_key(const FMECoord2D& vertex, int precision)
+{
+   // we put commas in this key, as it will be used to make JSON later.
+   return (get_key(vertex.x, precision) + ", " +
+           get_key(vertex.y, precision));
+}
+
 
 void tokenize(const std::string& str, std::vector<std::string>& tokens)
 {
@@ -341,6 +406,33 @@ unsigned long FMECityJSONGeometryVisitor::addVertex(const FMECoord3D& vertex)
    return index;
 }
 
+// This will make sure we don't add any texture coord twice.
+unsigned long FMECityJSONGeometryVisitor::addTextureCoord(const FMECoord2D& texcoord)
+{
+   // This is the vertex, as a string, which we'll use.
+   std::string texcoord_key = get_key(texcoord, important_digits_);
+
+   // This will be the index in the vertex pool if it is new
+   unsigned long index(textureCoords_.size());
+
+   // A little more bookkeeping if we want to optimize the texture coordinate pool
+   // and not have duplicates.
+
+   // Have we encountered this texture coordinate before?
+   auto [entry, texCoordAdded] = textureCoordToIndex_.try_emplace(texcoord_key, index);
+   if (!texCoordAdded) // We already have this in our texture coordinate pool
+   {
+      index = entry->second;
+   }
+   else // We haven't seen this before, so insert it into the pool.
+   {
+      textureCoords_.push_back('[' + texcoord_key + ']');
+
+      // index is already set correctly.
+   }
+
+   return index;
+}
 
 
 //=====================================================================
@@ -362,15 +454,23 @@ bool FMECityJSONGeometryVisitor::claimTopLevel(const std::string& type)
 
 //=====================================================================
 //
-void FMECityJSONGeometryVisitor::completedGeometry(bool topLevel, const json& boundary)
+void FMECityJSONGeometryVisitor::completedGeometry(bool topLevel, const json& boundary, const json& texCoords)
 {
    if (topLevel)
    {
       outputgeom_["boundaries"] = boundary;
+      if (!textureRefsToCJIndex_.empty()) // only if we've actually found a texture.
+      {
+         outputgeom_["texture"]["default_theme"]["values"] = texCoords;
+      }
    }
    else
    {
       workingBoundary_ = boundary;
+      if (!texCoords.is_null())
+      {
+         workingTexCoords_ = texCoords;
+      }
    }
 }
 
@@ -381,7 +481,8 @@ FME_Status FMECityJSONGeometryVisitor::visitAggregate(const IFMEAggregate& aggre
 {
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("aggregate"));
 
-   FME_Status badNews;
+//    // For appearances, let's make it easy and not have to deal with inherited ones.
+//    aggregate.resolvePartDefaults();
 
    // Create iterator to get all geometries
    //-- We can't write this out as an aggregate in CityJSON, so
@@ -395,7 +496,7 @@ FME_Status FMECityJSONGeometryVisitor::visitAggregate(const IFMEAggregate& aggre
       // re-visit aggregate geometries
       if (nullptr != iterator->getPart())
       {
-         badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
+         FME_Status badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
          if (badNews)
          {
             // Destroy the iterator
@@ -524,7 +625,35 @@ FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
       jsonArray2.push_back(jsonArray);
       jsonArray = jsonArray2;
    }
-   completedGeometry(topLevel, jsonArray);
+
+   // Do we need to gather up the textures?
+   auto jsonTCArray = json::array();
+//   if (getTextureCoordsFromLine_)
+   {
+      FME_Real64 *uCoords = new FME_Real64[line.numPoints()-skip];
+      FME_Real64 *vCoords = new FME_Real64[line.numPoints()-skip];
+
+      if((FME_SUCCESS == line.getNamedMeasureValues(*uCoordDesc_, uCoords)) &&
+         (FME_SUCCESS == line.getNamedMeasureValues(*vCoordDesc_, vCoords)))
+      {
+         // The index to the texture is first.
+         jsonTCArray.push_back(nextTextRef_);
+         for  (FME_UInt32 i=0; i < line.numPoints()-skip; i++)
+         {
+            FMECoord2D uvCoord(uCoords[i], vCoords[i]);
+            unsigned long index = addTextureCoord(uvCoord);
+            jsonTCArray.push_back(index);
+         }
+      }
+      else
+      {
+         jsonTCArray.push_back(nullptr);
+      }
+
+      delete [] uCoords; uCoords = nullptr;
+      delete [] vCoords; vCoords = nullptr;
+   }
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("line"));
 
@@ -776,6 +905,43 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
       return FME_FAILURE;
    }
    
+   // Let's deal with appearances, if we have any.
+   // Note: we only look at the front, because CityJSON does not
+   // have the ability to store back textures.
+   FME_UInt32 frontAppRef(0);
+   int cityJSONTexIndex(-1);
+   if (face.getAppearanceReference(frontAppRef, FME_TRUE) == FME_TRUE)
+   {
+      // Is this appearance a texture or a material?
+      IFMEAppearance* app = fmeSession_->getLibrary()->getAppearanceCopy(frontAppRef);
+      if (app) // if the appRef was "0" or "-1" we don't expect a reference
+      {
+         FME_UInt32 texRef(0);
+         if (FME_TRUE == app->getTextureReference(texRef))
+         {
+            // We've got a texture.
+            // One we've never seen before?
+            auto refIndex = textureRefsToCJIndex_.find(texRef);
+            if (refIndex == textureRefsToCJIndex_.end())
+            {
+               // Storing an increasing number means we'll get the right
+               // index later.
+               cityJSONTexIndex = textureRefsToCJIndex_.size();
+               textureRefsToCJIndex_[texRef] = cityJSONTexIndex;
+            }
+            else
+            {
+               cityJSONTexIndex = refIndex->second;
+            }
+         }
+
+         fmeGeometryTools_->destroyAppearance(app); app = nullptr;
+      }
+   }
+
+   // For children of mine, this is the texture index to use
+   nextTextRef_= cityJSONTexIndex;
+
    bool topLevel = claimTopLevel("CompositeSurface");
 
    // re-visit the boundary
@@ -787,6 +953,10 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
    }
    jsonArray.push_back(takeWorkingBoundary());
 
+   // Do we need to gather up the textures?
+   json jsonTCArray = json::array();
+   jsonTCArray.push_back(takeWorkingTexCoords());
+
    // If we are at the top level, just passed in a Face, we must convert this into 
    // a CompositeSurface, as CityJSON cannot store faces by themselves.
    if (topLevel)
@@ -794,39 +964,12 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
       auto jsonArray2 = json::array();
       jsonArray2.push_back(jsonArray);
       jsonArray = jsonArray2;
-   }
-   completedGeometry(topLevel, jsonArray);
 
-   // Let's deal with appearances, if we have any.
-   // Note: we only look at the front, because CityJSON does not
-   // have the ability to store back textures.
-   FME_UInt32 frontAppRef(0);
-   int cityJSONTexIndex(0);
-   if (face.getAppearanceReference(frontAppRef, FME_TRUE) == FME_TRUE)
-   {
-      // Is this appearance a texture or a material?
-      IFMEAppearance* app = fmeSession_->getLibrary()->getAppearanceCopy(frontAppRef);
-      FME_UInt32 texRef(0);
-      if (FME_TRUE == app->getTextureReference(texRef))
-      {
-         // We've got a texture.
-         // One we've never seen before?
-         auto refIndex = textureRefsToCJIndex_.find(texRef);
-         if (refIndex == textureRefsToCJIndex_.end())
-         {
-            // Storing an increasing number means we'll get the right
-            // index later.
-            cityJSONTexIndex              = textureRefsToCJIndex_.size();
-            textureRefsToCJIndex_[texRef] = cityJSONTexIndex;
-         }
-         else
-         {
-            cityJSONTexIndex = refIndex->second;
-         }
-      }
-
-      fmeGeometryTools_->destroyAppearance(app); app = nullptr;
+      auto jsonTCArray2 = json::array();
+      jsonTCArray2.push_back(jsonTCArray);
+      jsonTCArray = jsonTCArray2;
    }
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    //-- fetch the semantic surface type of the geometry
    // Check if the semantics type is allowed

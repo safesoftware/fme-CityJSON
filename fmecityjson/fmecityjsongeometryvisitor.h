@@ -46,6 +46,7 @@
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 using VertexPool = std::vector<std::tuple<double, double, double>>;
+using TexCoordPool = std::vector<std::string>;
 
 class IFMEVoxelGrid;
 class IFMESession;
@@ -91,7 +92,7 @@ public:
    FME_Status visitArc(const IFMEArc& arc) override;
 
    //----------------------------------------------------------------------
-   FME_Status visitOrientedArc(const IFMEOrientedArc & orientedArc) override;
+   FME_Status visitOrientedArc(const IFMEOrientedArc& orientedArc) override;
 
    //----------------------------------------------------------------------
    FME_Status visitClothoid(const IFMEClothoid& clothoid) override;
@@ -203,7 +204,7 @@ public:
    //----------------------------------------------------------------------
    // Visitor logs the values of the passed in IFMEFeatureTable geometry object.
    FME_Status visitFeatureTable(const IFMEFeatureTable& featureTable) override;
-   
+
    //----------------------------------------------------------------------
    // Visitor logs the values of the passed in IFMEVoxelGrid geometry object.
    FME_Status visitVoxelGrid(const IFMEVoxelGrid& voxelGrid);
@@ -211,10 +212,12 @@ public:
    //----------------------------------------------------------------------
    // get the JSON object for the geometry (without the "lod")
    json getGeomJSON();
+   json getTexCoordsJSON();
 
    //----------------------------------------------------------------------
    // get the array of vertices for the geometry
    const VertexPool& getGeomVertices();
+   const TexCoordPool& getTextureCoords();
 
    //----------------------------------------------------------------------
    // get bounds of vertices for the geometry
@@ -250,7 +253,7 @@ private:
 
    //---------------------------------------------------------------
    // Copy constructor
-   FMECityJSONGeometryVisitor (const FMECityJSONGeometryVisitor&);
+   FMECityJSONGeometryVisitor(const FMECityJSONGeometryVisitor&);
 
    //---------------------------------------------------------------
    // Assignment operator
@@ -266,6 +269,7 @@ private:
    // The index of the vertex in the pool is returned.
    unsigned long addVertex(const FMECoord3D& vertex);
    void acceptVertex(const std::string& vertex_string);
+   unsigned long addTextureCoord(const FMECoord2D& texcoord);
 
    //---------------------------------------------------------------------
    // This allows easy access to turn on/off debug logging throughout this class.
@@ -278,6 +282,7 @@ private:
    // get the JSON object for the boundary that is "in progress"  
    // likely from the last visit call.
    json takeWorkingBoundary();
+   json takeWorkingTexCoords();
 
    //----------------------------------------------------------------------
    // If we are the first in a hierarchy, let's put out "header" info about
@@ -288,7 +293,7 @@ private:
    //----------------------------------------------------------------------
    // If we are the first in a hierarchy, let's put out "boundary" and "semantic" info.
    // If we know we are just a sub-part we'll store our info away for it to use later.
-   void completedGeometry(bool topLevel, const json& boundary);
+   void completedGeometry(bool topLevel, const json& boundary, const json& texCoords = {});
 
    //----------------------------------------------------------------------
    //
@@ -379,6 +384,7 @@ private:
    std::string featureType_;
    json outputgeom_;
    json workingBoundary_;
+   json workingTexCoords_;
    bool remove_duplicates_; 
    int important_digits_; 
 
@@ -404,6 +410,16 @@ private:
    VertexPool vertices_;
    std::optional<double> minx_, miny_, minz_, maxx_, maxy_, maxz_;
 
+   // Maps a texture coordinate to a specific index in the textCoord pool
+   std::unordered_map<std::string, unsigned long> textureCoordToIndex_;
+   TexCoordPool textureCoords_;
+   // If we need texture coordinates from a parent object, set this
+   // up high so the line down below knows which ref to use.
+   int nextTextRef_;
+
+   // Saved once so we don't need to make them over and over
+   IFMEString* uCoordDesc_;
+   IFMEString* vCoordDesc_;
 };
 
 #endif
