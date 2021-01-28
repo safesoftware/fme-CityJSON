@@ -820,10 +820,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    //-- extract the geometries from the feature
    const IFMEGeometry& geometry = feature.geometry();
 
-   // CityJSON must explicitly set texture references on each level of the
-   // heirarchy, so we must resolve any inheritance that might exist.
-   resolveTextureInheritance(geometry);
-
    //-- do no process geometry if none, this is allowed in CityJSON
    //-- a CO without geometry still has to have an empty array "geometry": []
    outputJSON_["CityObjects"][fids]["geometry"] = json::array();
@@ -1395,23 +1391,4 @@ FME_Status FMECityJSONWriter::outputAppearances()
       textureRefsToCJIndex_.clear();
    }
    return FME_SUCCESS;
-}
-
-//===========================================================================
-void FMECityJSONWriter::resolveTextureInheritance(const IFMEGeometry& geometry)
-{
-   // First, doing this actually violates the "const" on the geometry object we have.
-   // But we know we are not doing anything tricky, so let's cast that away.
-   // This avoids us needing to make a copy.
-   IFMEGeometry* nonConstGeom = const_cast<IFMEGeometry*>(&geometry);
-
-   // Only some of the geometries are nested, so we only need to resolve references in those.
-   if (nonConstGeom->canCastAs<IFMEMultiSurface*>())
-   {
-      nonConstGeom->castAs<IFMEMultiSurface*>()->resolvePartDefaults();
-   }
-   else if (nonConstGeom->canCastAs<IFMECompositeSurface*>())
-   {
-      nonConstGeom->castAs<IFMECompositeSurface*>()->resolvePartDefaults();
-   }
 }

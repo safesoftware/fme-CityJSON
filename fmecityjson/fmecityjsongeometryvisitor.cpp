@@ -1186,6 +1186,13 @@ FME_Status FMECityJSONGeometryVisitor::visitExtrusion(const IFMEExtrusion& extru
 //
 FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepSolid)
 {
+   // CityJSON must explicitly set texture references on each level of the
+   // hierarchy, so we must resolve any inheritance that might exist.
+   // Doing this cast actually violates the "const" on the geometry object we have.
+   // But we know we are not doing anything tricky, so let's cast that away.
+   // This avoids us needing to make a copy.
+   const_cast<IFMEBRepSolid*>(&brepSolid)->resolvePartDefaults();
+
    skipLastPointOnLine_ = true; 
 
    solidSemanticValues_.clear();
@@ -1210,7 +1217,10 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
       return FME_FAILURE;
    }
    auto jsonArray = json::array();
+   json jsonTCArray = json::array();
    jsonArray.push_back(takeWorkingBoundary());
+   // Do we need to gather up the textures?
+   jsonTCArray.push_back(takeWorkingTexCoords());
    solidSemanticValues_.push_back(replaceSemanticValues(semanticValues_));
 
 
@@ -1230,10 +1240,12 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
          return FME_FAILURE;
       }
       jsonArray.push_back(takeWorkingBoundary());
+      // Do we need to gather up the textures?
+      jsonTCArray.push_back(takeWorkingTexCoords());
       solidSemanticValues_.push_back(replaceSemanticValues(semanticValues_));
    }
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    //-- store semantic surface information
    if (!semanticValues_.empty()) {
@@ -1298,6 +1310,13 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
 //
 FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMECompositeSurface& compositeSurface)
 {
+   // CityJSON must explicitly set texture references on each level of the
+   // hierarchy, so we must resolve any inheritance that might exist.
+   // Doing this cast actually violates the "const" on the geometry object we have.
+   // But we know we are not doing anything tricky, so let's cast that away.
+   // This avoids us needing to make a copy.
+   const_cast<IFMECompositeSurface*>(&compositeSurface)->resolvePartDefaults();
+
    skipLastPointOnLine_ = true; 
 
    semanticValues_.clear();
@@ -1359,6 +1378,13 @@ FME_Status FMECityJSONGeometryVisitor::visitRectangleFace(const IFMERectangleFac
 //
 FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface& multiSurface)
 {
+   // CityJSON must explicitly set texture references on each level of the
+   // hierarchy, so we must resolve any inheritance that might exist.
+   // Doing this cast actually violates the "const" on the geometry object we have.
+   // But we know we are not doing anything tricky, so let's cast that away.
+   // This avoids us needing to make a copy.
+   const_cast<IFMEMultiSurface*>(&multiSurface)->resolvePartDefaults();
+
    skipLastPointOnLine_ = true; 
 
    semanticValues_.clear();

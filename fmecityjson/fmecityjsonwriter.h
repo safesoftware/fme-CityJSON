@@ -196,10 +196,6 @@ private:
                                  const std::string& extension);
 
    //---------------------------------------------------------------
-   // makes any texture inheritance explicit at each leal level.
-   void resolveTextureInheritance(const IFMEGeometry& geometry);
-
-   //---------------------------------------------------------------
    FME_Status outputAppearances();
 
    // Data members
