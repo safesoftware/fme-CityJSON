@@ -283,8 +283,11 @@ private:
    //----------------------------------------------------------------------
    // get the JSON object for the boundary that is "in progress"  
    // likely from the last visit call.
-   json takeWorkingBoundary();
-   json takeWorkingTexCoords();
+   void takeWorkingBoundaries(json& jsonArray, json& jsonTCArray);
+   void takeWorkingBoundaries_2Deep(json& jsonArray, json& jsonTCArray);
+   void takeWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray);
+   void addWorkingBoundaries(json& jsonArray, json& jsonTCArray);
+   void addWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray);
 
    //----------------------------------------------------------------------
    // If we are the first in a hierarchy, let's put out "header" info about
@@ -295,13 +298,20 @@ private:
    //----------------------------------------------------------------------
    // If we are the first in a hierarchy, let's put out "boundary" and "semantic" info.
    // If we know we are just a sub-part we'll store our info away for it to use later.
-   void completedGeometry(bool topLevel, const json& boundary, const json& texCoords = {});
+   void completedGeometry(bool topLevel, const json& boundary, const json& texCoords);
 
    //----------------------------------------------------------------------
    //
    template <class T>
    FME_Status visitCompositeOrMultiSolid(const T& compositeOrMultiSolid, const std::string& typeAsString)
    {
+      // CityJSON must explicitly set texture references on each level of the
+      // hierarchy, so we must resolve any inheritance that might exist.
+      // Doing this cast actually violates the "const" on the geometry object we have.
+      // But we know we are not doing anything tricky, so let's cast that away.
+      // This avoids us needing to make a copy.
+      const_cast<T*>(&compositeOrMultiSolid)->resolvePartDefaults();
+
       skipLastPointOnLine_ = true; 
 
       multiSolidSemanticValues_.clear();
@@ -313,6 +323,7 @@ private:
       // Create an iterator to loop through all the solids this multi solid contains
       auto* iterator = compositeOrMultiSolid.getIterator();
       auto jsonArray = json::array();
+      json jsonTCArray = json::array();
       while (iterator->next())
       {
          // Get the next solid.
@@ -336,22 +347,18 @@ private:
          // nesting in the same way FME can.
          if (solid->canCastAs<const IFMECompositeSolid*>())
          {
-            auto compositeSolidBoundaryJSON = takeWorkingBoundary();
-            for (auto& singleSolidBoundary : compositeSolidBoundaryJSON)
-            {
-               jsonArray.push_back(singleSolidBoundary);
-               multiSolidSemanticValues_.push_back(solidSemanticValues_);
-            }
+            addWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
+            multiSolidSemanticValues_.insert(multiSolidSemanticValues_.end(), solidSemanticValues_.begin(), solidSemanticValues_.end());
          }
          else
          {
             // Just a regular single solid.
-            jsonArray.push_back(takeWorkingBoundary());
+            addWorkingBoundaries(jsonArray, jsonTCArray);
             multiSolidSemanticValues_.push_back(solidSemanticValues_);
          }
       }
 
-      completedGeometry(topLevel, jsonArray);
+      completedGeometry(topLevel, jsonArray, jsonTCArray);
 
       //-- store semantic surface information
       if (!semanticValues_.empty())
