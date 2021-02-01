@@ -1644,37 +1644,34 @@ void FMECityJSONReader::parseLineString(IFMELine* line,
    // so we should make sure it all matches up.
    bool useTexCoords = ((boundary.size() + 1) == textureRefs.size());
    int vertexCoordIndex(0);
-   for (json::iterator it = boundary.begin(); it != boundary.end(); it++)
+   for (int vertex : boundary)
    {
-      for (int vertex : it.value())
+      if (useTexCoords && (vertexCoordIndex == 0))
       {
-         if (useTexCoords && (vertexCoordIndex == 0))
-         {
-            appearanceRef = texturesMap_[textureRefs[0]]; // texture reference is the first one.
-         }
-         vertexCoordIndex++;
-         IFMEPoint* point = fmeGeometryTools_->createPointXYZ(std::get<0>(vertices[vertex]),
-                                                              std::get<1>(vertices[vertex]),
-                                                              std::get<2>(vertices[vertex]));
-
-         if (useTexCoords)
-         {
-            // Some datasets do not have the texture coordinates they claim to need.
-            int uvRef = textureRefs[vertexCoordIndex];
-            if (uvRef < textureVertices_.size())
-            {
-               point->setNamedMeasure(*textureCoordUName_, std::get<0>(textureVertices_[uvRef]));
-               point->setNamedMeasure(*textureCoordVName_, std::get<1>(textureVertices_[uvRef]));
-            }
-            else
-            {
-               // TODO: log a warning here that some texture coordinates are missing from the file.
-            }
-         }
-
-         line->appendPoint(point);
-         point = nullptr; // We no longer own this.
+         appearanceRef = texturesMap_[textureRefs[0]]; // texture reference is the first one.
       }
+      vertexCoordIndex++;
+      IFMEPoint* point = fmeGeometryTools_->createPointXYZ(std::get<0>(vertices[vertex]),
+                                                            std::get<1>(vertices[vertex]),
+                                                            std::get<2>(vertices[vertex]));
+
+      if (useTexCoords)
+      {
+         // Some datasets do not have the texture coordinates they claim to need.
+         int uvRef = textureRefs[vertexCoordIndex];
+         if (uvRef < textureVertices_.size())
+         {
+            point->setNamedMeasure(*textureCoordUName_, std::get<0>(textureVertices_[uvRef]));
+            point->setNamedMeasure(*textureCoordVName_, std::get<1>(textureVertices_[uvRef]));
+         }
+         else
+         {
+            // TODO: log a warning here that some texture coordinates are missing from the file.
+         }
+      }
+
+      line->appendPoint(point);
+      point = nullptr; // We no longer own this.
    }
 }
 
