@@ -216,24 +216,6 @@ void FMECityJSONGeometryVisitor::takeWorkingBoundaries_1Deep(json& jsonArray,
    jsonTCArray.insert(jsonTCArray.end(), jsonTCArray2.begin(), jsonTCArray2.end());
 }
 
-void FMECityJSONGeometryVisitor::takeWorkingBoundaries_2Deep(json& jsonArray, json& jsonTCArray)
-{
-   json jsonArray2;
-   json jsonTCArray2;
-   takeWorkingBoundaries(jsonArray2, jsonTCArray2);
-   for (auto& singleBoundary : jsonArray2)
-   {
-      // We must take away another level of hierarchy here as well.
-      jsonArray.insert(jsonArray.end(), singleBoundary.begin(), singleBoundary.end());
-   }
-   // Do we need to gather up the textures?
-   for (auto& singleTCArray : jsonTCArray2)
-   {
-      // We must take away another level of hierarchy here as well.
-      jsonTCArray.insert(jsonTCArray.end(), singleTCArray.begin(), singleTCArray.end());
-   }
-}
-
 void FMECityJSONGeometryVisitor::addWorkingBoundaries(json& jsonArray, json& jsonTCArray)
 {
    json jsonArray2;
@@ -1480,17 +1462,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
          return FME_FAILURE;
       }
 
-      // We need to handle composite surfaces differently, as they will have
-      // another level of hierarchy we need to drop.  CityJSON does not allow 
-      // nesting in the same way FME can.
-      if (surface->canCastAs<const IFMECompositeSurface*>())
-      {
-         takeWorkingBoundaries_2Deep(jsonArray, jsonTCArray);
-      }
-      else
-      {
-         takeWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
-      }
+      takeWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
    }
 
    completedGeometry(topLevel, jsonArray, jsonTCArray);
