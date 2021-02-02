@@ -284,7 +284,6 @@ private:
    // get the JSON object for the boundary that is "in progress"  
    // likely from the last visit call.
    void takeWorkingBoundaries(json& jsonArray, json& jsonTCArray);
-   void takeWorkingBoundaries_2Deep(json& jsonArray, json& jsonTCArray);
    void takeWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray);
    void addWorkingBoundaries(json& jsonArray, json& jsonTCArray);
    void addWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray);
