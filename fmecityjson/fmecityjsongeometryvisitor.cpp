@@ -80,6 +80,7 @@
 #include <itextiterator.h>
 #include <itrianglefan.h>
 #include <itrianglestrip.h>
+#include <ilibrary.h>
 
 #include <string>
 
@@ -137,15 +138,21 @@ const std::map< std::string, std::vector< std::string > > FMECityJSONGeometryVis
 FMECityJSONGeometryVisitor::FMECityJSONGeometryVisitor(const IFMEGeometryTools* geomTools,
                                                        IFMESession* session,
                                                        bool remove_duplicates,
-                                                       int important_digits)
+                                                       int important_digits,
+                                                       std::map<FME_UInt32, int>& textureRefsToCJIndex)
    :
    fmeGeometryTools_(geomTools),
    fmeSession_(session),
    remove_duplicates_(remove_duplicates),
    important_digits_(important_digits),
-   skipLastPointOnLine_(false)
+   skipLastPointOnLine_(false),
+   textureRefsToCJIndex_(textureRefsToCJIndex)
 {
    logFile_ = session->logFile();
+   uCoordDesc_ = session->createString();
+   uCoordDesc_->set(kFME_texture_coordinate_u, (FME_UInt32)strlen(kFME_texture_coordinate_u));
+   vCoordDesc_ = session->createString();
+   vCoordDesc_->set(kFME_texture_coordinate_v, (FME_UInt32)strlen(kFME_texture_coordinate_v));
 }
 
 //===========================================================================
@@ -155,6 +162,9 @@ FMECityJSONGeometryVisitor::~FMECityJSONGeometryVisitor()
    //------------------------------------------------------------------------
    // Perform any necessary cleanup
    //------------------------------------------------------------------------
+
+   fmeSession_->destroyString(uCoordDesc_); uCoordDesc_ = nullptr;
+   fmeSession_->destroyString(vCoordDesc_); vCoordDesc_ = nullptr;
 }
 
 json FMECityJSONGeometryVisitor::getGeomJSON()
@@ -164,16 +174,96 @@ json FMECityJSONGeometryVisitor::getGeomJSON()
    return retVal;
 }
 
-json FMECityJSONGeometryVisitor::takeWorkingBoundary()
+json FMECityJSONGeometryVisitor::getTexCoordsJSON()
 {
-   json retVal = workingBoundary_;
-   workingBoundary_.clear();
+   json retVal;
+   // This holds an array of strings, but each string is a (nested) JSON array.
+   if (!textureCoords_.empty())
+   {
+      retVal = json::array();
+      for (auto& oneElement : textureCoords_)
+      {
+         retVal.push_back(json::parse(oneElement));
+      }
+   }
+   textureCoords_.clear();
    return retVal;
+}
+
+void FMECityJSONGeometryVisitor::takeWorkingBoundaries(json& jsonArray,
+                                                       json& jsonTCArray)
+{
+   jsonArray = workingBoundary_;
+   workingBoundary_.clear();
+
+   // Do we need to gather up the textures?
+   jsonTCArray = workingTexCoords_;
+   workingTexCoords_.clear();
+}
+
+void FMECityJSONGeometryVisitor::takeWorkingBoundaries_1Deep(json& jsonArray,
+                                                             json& jsonTCArray)
+{
+   // We need to handle multi surfaces, etc differently, as they will have
+   // another level of hierarchy we need to drop.  CityJSON does not allow
+   // nesting in the same way FME can.
+   json jsonArray2;
+   json jsonTCArray2;
+   takeWorkingBoundaries(jsonArray2, jsonTCArray2);
+   jsonArray.insert(jsonArray.end(), jsonArray2.begin(), jsonArray2.end());
+
+   // Do we need to gather up the textures?
+   jsonTCArray.insert(jsonTCArray.end(), jsonTCArray2.begin(), jsonTCArray2.end());
+}
+
+void FMECityJSONGeometryVisitor::takeWorkingBoundaries_2Deep(json& jsonArray, json& jsonTCArray)
+{
+   json jsonArray2;
+   json jsonTCArray2;
+   takeWorkingBoundaries(jsonArray2, jsonTCArray2);
+   for (auto& singleBoundary : jsonArray2)
+   {
+      // We must take away another level of hierarchy here as well.
+      jsonArray.insert(jsonArray.end(), singleBoundary.begin(), singleBoundary.end());
+   }
+   // Do we need to gather up the textures?
+   for (auto& singleTCArray : jsonTCArray2)
+   {
+      // We must take away another level of hierarchy here as well.
+      jsonTCArray.insert(jsonTCArray.end(), singleTCArray.begin(), singleTCArray.end());
+   }
+}
+
+void FMECityJSONGeometryVisitor::addWorkingBoundaries(json& jsonArray, json& jsonTCArray)
+{
+   json jsonArray2;
+   json jsonTCArray2;
+   takeWorkingBoundaries(jsonArray2, jsonTCArray2);
+   jsonArray.push_back(jsonArray2);
+
+   // Do we need to gather up the textures?
+   jsonTCArray.push_back(jsonTCArray2);
+}
+
+void FMECityJSONGeometryVisitor::addWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray)
+{
+   json jsonArray2;
+   json jsonTCArray2;
+   takeWorkingBoundaries(jsonArray2, jsonTCArray2);
+   jsonArray.insert(jsonArray.end(), jsonArray2.begin(), jsonArray2.end());
+
+   // Do we need to gather up the textures?
+   jsonTCArray.insert(jsonTCArray.end(), jsonTCArray2.begin(), jsonTCArray2.end());
 }
 
 const VertexPool& FMECityJSONGeometryVisitor::getGeomVertices()
 {
    return vertices_;
+}
+
+const TexCoordPool& FMECityJSONGeometryVisitor::getTextureCoords()
+{
+   return textureCoords_;
 }
 
 void FMECityJSONGeometryVisitor::getGeomBounds(std::optional<double>& minx,
@@ -253,20 +343,49 @@ void FMECityJSONGeometryVisitor::reset()
    outputgeom_.clear();
    surfaces_.clear();
    semanticValues_.clear();
+   workingBoundary_.clear();
+   workingTexCoords_.clear();
+}
+
+// Converts a value into a string
+std::string get_key(FME_Real64 val, int precision)
+{
+   char buf[200];
+   std::stringstream ss;
+   ss << "%." << precision << "f";
+   std::sprintf(buf, ss.str().c_str(), val);
+   std::string r(buf);
+
+   // Pretty it up a bit if it has a decimal place (remove trailing zeros)
+   if (r.find('.') != std::string::npos)
+   {
+      // Remove trailing 0s
+      r = r.substr(0, r.find_last_not_of('0') + 1);
+      // If the decimal point is now the last character, remove that as well
+      if (r.find('.') == r.size() - 1)
+      {
+         r = r.substr(0, r.size() - 1);
+      }
+   }
+
+   return r;
 }
 
 // Converts a point into a string
 std::string get_key(const FMECoord3D& vertex, int precision)
 {
-   char buf[200];
-   std::stringstream ss;
-   ss << "%." << precision << "f "
-      << "%." << precision << "f "
-      << "%." << precision << "f";
-   std::sprintf(buf, ss.str().c_str(), vertex.x, vertex.y, vertex.z);
-   std::string r(buf);
-   return r;
+   return (get_key(vertex.x, precision) + ' ' + 
+           get_key(vertex.y, precision) + ' ' +
+           get_key(vertex.z, precision));
 }
+
+std::string get_key(const FMECoord2D& vertex, int precision)
+{
+   // we put commas in this key, as it will be used to make JSON later.
+   return (get_key(vertex.x, precision) + ", " +
+           get_key(vertex.y, precision));
+}
+
 
 void tokenize(const std::string& str, std::vector<std::string>& tokens)
 {
@@ -338,6 +457,33 @@ unsigned long FMECityJSONGeometryVisitor::addVertex(const FMECoord3D& vertex)
    return index;
 }
 
+// This will make sure we don't add any texture coord twice.
+unsigned long FMECityJSONGeometryVisitor::addTextureCoord(const FMECoord2D& texcoord)
+{
+   // This is the vertex, as a string, which we'll use.
+   std::string texcoord_key = get_key(texcoord, important_digits_);
+
+   // This will be the index in the vertex pool if it is new
+   unsigned long index(textureCoords_.size());
+
+   // A little more bookkeeping if we want to optimize the texture coordinate pool
+   // and not have duplicates.
+
+   // Have we encountered this texture coordinate before?
+   auto [entry, texCoordAdded] = textureCoordToIndex_.try_emplace(texcoord_key, index);
+   if (!texCoordAdded) // We already have this in our texture coordinate pool
+   {
+      index = entry->second;
+   }
+   else // We haven't seen this before, so insert it into the pool.
+   {
+      textureCoords_.push_back('[' + texcoord_key + ']');
+
+      // index is already set correctly.
+   }
+
+   return index;
+}
 
 
 //=====================================================================
@@ -359,15 +505,23 @@ bool FMECityJSONGeometryVisitor::claimTopLevel(const std::string& type)
 
 //=====================================================================
 //
-void FMECityJSONGeometryVisitor::completedGeometry(bool topLevel, const json& boundary)
+void FMECityJSONGeometryVisitor::completedGeometry(bool topLevel, const json& boundary, const json& texCoords)
 {
    if (topLevel)
    {
       outputgeom_["boundaries"] = boundary;
+      if (!textureRefsToCJIndex_.empty()) // only if we've actually found a texture.
+      {
+         outputgeom_["texture"]["default_theme"]["values"] = texCoords;
+      }
    }
    else
    {
       workingBoundary_ = boundary;
+      if (!texCoords.is_null())
+      {
+         workingTexCoords_ = texCoords;
+      }
    }
 }
 
@@ -378,7 +532,8 @@ FME_Status FMECityJSONGeometryVisitor::visitAggregate(const IFMEAggregate& aggre
 {
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("aggregate"));
 
-   FME_Status badNews;
+//    // For appearances, let's make it easy and not have to deal with inherited ones.
+//    aggregate.resolvePartDefaults();
 
    // Create iterator to get all geometries
    //-- We can't write this out as an aggregate in CityJSON, so
@@ -392,7 +547,7 @@ FME_Status FMECityJSONGeometryVisitor::visitAggregate(const IFMEAggregate& aggre
       // re-visit aggregate geometries
       if (nullptr != iterator->getPart())
       {
-         badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
+         FME_Status badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
          if (badNews)
          {
             // Destroy the iterator
@@ -423,7 +578,7 @@ FME_Status FMECityJSONGeometryVisitor::visitPoint(const IFMEPoint& point)
    auto jsonArray = json::array();
    jsonArray.push_back(index);
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, {});
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("point"));
 
@@ -441,6 +596,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiPoint(const IFMEMultiPoint& mul
    // Create iterator to get all point geometries
    IFMEPointIterator* iterator = multipoint.getIterator();
    auto jsonArray = json::array();
+   json jsonTCArray = json::array();
    while (iterator->next())
    {
       logDebugMessage(std::string(kMsgVisiting) + std::string("point"));
@@ -453,12 +609,12 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiPoint(const IFMEMultiPoint& mul
          multipoint.destroyIterator(iterator);
          return FME_FAILURE;
       }
-      jsonArray.push_back(takeWorkingBoundary());
+      addWorkingBoundaries(jsonArray, jsonTCArray);
    }
    // We are done with the iterator, so destroy it
    multipoint.destroyIterator(iterator);
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("multi point"));
 
@@ -521,7 +677,34 @@ FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
       jsonArray2.push_back(jsonArray);
       jsonArray = jsonArray2;
    }
-   completedGeometry(topLevel, jsonArray);
+
+   // Do we need to gather up the textures?
+   auto jsonTCArray = json::array();
+
+   FME_Real64* uCoords = new FME_Real64[line.numPoints() - skip];
+   FME_Real64* vCoords = new FME_Real64[line.numPoints() - skip];
+
+   if ((FME_SUCCESS == line.getNamedMeasureValues(*uCoordDesc_, uCoords)) &&
+       (FME_SUCCESS == line.getNamedMeasureValues(*vCoordDesc_, vCoords)))
+   {
+      // The index to the texture is first.
+      jsonTCArray.push_back(nextTextRef_);
+      for (FME_UInt32 i = 0; i < line.numPoints() - skip; i++)
+      {
+         FMECoord2D uvCoord(uCoords[i], vCoords[i]);
+         unsigned long index = addTextureCoord(uvCoord);
+         jsonTCArray.push_back(index);
+      }
+   }
+   else
+   {
+      jsonTCArray.push_back(nullptr);
+   }
+
+   delete [] uCoords; uCoords = nullptr;
+   delete [] vCoords; vCoords = nullptr;
+
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("line"));
 
@@ -549,6 +732,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiCurve(const IFMEMultiCurve& mul
    // Create an iterator to get the curves
    IFMECurveIterator* iterator = multicurve.getIterator();
    auto jsonArray = json::array();
+   json jsonTCArray = json::array();
    while (iterator->next())
    {
       logDebugMessage(std::string(kMsgVisiting) + std::string("curve"));
@@ -561,12 +745,12 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiCurve(const IFMEMultiCurve& mul
          multicurve.destroyIterator(iterator);
          return FME_FAILURE;
       }
-      jsonArray.push_back(takeWorkingBoundary());
+      addWorkingBoundaries(jsonArray, jsonTCArray);
    }
    // Done visiting curves, destroy iterator
    multicurve.destroyIterator(iterator);
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("multi curve"));
 
@@ -584,6 +768,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiArea(const IFMEMultiArea& multi
    // Create iterator to visit all areas
    IFMEAreaIterator* iterator = multiarea.getIterator();
    auto jsonArray = json::array();
+   json jsonTCArray = json::array();
    while (iterator->next())
    {
       logDebugMessage(std::string(kMsgVisiting) + std::string("area"));
@@ -596,12 +781,12 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiArea(const IFMEMultiArea& multi
          multiarea.destroyIterator(iterator);
          return FME_FAILURE;
       }
-      jsonArray.push_back(takeWorkingBoundary());
+      takeWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
    }
    // Done with iterator, destroy it
    multiarea.destroyIterator(iterator);
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("multi area"));
 
@@ -614,6 +799,8 @@ FME_Status FMECityJSONGeometryVisitor::visitPolygon(const IFMEPolygon& polygon)
 {
    logDebugMessage(std::string(kMsgVisiting) + std::string("polygon"));
 
+   bool topLevel = claimTopLevel("MultiLineString");
+
    const IFMECurve* boundary = polygon.getBoundaryAsCurve();
    if (boundary == nullptr)
    {
@@ -621,11 +808,17 @@ FME_Status FMECityJSONGeometryVisitor::visitPolygon(const IFMEPolygon& polygon)
       return FME_FAILURE;
    }
    // re-visit polygon curve geometry
+   auto jsonArray = json::array();
+   json jsonTCArray = json::array();
    FME_Status badNews = boundary->acceptGeometryVisitorConst(*this);
    if (badNews)
    {
       return FME_FAILURE;
    }
+   addWorkingBoundaries(jsonArray, jsonTCArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
+
+   logDebugMessage(std::string(kMsgEndVisiting) + std::string("polygon"));
 
    return FME_SUCCESS;
 }
@@ -648,13 +841,17 @@ FME_Status FMECityJSONGeometryVisitor::visitDonut(const IFMEDonut& donut)
       return FME_FAILURE;
    }
    // re-visit the outer boundary
-   auto jsonArray = json::array();
    FME_Status badNews = outerBoundary->acceptGeometryVisitorConst(*this);
    if (badNews)
    {
       return FME_FAILURE;
    }
-   jsonArray.push_back(takeWorkingBoundary());
+   // We need to handle donut areas differently, as they will have
+   // another level of hierarchy we need to drop.  CityJSON does not allow
+   // nesting in the same way FME can.
+   auto jsonArray = json::array();
+   json jsonTCArray = json::array();
+   takeWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
 
    // Get the inner boundary
    logDebugMessage(std::string(kMsgVisiting) + std::string("inner boundary"));
@@ -669,12 +866,15 @@ FME_Status FMECityJSONGeometryVisitor::visitDonut(const IFMEDonut& donut)
          donut.destroyIterator(iterator);
          return FME_FAILURE;
       }
-      jsonArray.push_back(takeWorkingBoundary());
+      // We need to handle donut areas differently, as they will have
+      // another level of hierarchy we need to drop.  CityJSON does not allow
+      // nesting in the same way FME can.
+      takeWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
    }
    // Done with iterator, destroy it
    donut.destroyIterator(iterator);
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("donut"));
 
@@ -711,6 +911,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiText(const IFMEMultiText& multi
    // Create iterator to get all text geometries
    IFMETextIterator* iterator = multitext.getIterator();
    auto jsonArray = json::array();
+   json jsonTCArray = json::array();
    while (iterator->next())
    {
       logDebugMessage(std::string(kMsgVisiting) + std::string("text"));
@@ -722,12 +923,12 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiText(const IFMEMultiText& multi
          multitext.destroyIterator(iterator);
          return FME_FAILURE;
       }
-      jsonArray.push_back(takeWorkingBoundary());
+      addWorkingBoundaries(jsonArray, jsonTCArray);
    }
    // Done with iterator, destroy it
    multitext.destroyIterator(iterator);
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("multi text"));
 
@@ -773,26 +974,66 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
       return FME_FAILURE;
    }
    
+   // Let's deal with appearances, if we have any.
+   // Note: we only look at the front, because CityJSON does not
+   // have the ability to store back textures.
+   FME_UInt32 frontAppRef(0);
+   int cityJSONTexIndex(-1);
+   if (face.getAppearanceReference(frontAppRef, FME_TRUE) == FME_TRUE)
+   {
+      // Is this appearance a texture or a material?
+      IFMEAppearance* app = fmeSession_->getLibrary()->getAppearanceCopy(frontAppRef);
+      if (app) // if the appRef was "0" or "-1" we don't expect a reference
+      {
+         FME_UInt32 texRef(0);
+         if (FME_TRUE == app->getTextureReference(texRef))
+         {
+            // We've got a texture.
+            // One we've never seen before?
+            auto refIndex = textureRefsToCJIndex_.find(texRef);
+            if (refIndex == textureRefsToCJIndex_.end())
+            {
+               // Storing an increasing number means we'll get the right
+               // index later.
+               cityJSONTexIndex = textureRefsToCJIndex_.size();
+               textureRefsToCJIndex_[texRef] = cityJSONTexIndex;
+            }
+            else
+            {
+               cityJSONTexIndex = refIndex->second;
+            }
+         }
+
+         fmeGeometryTools_->destroyAppearance(app); app = nullptr;
+      }
+   }
+
+   // For children of mine, this is the texture index to use
+   nextTextRef_= cityJSONTexIndex;
+
    bool topLevel = claimTopLevel("CompositeSurface");
 
    // re-visit the boundary
    auto jsonArray = json::array();
+   json jsonTCArray = json::array();
    FME_Status badNews = area->acceptGeometryVisitorConst(*this);
    if (badNews)
    {
       return FME_FAILURE;
    }
-   jsonArray.push_back(takeWorkingBoundary());
+   takeWorkingBoundaries(jsonArray, jsonTCArray);
 
-   // If we are at the top level, just passed in a Face, we must convert this into 
+   // For a Face, we must convert this into 
    // a CompositeSurface, as CityJSON cannot store faces by themselves.
-   if (topLevel)
-   {
-      auto jsonArray2 = json::array();
-      jsonArray2.push_back(jsonArray);
-      jsonArray = jsonArray2;
-   }
-   completedGeometry(topLevel, jsonArray);
+   // Adding one layer of "nesting"...
+   auto jsonArray2 = json::array();
+   jsonArray2.push_back(jsonArray);
+   jsonArray = jsonArray2;
+   auto jsonTCArray2 = json::array();
+   jsonTCArray2.push_back(jsonTCArray);
+   jsonTCArray = jsonTCArray2;
+
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    //-- fetch the semantic surface type of the geometry
    // Check if the semantics type is allowed
@@ -1009,6 +1250,13 @@ FME_Status FMECityJSONGeometryVisitor::visitExtrusion(const IFMEExtrusion& extru
 //
 FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepSolid)
 {
+   // CityJSON must explicitly set texture references on each level of the
+   // hierarchy, so we must resolve any inheritance that might exist.
+   // Doing this cast actually violates the "const" on the geometry object we have.
+   // But we know we are not doing anything tricky, so let's cast that away.
+   // This avoids us needing to make a copy.
+   const_cast<IFMEBRepSolid*>(&brepSolid)->resolvePartDefaults();
+
    skipLastPointOnLine_ = true; 
 
    solidSemanticValues_.clear();
@@ -1032,10 +1280,15 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
    {
       return FME_FAILURE;
    }
+   // We need to handle donut solids differently, as they will have
+   // another level of hierarchy we need to drop.  CityJSON does not allow
+   // nesting in the same way FME can.
    auto jsonArray = json::array();
-   jsonArray.push_back(takeWorkingBoundary());
-   solidSemanticValues_.push_back(replaceSemanticValues(semanticValues_));
+   json jsonTCArray = json::array();
 
+   // Let's get the list of surfaces that make up this solid:
+   addWorkingBoundaries(jsonArray, jsonTCArray);
+   solidSemanticValues_.push_back(replaceSemanticValues(semanticValues_));
 
    // Create iterator to loop though all the inner surfaces
    IFMESurfaceIterator* iterator = brepSolid.getIterator();
@@ -1052,11 +1305,14 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
          brepSolid.destroyIterator(iterator);
          return FME_FAILURE;
       }
-      jsonArray.push_back(takeWorkingBoundary());
+
+      // Let's get the list of surfaces that make up this solid:
+      addWorkingBoundaries(jsonArray, jsonTCArray);
+
       solidSemanticValues_.push_back(replaceSemanticValues(semanticValues_));
    }
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    //-- store semantic surface information
    if (!semanticValues_.empty()) {
@@ -1074,8 +1330,10 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
    return FME_SUCCESS;
 }
 
+//=====================================================================
+//
 FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
-   const IFMECompositeSurface& compositeSurface, json& jsonArray)
+   const IFMECompositeSurface& compositeSurface, json& jsonArray, json& jsonTCArray)
 {
    skipLastPointOnLine_ = true; 
 
@@ -1088,7 +1346,7 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
       // Can't deal with multiple levels of nesting, so let's break that down.
       if (surface->canCastAs<const IFMECompositeSurface*>())
       {
-         FME_Status badNews = visitCompositeSurfaceParts(*(surface->castAs<const IFMECompositeSurface*>()), jsonArray);
+         FME_Status badNews = visitCompositeSurfaceParts(*(surface->castAs<const IFMECompositeSurface*>()), jsonArray, jsonTCArray);
          if (badNews) return FME_FAILURE;
       }
       else
@@ -1103,7 +1361,7 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
             compositeSurface.destroyIterator(iterator);
             return FME_FAILURE;
          }
-         jsonArray.push_back(takeWorkingBoundary());
+         addWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
       }
    }
 
@@ -1119,6 +1377,13 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurfaceParts(
 //
 FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMECompositeSurface& compositeSurface)
 {
+   // CityJSON must explicitly set texture references on each level of the
+   // hierarchy, so we must resolve any inheritance that might exist.
+   // Doing this cast actually violates the "const" on the geometry object we have.
+   // But we know we are not doing anything tricky, so let's cast that away.
+   // This avoids us needing to make a copy.
+   const_cast<IFMECompositeSurface*>(&compositeSurface)->resolvePartDefaults();
+
    skipLastPointOnLine_ = true; 
 
    semanticValues_.clear();
@@ -1129,10 +1394,11 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
 
    // Create an iterator to loop through all the surfaces this multi surface contains
    auto jsonArray = json::array();
-   FME_Status badNews = visitCompositeSurfaceParts(compositeSurface, jsonArray);
+   json jsonTCArray = json::array();
+   FME_Status badNews = visitCompositeSurfaceParts(compositeSurface, jsonArray, jsonTCArray);
    if (badNews) return FME_FAILURE;
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    //-- store semantic surface information
    if (!semanticValues_.empty()) {
@@ -1179,6 +1445,13 @@ FME_Status FMECityJSONGeometryVisitor::visitRectangleFace(const IFMERectangleFac
 //
 FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface& multiSurface)
 {
+   // CityJSON must explicitly set texture references on each level of the
+   // hierarchy, so we must resolve any inheritance that might exist.
+   // Doing this cast actually violates the "const" on the geometry object we have.
+   // But we know we are not doing anything tricky, so let's cast that away.
+   // This avoids us needing to make a copy.
+   const_cast<IFMEMultiSurface*>(&multiSurface)->resolvePartDefaults();
+
    skipLastPointOnLine_ = true; 
 
    semanticValues_.clear();
@@ -1190,6 +1463,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
    // Create an iterator to loop through all the surfaces this multi surface contains
    IFMESurfaceIterator* iterator = multiSurface.getIterator();
    auto jsonArray = json::array();
+   json jsonTCArray = json::array();
    while (iterator->next())
    {
       // Get the next surface
@@ -1211,20 +1485,15 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
       // nesting in the same way FME can.
       if (surface->canCastAs<const IFMECompositeSurface*>())
       {
-         auto compositeSurfaceBoundaryJSON = takeWorkingBoundary();
-         for (auto& singleSurfaceBoundary : compositeSurfaceBoundaryJSON)
-         {
-            jsonArray.push_back(singleSurfaceBoundary);
-         }
+         takeWorkingBoundaries_2Deep(jsonArray, jsonTCArray);
       }
       else
       {
-         // Just a regular single surface.
-         jsonArray.push_back(takeWorkingBoundary());
+         takeWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
       }
    }
 
-   completedGeometry(topLevel, jsonArray);
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    //-- store semantic surface information
    if (!semanticValues_.empty()) {

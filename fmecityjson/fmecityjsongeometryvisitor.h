@@ -46,6 +46,7 @@
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 using VertexPool = std::vector<std::tuple<double, double, double>>;
+using TexCoordPool = std::vector<std::string>;
 
 class IFMEVoxelGrid;
 class IFMESession;
@@ -60,7 +61,8 @@ public:
    FMECityJSONGeometryVisitor(const IFMEGeometryTools* geomTools,
                               IFMESession* session,
                               bool remove_duplicates,
-                              int important_digits);
+                              int important_digits,
+                              std::map<FME_UInt32, int>& textureRefsToCJIndex);
 
    //---------------------------------------------------------------------
    // Destructor.
@@ -90,7 +92,7 @@ public:
    FME_Status visitArc(const IFMEArc& arc) override;
 
    //----------------------------------------------------------------------
-   FME_Status visitOrientedArc(const IFMEOrientedArc & orientedArc) override;
+   FME_Status visitOrientedArc(const IFMEOrientedArc& orientedArc) override;
 
    //----------------------------------------------------------------------
    FME_Status visitClothoid(const IFMEClothoid& clothoid) override;
@@ -202,7 +204,7 @@ public:
    //----------------------------------------------------------------------
    // Visitor logs the values of the passed in IFMEFeatureTable geometry object.
    FME_Status visitFeatureTable(const IFMEFeatureTable& featureTable) override;
-   
+
    //----------------------------------------------------------------------
    // Visitor logs the values of the passed in IFMEVoxelGrid geometry object.
    FME_Status visitVoxelGrid(const IFMEVoxelGrid& voxelGrid);
@@ -210,10 +212,12 @@ public:
    //----------------------------------------------------------------------
    // get the JSON object for the geometry (without the "lod")
    json getGeomJSON();
+   json getTexCoordsJSON();
 
    //----------------------------------------------------------------------
    // get the array of vertices for the geometry
    const VertexPool& getGeomVertices();
+   const TexCoordPool& getTextureCoords();
 
    //----------------------------------------------------------------------
    // get bounds of vertices for the geometry
@@ -249,7 +253,7 @@ private:
 
    //---------------------------------------------------------------
    // Copy constructor
-   FMECityJSONGeometryVisitor (const FMECityJSONGeometryVisitor&);
+   FMECityJSONGeometryVisitor(const FMECityJSONGeometryVisitor&);
 
    //---------------------------------------------------------------
    // Assignment operator
@@ -258,13 +262,16 @@ private:
    //---------------------------------------------------------------------
    // We can't have nested composite surfaces, so we need to flatten
    // them down to one level of hierarchy.
-   FME_Status visitCompositeSurfaceParts(const IFMECompositeSurface& compositeSurface, json& jsonArray);
+   FME_Status visitCompositeSurfaceParts(const IFMECompositeSurface& compositeSurface,
+                                         json& jsonArray,
+                                         json& jsonTCArray);
 
    //---------------------------------------------------------------------
    // The vertex is added to the vertex pool.  It will not add duplicates.
    // The index of the vertex in the pool is returned.
    unsigned long addVertex(const FMECoord3D& vertex);
    void acceptVertex(const std::string& vertex_string);
+   unsigned long addTextureCoord(const FMECoord2D& texcoord);
 
    //---------------------------------------------------------------------
    // This allows easy access to turn on/off debug logging throughout this class.
@@ -276,7 +283,11 @@ private:
    //----------------------------------------------------------------------
    // get the JSON object for the boundary that is "in progress"  
    // likely from the last visit call.
-   json takeWorkingBoundary();
+   void takeWorkingBoundaries(json& jsonArray, json& jsonTCArray);
+   void takeWorkingBoundaries_2Deep(json& jsonArray, json& jsonTCArray);
+   void takeWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray);
+   void addWorkingBoundaries(json& jsonArray, json& jsonTCArray);
+   void addWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray);
 
    //----------------------------------------------------------------------
    // If we are the first in a hierarchy, let's put out "header" info about
@@ -287,13 +298,20 @@ private:
    //----------------------------------------------------------------------
    // If we are the first in a hierarchy, let's put out "boundary" and "semantic" info.
    // If we know we are just a sub-part we'll store our info away for it to use later.
-   void completedGeometry(bool topLevel, const json& boundary);
+   void completedGeometry(bool topLevel, const json& boundary, const json& texCoords);
 
    //----------------------------------------------------------------------
    //
    template <class T>
    FME_Status visitCompositeOrMultiSolid(const T& compositeOrMultiSolid, const std::string& typeAsString)
    {
+      // CityJSON must explicitly set texture references on each level of the
+      // hierarchy, so we must resolve any inheritance that might exist.
+      // Doing this cast actually violates the "const" on the geometry object we have.
+      // But we know we are not doing anything tricky, so let's cast that away.
+      // This avoids us needing to make a copy.
+      const_cast<T*>(&compositeOrMultiSolid)->resolvePartDefaults();
+
       skipLastPointOnLine_ = true; 
 
       multiSolidSemanticValues_.clear();
@@ -305,6 +323,7 @@ private:
       // Create an iterator to loop through all the solids this multi solid contains
       auto* iterator = compositeOrMultiSolid.getIterator();
       auto jsonArray = json::array();
+      json jsonTCArray = json::array();
       while (iterator->next())
       {
          // Get the next solid.
@@ -328,22 +347,18 @@ private:
          // nesting in the same way FME can.
          if (solid->canCastAs<const IFMECompositeSolid*>())
          {
-            auto compositeSolidBoundaryJSON = takeWorkingBoundary();
-            for (auto& singleSolidBoundary : compositeSolidBoundaryJSON)
-            {
-               jsonArray.push_back(singleSolidBoundary);
-               multiSolidSemanticValues_.push_back(solidSemanticValues_);
-            }
+            addWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
+            multiSolidSemanticValues_.insert(multiSolidSemanticValues_.end(), solidSemanticValues_.begin(), solidSemanticValues_.end());
          }
          else
          {
             // Just a regular single solid.
-            jsonArray.push_back(takeWorkingBoundary());
+            addWorkingBoundaries(jsonArray, jsonTCArray);
             multiSolidSemanticValues_.push_back(solidSemanticValues_);
          }
       }
 
-      completedGeometry(topLevel, jsonArray);
+      completedGeometry(topLevel, jsonArray, jsonTCArray);
 
       //-- store semantic surface information
       if (!semanticValues_.empty())
@@ -378,6 +393,7 @@ private:
    std::string featureType_;
    json outputgeom_;
    json workingBoundary_;
+   json workingTexCoords_;
    bool remove_duplicates_; 
    int important_digits_; 
 
@@ -395,11 +411,24 @@ private:
    //-- possible types; always possible to have '+MySemantics' with the '+'
    static const std::map< std::string, std::vector< std::string > > semancticsTypes_; 
 
+   // Keeping track of textures in appearances
+   std::map<FME_UInt32, int>& textureRefsToCJIndex_;
+
    // Maps a vertex to a specific index in the vertex pool.
    std::unordered_map<std::string, unsigned long> vertexToIndex_;
    VertexPool vertices_;
    std::optional<double> minx_, miny_, minz_, maxx_, maxy_, maxz_;
 
+   // Maps a texture coordinate to a specific index in the textCoord pool
+   std::unordered_map<std::string, unsigned long> textureCoordToIndex_;
+   TexCoordPool textureCoords_;
+   // If we need texture coordinates from a parent object, set this
+   // up high so the line down below knows which ref to use.
+   int nextTextRef_;
+
+   // Saved once so we don't need to make them over and over
+   IFMEString* uCoordDesc_;
+   IFMEString* vCoordDesc_;
 };
 
 #endif
