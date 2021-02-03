@@ -871,7 +871,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
 
       //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
       json fgeomjson = (visitor_)->getGeomJSON();
-      json ftcjson = (visitor_)->getTexCoordsJSON();
 
       //-- write it to the JSON object
       // outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
@@ -881,11 +880,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
          fgeomjson["lod"] = lodAsDouble;
 
          outputJSON_["CityObjects"][fids]["geometry"].push_back(fgeomjson);
-
-         if (!ftcjson.is_null())
-         {
-            outputJSON_["appearance"]["vertices-texture"] = ftcjson;
-         }
       }
 
       //-- reset the internal DS for one feature
@@ -1389,6 +1383,13 @@ FME_Status FMECityJSONWriter::outputAppearances()
 
       // We're done with this
       textureRefsToCJIndex_.clear();
+
+      // Write out the texture coordinates
+      json ftcjson = (visitor_)->getTexCoordsJSON();
+      if (!ftcjson.is_null())
+      {
+         outputJSON_["appearance"]["vertices-texture"] = ftcjson;
+      }
    }
    return FME_SUCCESS;
 }
