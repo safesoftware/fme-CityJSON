@@ -663,8 +663,8 @@ FME_Status FMECityJSONGeometryVisitor::visitLine(const IFMELine& line)
    // Do we need to gather up the textures?
    auto jsonTCArray = json::array();
 
-   FME_Real64* uCoords = new FME_Real64[line.numPoints() - skip];
-   FME_Real64* vCoords = new FME_Real64[line.numPoints() - skip];
+   FME_Real64* uCoords = new FME_Real64[line.numPoints()];
+   FME_Real64* vCoords = new FME_Real64[line.numPoints()];
 
    if ((FME_SUCCESS == line.getNamedMeasureValues(*uCoordDesc_, uCoords)) &&
        (FME_SUCCESS == line.getNamedMeasureValues(*vCoordDesc_, vCoords)))
