@@ -859,39 +859,39 @@ void FMECityJSONReader::scanLODs()
          // The default LoD to read is the LoD of the first Geometry of the
          // first CityObject.
          std::string defaultMsg = "No value is set for the 'CityJSON Level of "
-                                  "Detail' parameter. Defaulting to: 'highest'";
+                                  "Detail' parameter. Defaulting to: 'Highest'";
          gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
-         lodParam_ = "highest";
+         lodParam_ = "Highest";
       }
-      else if ((lodParam_ != "highest") &&
+      else if ((lodParam_ != "Highest") &&
                (std::find(lodInData_.begin(), lodInData_.end(), lodParam_) == lodInData_.end()))
       {
          std::string defaultMsg = "The provided 'CityJSON Level of Detail' parameter value " +
                                   lodParam_ +
-                                  " is not present in the data. Defaulting to: 'highest'";
+                                  " is not present in the data. Defaulting to: 'Highest'";
          gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
-         lodParam_ = "highest";
+         lodParam_ = "Highest";
       }
    }
    else if (lodInData_.size() == 1)
    {
       // In case there is only one LoD in the data, we ignore the Parameter
       // even if it is set.
-      if (lodParam_ != "highest")
+      if (lodParam_ != "Highest")
       {
          gLogFile->logMessageString(("The Level of Detail requested, '" + lodParam_ + "', does not exist in this file.").c_str(), FME_INFORM);
          gLogFile->logMessageString(("Instead, reading the only Level of Detail present in this file: " + lodInData_[0]).c_str(), FME_INFORM);
       }
       else
       {
-         gLogFile->logMessageString("Reading the 'highest' Level of Detail for every geometry in this file.", FME_INFORM);
+         gLogFile->logMessageString("Reading the 'Highest' Level of Detail for every geometry in this file.", FME_INFORM);
       }
       lodParam_ = lodInData_[0];
    }
 
-   if (lodParam_ == "highest")
+   if (lodParam_ == "Highest")
    {
-      gLogFile->logMessageString("Reading the 'highest' Level of Detail for every geometry in this file.", FME_INFORM);
+      gLogFile->logMessageString("Reading the 'Highest' Level of Detail for every geometry in this file.", FME_INFORM);
    }
 }
 
@@ -1010,7 +1010,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
    else
    {
       // Skipping CityObjects completely if it has no geometries of the chosen LOD.
-      if (lodParam_ != "highest") // We know we will never skip a geometry in "highest" mode
+      if (lodParam_ != "Highest") // We know we will never skip a geometry in "Highest" mode
       {
          std::vector<bool> ignore_lod;
          std::string geometryLodValue;
@@ -1095,9 +1095,9 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
          gFMESession->destroyStringArray(parents);
       }
 
-      // Let's do a bit of work here, if we're asked to read the 'highest" LOD
+      // Let's do a bit of work here, if we're asked to read the 'Highest" LOD
       std::string LODToUse(lodParam_);
-      if (lodParam_ == "highest")
+      if (lodParam_ == "Highest")
       {
          LODToUse = "";
          // Build up a clean list of the LODs we have for this geometry
@@ -1125,7 +1125,7 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
             }
          }
 
-         // sort, and pick the "highest" one.  It will be the last.
+         // sort, and pick the "Highest" one.  It will be the last.
          if (!allLODs.empty())
          {
             std::sort(allLODs.begin(), allLODs.end());
