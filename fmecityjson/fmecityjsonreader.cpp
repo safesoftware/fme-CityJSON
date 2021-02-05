@@ -604,9 +604,9 @@ FME_Status FMECityJSONReader::readMaterials()
    // Check for materials in the file
    try
    {
-      IFMEString* fmeVal = gFMESession->createString();
-
       json materials = inputJSON_.at("appearance").at("materials");
+
+      IFMEString* fmeVal = gFMESession->createString();
 
       for (int i = 0; i < materials.size(); i++)
       {

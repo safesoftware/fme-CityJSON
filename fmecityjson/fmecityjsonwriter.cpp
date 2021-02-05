@@ -565,9 +565,12 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       const IFMEString* tFME = allatt->elementAt(i);
       std::string ts(tFME->data(), tFME->length());
       // gLogFile->logMessageString(ts.c_str());
+      
       IFMEString* valueFME = gFMESession->createString();
       feature.getAttribute(*tFME, *valueFME);
       std::string val(valueFME->data(), valueFME->length());
+      gFMESession->destroyString(valueFME); valueFME = nullptr;
+
       FME_AttributeType ftype = feature.getAttributeType(*tFME);
       // gLogFile->logMessageString(ts.c_str(), FME_WARN);
       if ( (ts != "fid") &&
