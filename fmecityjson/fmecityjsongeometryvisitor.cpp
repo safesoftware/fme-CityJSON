@@ -1042,7 +1042,7 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
                FME_AttributeType type = face.getTraitType(*traitNames->elementAt(i));
                logDebugMessage("Found traitName with value: " + traitNameStr + " and type: " + std::to_string(type));
 
-               if (type == FME_ATTR_STRING) {
+               if (type == FME_ATTR_STRING || type == FME_ATTR_ENCODED_STRING) {
                   IFMEString *geometryTrait = fmeSession_->createString();
                   face.getTraitString(*traitNames->elementAt(i), *geometryTrait);
                   surfaceSemantics[traitNameStr] = geometryTrait->data();
