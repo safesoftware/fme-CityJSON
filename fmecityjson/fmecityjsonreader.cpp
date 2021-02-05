@@ -889,6 +889,12 @@ void FMECityJSONReader::scanLODs()
       lodParam_ = lodInData_[0];
    }
 
+   // To match our other LOD list, we need the integer LODs to have a trailing 0.
+   if (lodParam_.find_first_not_of( "0123456789" ) == std::string::npos)
+   {
+      lodParam_ = lodParam_ + ".0";
+   }
+
    if (lodParam_ == "Highest")
    {
       gLogFile->logMessageString("Reading the 'Highest' Level of Detail for every geometry in this file.", FME_INFORM);
@@ -1720,7 +1726,7 @@ std::string FMECityJSONReader::lodToString(json currentGeometry)
    }
    if (lod.is_number_integer())
    {
-      return std::to_string(int(lod));
+      return std::to_string(int(lod)) + ".0";
    }
    else if (lod.is_number_float())
    {
