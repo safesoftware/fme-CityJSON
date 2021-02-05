@@ -412,6 +412,10 @@ FME_Status FMECityJSONWriter::close()
    // close the file
    outputFile_.close();
 
+   // We don't want to log anything as we destroy  texture writers
+   const FME_Boolean oldSilentMode = gLogFile->getSilent();
+   gLogFile->silent(FME_TRUE); // don't forget to set this back to what it was before...
+
    for (auto& [key, value]: writers_)
    {
       IFMEUniversalWriter* writer = value;
@@ -419,6 +423,8 @@ FME_Status FMECityJSONWriter::close()
       gFMESession->destroyWriter(writer);
    }
    writers_.clear();
+
+   gLogFile->silent(oldSilentMode);
 
    return FME_SUCCESS;
 }
@@ -1230,14 +1236,20 @@ FME_Status FMECityJSONWriter::writeWithWriter(IFMERaster*& raster,
    }
    else
    {
+      // We don't want to log anything as we create a new texture writer
+      const FME_Boolean oldSilentMode = gLogFile->getSilent();
+      gLogFile->silent(FME_TRUE); // don't forget to set this back to what it was before...
+
       // We haven't tried to make a writer for this format yet. Do it now.
       writer = gFMESession->createWriter(format.c_str(), nullptr);
 
       // Open this writer on our directory.
       IFMEStringArray* directives = gFMESession->createStringArray();
-
       FME_MsgNum msgNum = writer->open(outputDir.c_str(), *directives);
       gFMESession->destroyStringArray(directives);
+
+      gLogFile->silent(oldSilentMode);
+
       if (msgNum != FME_SUCCESS)
       {
          raster->destroy();

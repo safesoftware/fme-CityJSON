@@ -2119,9 +2119,13 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName,
       readerToUse = "GENERIC";
    }
 
+   const FME_Boolean oldSilentMode = gLogFile->getSilent();
+   gLogFile->silent(FME_TRUE); // don't forget to set this back to what it was before...
+
    newReader = gFMESession->createReader(readerToUse.c_str(), FME_FALSE, nullptr);
    if (!newReader)
    {
+      gLogFile->silent(oldSilentMode);
       // TODO: Log some error message
       return FME_FAILURE;
    }
@@ -2133,6 +2137,7 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName,
    gFMESession->destroyStringArray(parameters);
    if (badLuck)
    {
+      gLogFile->silent(oldSilentMode);
       // TODO: Log some error message
       return FME_FAILURE;
    }
@@ -2142,6 +2147,7 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName,
    badLuck = newReader->read(*textureFeature, endOfFile);
    if (badLuck)
    {
+      gLogFile->silent(oldSilentMode);
       // TODO: Log some error message
       return FME_FAILURE;
    }
@@ -2150,6 +2156,7 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName,
 
    if (!geom->canCastAs<IFMERaster*>())
    {
+      gLogFile->silent(oldSilentMode);
       // TODO: Log some warning message
       raster = nullptr;
    }
@@ -2161,7 +2168,11 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName,
 
    // Close the reader and *ignore* any errors.
    badLuck = newReader->close();
-   if (badLuck) return badLuck;
+   if (badLuck)
+   {
+      gLogFile->silent(oldSilentMode);
+      return badLuck;
+   }
 
    // clean up
    gFMESession->destroyFeature(textureFeature);
@@ -2169,6 +2180,7 @@ FME_Status FMECityJSONReader::readRaster(const std::string& fullFileName,
    gFMESession->destroyReader(newReader);
    newReader = nullptr;
 
+   gLogFile->silent(oldSilentMode);
    return FME_SUCCESS;
 }
 
