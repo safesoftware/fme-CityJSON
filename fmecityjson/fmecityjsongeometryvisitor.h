@@ -451,7 +451,8 @@ private:
    IFMEString* uCoordDesc_;
    IFMEString* vCoordDesc_;
 
-   // TODO
+   // CityJSON must explicitly set texture references on each level of the hierarchy, so we keep
+   // track of the parent's appearance reference to be able to resolve appearance inheritance
    FME_UInt32 parentAppearanceRef_ = 0;
 };
 
