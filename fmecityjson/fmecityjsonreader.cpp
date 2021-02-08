@@ -1142,18 +1142,35 @@ FME_Status FMECityJSONReader::read(IFMEFeature& feature, FME_Boolean& endOfFile)
       // Set the geometry
       // We loop through all the geometries of this feature.  It may have a
       // separate geometry per LOD, but we are reading only a single requested
-      // LOD, so we should at most get one, we're assuming.  Not sure how we'd
-      // prefer to handle reading a case where it had more than one geometry with
-      // the same LOD.  Maybe aggregate them?
+      // LOD. If we get more than one geometry at a requested LOD, we will
+      // output an aggregate geometry.
+      IFMEAggregate* aggregate = fmeGeometryTools_->createAggregate();
       for (auto& geometry : nextObject_.value()["geometry"])
       {
          // Set the geometry for the feature
          IFMEGeometry* geom = parseCityObjectGeometry(geometry, vertices_, LODToUse, false);
          if (geom != nullptr)
          {
-            feature.setGeometry(geom);
+            aggregate->appendPart(geom);
          }
          // else if we get nullptr, that means it was an LOD we want to skip.
+      }
+
+      if (aggregate->numParts() == 0)
+      {
+         fmeGeometryTools_->destroyGeometry(aggregate);
+         aggregate = nullptr;
+      }
+      else if (aggregate->numParts() == 1)
+      {
+         feature.setGeometry(aggregate->removeLastPart());
+         fmeGeometryTools_->destroyGeometry(aggregate);
+         aggregate = nullptr;
+      }
+      else
+      {
+         feature.setGeometry(aggregate);
+         aggregate = nullptr;
       }
 
       ++nextObject_;

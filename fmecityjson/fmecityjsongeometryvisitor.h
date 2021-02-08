@@ -51,7 +51,8 @@ using TexCoordPool = std::vector<std::string>;
 class IFMEVoxelGrid;
 class IFMESession;
 
-// This returns a string that contains the geometry of a feature passed in.
+// This class fills outputgeoms_ with json geometry objects at the specified LOD
+// NOTE: reset() must be called before the visitor visits any geometries
 class FMECityJSONGeometryVisitor : public IFMEGeometryVisitorConst
 {
 public:
@@ -73,6 +74,15 @@ public:
    FME_Int32 getVersion() const override
    {
       return kGeometryVisitorVersion; // This constant defined in the parent's header file
+   }
+
+   //----------------------------------------------------------------------
+   // reset the variables outputgeoms_ and lodAsDouble_ so that a new geometry
+   // can be written. Must be called before a geometry is visited.
+   void reset(json& outputgeoms, const double lodAsDouble)
+   {
+      outputgeoms_ = &outputgeoms;
+      lodAsDouble_ = lodAsDouble;
    }
 
    //---------------------------------------------------------------------
@@ -244,11 +254,6 @@ public:
    // replace empty array with null value
    json replaceEmptySurface(std::vector<json> semanticSurface);
 
-   //----------------------------------------------------------------------
-   // reset the variables vertices_ and onegeom_ so that a new geometry
-   // can be written
-   void reset();
-
 private:
 
    //---------------------------------------------------------------
@@ -300,16 +305,28 @@ private:
    void completedGeometry(bool topLevel, const json& boundary, const json& texCoords);
 
    //----------------------------------------------------------------------
+   template <class T>
+   FME_UInt32 updateParentAppearanceReference(const T& geom)
+   {
+      const FME_UInt32 result = parentAppearanceRef_;
+
+      FME_UInt32 appearanceRef = 0;
+      if (geom.getAppearanceReference(appearanceRef, FME_TRUE) && appearanceRef != 0)
+      {
+         parentAppearanceRef_ = appearanceRef;
+      }
+
+      return result;
+   }
+
+   //----------------------------------------------------------------------
    //
    template <class T>
    FME_Status visitCompositeOrMultiSolid(const T& compositeOrMultiSolid, const std::string& typeAsString)
    {
       // CityJSON must explicitly set texture references on each level of the
       // hierarchy, so we must resolve any inheritance that might exist.
-      // Doing this cast actually violates the "const" on the geometry object we have.
-      // But we know we are not doing anything tricky, so let's cast that away.
-      // This avoids us needing to make a copy.
-      const_cast<T*>(&compositeOrMultiSolid)->resolvePartDefaults();
+      const FME_UInt32 oldParentAppearanceRef = updateParentAppearanceReference(compositeOrMultiSolid);
 
       skipLastPointOnLine_ = true; 
 
@@ -357,8 +374,6 @@ private:
          }
       }
 
-      completedGeometry(topLevel, jsonArray, jsonTCArray);
-
       //-- store semantic surface information
       if (!semanticValues_.empty())
       {
@@ -366,12 +381,16 @@ private:
          outputgeom_["semantics"]["values"]   = multiSolidSemanticValues_;
       }
 
+      completedGeometry(topLevel, jsonArray, jsonTCArray);
+
       // Done with the iterator
       compositeOrMultiSolid.destroyIterator(iterator);
 
       logDebugMessage(std::string(kMsgEndVisiting) + typeAsString);
 
       skipLastPointOnLine_ = false; 
+
+      parentAppearanceRef_ = oldParentAppearanceRef;
 
       return FME_SUCCESS;
    }
@@ -388,6 +407,9 @@ private:
    IFMELogFile* logFile_;
 
    //---------- private data members
+
+   json* outputgeoms_ = nullptr;
+   double lodAsDouble_ = FME_NAN;
 
    std::string featureType_;
    json outputgeom_;
@@ -428,6 +450,9 @@ private:
    // Saved once so we don't need to make them over and over
    IFMEString* uCoordDesc_;
    IFMEString* vCoordDesc_;
+
+   // TODO
+   FME_UInt32 parentAppearanceRef_ = 0;
 };
 
 #endif
