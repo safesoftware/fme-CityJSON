@@ -320,15 +320,6 @@ json FMECityJSONGeometryVisitor::replaceEmptySurface(std::vector<json> semanticS
    return std::vector<json>{nullptr};
 }
 
-void FMECityJSONGeometryVisitor::reset()
-{
-   outputgeom_.clear();
-   surfaces_.clear();
-   semanticValues_.clear();
-   workingBoundary_.clear();
-   workingTexCoords_.clear();
-}
-
 // Converts a value into a string
 std::string get_key(FME_Real64 val, int precision)
 {
@@ -496,6 +487,20 @@ void FMECityJSONGeometryVisitor::completedGeometry(bool topLevel, const json& bo
       {
          outputgeom_["texture"]["default_theme"]["values"] = texCoords;
       }
+
+      //-- write it to the JSON object
+      if (outputgeoms_ != nullptr && !outputgeom_.empty()) 
+      {
+         //-- TODO: write '2' or '2.0' is fine for the "lod"?
+         outputgeom_["lod"] = lodAsDouble_;
+         outputgeoms_->push_back(outputgeom_);
+      }
+
+      outputgeom_.clear();
+      surfaces_.clear();
+      semanticValues_.clear();
+      workingBoundary_.clear();
+      workingTexCoords_.clear();
    }
    else
    {
@@ -514,32 +519,19 @@ FME_Status FMECityJSONGeometryVisitor::visitAggregate(const IFMEAggregate& aggre
 {
    logDebugMessage(std::string(kMsgStartVisiting) + std::string("aggregate"));
 
-//    // For appearances, let's make it easy and not have to deal with inherited ones.
-//    aggregate.resolvePartDefaults();
+   // CityJSON must explicitly set texture references on each level of the
+   // hierarchy, so we must resolve any inheritance that might exist.
+   const FME_UInt32 oldParentAppearanceRef = updateParentAppearanceReference(aggregate);
 
-   // Create iterator to get all geometries
-   //-- We can't write this out as an aggregate in CityJSON, so
-   //   rather than fail, let's do the best we can - which is write
-   //   them out as if they came in separately.
-   IFMEGeometryIterator* iterator = aggregate.getIterator();
-   while (iterator->next())
+   // Visit all the parts in order. Each geometry part will become a separate
+   // geometry json object in outputgeoms_
+   for (FME_UInt32 i = 0; i < aggregate.numParts(); ++i)
    {
-      logDebugMessage(std::string(kMsgVisiting) + std::string("aggregate geometry"));
-
-      // re-visit aggregate geometries
-      if (nullptr != iterator->getPart())
-      {
-         FME_Status badNews = iterator->getPart()->acceptGeometryVisitorConst(*this);
-         if (badNews)
-         {
-            // Destroy the iterator
-            aggregate.destroyIterator(iterator);
-            return FME_FAILURE;
-         }
-      }
+      const FME_Status badLuck = aggregate.getPartAt(i)->acceptGeometryVisitorConst(*this);
+      if (badLuck) return badLuck;
    }
-   // Done with the iterator, destroy it
-   aggregate.destroyIterator(iterator);
+
+   parentAppearanceRef_ = oldParentAppearanceRef;
 
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("aggregate"));
 
@@ -963,6 +955,11 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
    int cityJSONTexIndex(-1);
    if (face.getAppearanceReference(frontAppRef, FME_TRUE) == FME_TRUE)
    {
+      if (frontAppRef == 0 && parentAppearanceRef_ > 0)
+      {
+         frontAppRef = parentAppearanceRef_;
+      }
+
       // Is this appearance a texture or a material?
       IFMEAppearance* app = fmeSession_->getLibrary()->getAppearanceCopy(frontAppRef);
       if (app) // if the appRef was "0" or "-1" we don't expect a reference
@@ -1014,8 +1011,6 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
    auto jsonTCArray2 = json::array();
    jsonTCArray2.push_back(jsonTCArray);
    jsonTCArray = jsonTCArray2;
-
-   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    //-- fetch the semantic surface type of the geometry
    // Check if the semantics type is allowed
@@ -1102,6 +1097,8 @@ FME_Status FMECityJSONGeometryVisitor::visitFace(const IFMEFace& face)
    else {
       semanticValues_.push_back(nullptr);
    }
+
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    skipLastPointOnLine_ = false;
 
@@ -1234,10 +1231,7 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
 {
    // CityJSON must explicitly set texture references on each level of the
    // hierarchy, so we must resolve any inheritance that might exist.
-   // Doing this cast actually violates the "const" on the geometry object we have.
-   // But we know we are not doing anything tricky, so let's cast that away.
-   // This avoids us needing to make a copy.
-   const_cast<IFMEBRepSolid*>(&brepSolid)->resolvePartDefaults();
+   const FME_UInt32 oldParentAppearanceRef = updateParentAppearanceReference(brepSolid);
 
    skipLastPointOnLine_ = true; 
 
@@ -1294,13 +1288,13 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
       solidSemanticValues_.push_back(replaceSemanticValues(semanticValues_));
    }
 
-   completedGeometry(topLevel, jsonArray, jsonTCArray);
-
    //-- store semantic surface information
    if (!semanticValues_.empty()) {
      outputgeom_["semantics"]["surfaces"] = replaceEmptySurface(surfaces_);
      outputgeom_["semantics"]["values"] = solidSemanticValues_;
    }
+
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    // Done with the iterator
    brepSolid.destroyIterator(iterator);
@@ -1308,6 +1302,8 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("boundary representation solid"));
 
    skipLastPointOnLine_ = false; 
+
+   parentAppearanceRef_ = oldParentAppearanceRef;
 
    return FME_SUCCESS;
 }
@@ -1361,10 +1357,7 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
 {
    // CityJSON must explicitly set texture references on each level of the
    // hierarchy, so we must resolve any inheritance that might exist.
-   // Doing this cast actually violates the "const" on the geometry object we have.
-   // But we know we are not doing anything tricky, so let's cast that away.
-   // This avoids us needing to make a copy.
-   const_cast<IFMECompositeSurface*>(&compositeSurface)->resolvePartDefaults();
+   const FME_UInt32 oldParentAppearanceRef = updateParentAppearanceReference(compositeSurface);
 
    skipLastPointOnLine_ = true; 
 
@@ -1380,15 +1373,17 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
    FME_Status badNews = visitCompositeSurfaceParts(compositeSurface, jsonArray, jsonTCArray);
    if (badNews) return FME_FAILURE;
 
-   completedGeometry(topLevel, jsonArray, jsonTCArray);
-
    //-- store semantic surface information
    if (!semanticValues_.empty()) {
       outputgeom_["semantics"]["surfaces"] = surfaces_;
       outputgeom_["semantics"]["values"] = semanticValues_;
    }
 
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
+
    skipLastPointOnLine_ = false; 
+
+   parentAppearanceRef_ = oldParentAppearanceRef;
 
    return FME_SUCCESS;
 }
@@ -1429,10 +1424,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
 {
    // CityJSON must explicitly set texture references on each level of the
    // hierarchy, so we must resolve any inheritance that might exist.
-   // Doing this cast actually violates the "const" on the geometry object we have.
-   // But we know we are not doing anything tricky, so let's cast that away.
-   // This avoids us needing to make a copy.
-   const_cast<IFMEMultiSurface*>(&multiSurface)->resolvePartDefaults();
+   const FME_UInt32 oldParentAppearanceRef = updateParentAppearanceReference(multiSurface);
 
    skipLastPointOnLine_ = true; 
 
@@ -1465,13 +1457,13 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
       takeWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
    }
 
-   completedGeometry(topLevel, jsonArray, jsonTCArray);
-
    //-- store semantic surface information
    if (!semanticValues_.empty()) {
      outputgeom_["semantics"]["surfaces"] = surfaces_;
      outputgeom_["semantics"]["values"] = semanticValues_;
    }
+
+   completedGeometry(topLevel, jsonArray, jsonTCArray);
 
    // Done with the iterator
    multiSurface.destroyIterator(iterator);
@@ -1479,6 +1471,8 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
    logDebugMessage(std::string(kMsgEndVisiting) + std::string("multi surface"));
 
    skipLastPointOnLine_ = false; 
+
+   parentAppearanceRef_ = oldParentAppearanceRef;
 
    return FME_SUCCESS;
 }

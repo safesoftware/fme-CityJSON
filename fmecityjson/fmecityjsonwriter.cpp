@@ -835,13 +835,6 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
    FME_Boolean isgeomnull = geometry.canCastAs<IFMENull*>();
    if (isgeomnull == false)
    {
-      FME_Status badNews = geometry.acceptGeometryVisitorConst(*visitor_);
-      if (badNews) {
-         // There was an error in writing the geometry
-         gLogFile->logMessageString(kMsgWriteError);
-         return FME_FAILURE;
-      }
-
       //-- fetch the LoD of the geometry
       IFMEString* slod = gFMESession->createString();
       slod->set("cityjson_lod", 12);
@@ -878,21 +871,15 @@ FME_Status FMECityJSONWriter::write(const IFMEFeature& feature)
       gFMESession->destroyString(stmpFME); stmpFME = nullptr;
       gFMESession->destroyString(slod); slod = nullptr;
 
-      //-- fetch the JSON geometry from the visitor (FMECityJSONGeometryVisitor)
-      json fgeomjson = (visitor_)->getGeomJSON();
-
-      //-- write it to the JSON object
-      // outputJSON_["CityObjects"][s1->data()]["geometry"] = json::array();
-      if (!fgeomjson.empty()) 
-      {
-         //-- TODO: write '2' or '2.0' is fine for the "lod"?
-         fgeomjson["lod"] = lodAsDouble;
-
-         outputJSON_["CityObjects"][fids]["geometry"].push_back(fgeomjson);
-      }
-
       //-- reset the internal DS for one feature
-      (visitor_)->reset();
+      visitor_->reset(outputJSON_["CityObjects"][fids]["geometry"], lodAsDouble);
+
+      FME_Status badNews = geometry.acceptGeometryVisitorConst(*visitor_);
+      if (badNews) {
+         // There was an error in writing the geometry
+         gLogFile->logMessageString(kMsgWriteError);
+         return FME_FAILURE;
+      }
    }
 
    return FME_SUCCESS;
