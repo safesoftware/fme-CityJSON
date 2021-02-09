@@ -251,9 +251,6 @@ public:
    json replaceSemanticValues(std::vector<json> semanticValues);
 
    //----------------------------------------------------------------------
-   // replace empty array with null value
-   json replaceEmptySurface(std::vector<json> semanticSurface);
-
 private:
 
    //---------------------------------------------------------------
@@ -375,9 +372,9 @@ private:
       }
 
       //-- store semantic surface information
-      if (!semanticValues_.empty())
+      if (!surfaces_.empty())
       {
-         outputgeom_["semantics"]["surfaces"] = replaceEmptySurface(surfaces_);
+         outputgeom_["semantics"]["surfaces"] = surfaces_;
          outputgeom_["semantics"]["values"]   = multiSolidSemanticValues_;
       }
 
