@@ -312,14 +312,6 @@ json FMECityJSONGeometryVisitor::replaceSemanticValues(std::vector<json> semanti
    return nullptr;
 }
 
-json FMECityJSONGeometryVisitor::replaceEmptySurface(std::vector<json> semanticSurface) {
-   // replace array with only null values with a single null value
-   if (semanticSurface.size() > 0) {
-      return semanticSurface;
-   }
-   return std::vector<json>{nullptr};
-}
-
 // Converts a value into a string
 std::string get_key(FME_Real64 val, int precision)
 {
@@ -1289,8 +1281,8 @@ FME_Status FMECityJSONGeometryVisitor::visitBRepSolid(const IFMEBRepSolid& brepS
    }
 
    //-- store semantic surface information
-   if (!semanticValues_.empty()) {
-     outputgeom_["semantics"]["surfaces"] = replaceEmptySurface(surfaces_);
+   if (!surfaces_.empty()) {
+     outputgeom_["semantics"]["surfaces"] = surfaces_;
      outputgeom_["semantics"]["values"] = solidSemanticValues_;
    }
 
@@ -1374,7 +1366,7 @@ FME_Status FMECityJSONGeometryVisitor::visitCompositeSurface(const IFMEComposite
    if (badNews) return FME_FAILURE;
 
    //-- store semantic surface information
-   if (!semanticValues_.empty()) {
+   if (!surfaces_.empty()) {
       outputgeom_["semantics"]["surfaces"] = surfaces_;
       outputgeom_["semantics"]["values"] = semanticValues_;
    }
@@ -1458,7 +1450,7 @@ FME_Status FMECityJSONGeometryVisitor::visitMultiSurface(const IFMEMultiSurface&
    }
 
    //-- store semantic surface information
-   if (!semanticValues_.empty()) {
+   if (!surfaces_.empty()) {
      outputgeom_["semantics"]["surfaces"] = surfaces_;
      outputgeom_["semantics"]["values"] = semanticValues_;
    }
