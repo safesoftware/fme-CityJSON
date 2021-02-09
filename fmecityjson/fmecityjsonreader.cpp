@@ -1555,7 +1555,7 @@ IFMEFace* FMECityJSONReader::parseSurfaceBoundaries(json::value_type& surface,
       //       which would we use?  I am assuming they are all the same and pick the
       //       appearance from the outer ring "0".
       face->setAppearanceReference(appearanceRefs[0], FME_TRUE);
-      face->setAppearanceReference(appearanceRefs[0], FME_FALSE);
+      //face->setAppearanceReference(appearanceRefs[0], FME_FALSE);
       //face->deleteSide(FME_FALSE); // make the back face not exist, "transparent".
    }
 
@@ -1632,7 +1632,7 @@ void FMECityJSONReader::parseMaterials(IFMEFace& face, json::value_type& materia
 
       // TODO: issue 74: I'm not sure if this material should be on both sides.
       face.setAppearanceReference(fmeMatRef, FME_TRUE);
-      face.setAppearanceReference(fmeMatRef, FME_FALSE);
+      //face.setAppearanceReference(fmeMatRef, FME_FALSE);
       //face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
    }
 }
