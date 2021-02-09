@@ -833,13 +833,13 @@ void FMECityJSONReader::scanLODs()
          {
             gLogFile->logMessageString(
                ("The 'lod' attribute is empty in the geometry of the CityObject: " + it.key()).c_str(),
-               FME_ERROR);
+               FME_WARN);
          }
          else
          {
             gLogFile->logMessageString(
                ("Did not find the 'lod' attribute in the geometry of the CityObject: " + it.key()).c_str(),
-               FME_ERROR);
+               FME_WARN);
          }
       }
    }
@@ -887,6 +887,11 @@ void FMECityJSONReader::scanLODs()
          gLogFile->logMessageString("Reading the 'Highest' Level of Detail for every geometry in this file.", FME_INFORM);
       }
       lodParam_ = lodInData_[0];
+   }
+   else // We found no valid LODs in the file!
+   {
+      gLogFile->logMessageString("There are no valid LOD values found in the input data file. Reading them all.");
+      lodParam_ = "Highest";
    }
 
    // To match our other LOD list, we need the integer LODs to have a trailing 0.
