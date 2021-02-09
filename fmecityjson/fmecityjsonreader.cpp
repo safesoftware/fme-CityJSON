@@ -863,14 +863,22 @@ void FMECityJSONReader::scanLODs()
          gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
          lodParam_ = "Highest";
       }
-      else if ((lodParam_ != "Highest") &&
-               (std::find(lodInData_.begin(), lodInData_.end(), lodParam_) == lodInData_.end()))
+      else if (lodParam_ != "Highest")
       {
-         std::string defaultMsg = "The provided 'CityJSON Level of Detail' parameter value " +
-                                  lodParam_ +
-                                  " is not present in the data. Defaulting to: 'Highest'";
-         gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
-         lodParam_ = "Highest";
+         // We may have some input like "1" and we need to match it to "1.0" successfully.
+         if (lodParam_.find_first_not_of("0123456789") == std::string::npos)
+         {
+            lodParam_ = lodParam_ + ".0";
+         }
+
+         if (std::find(lodInData_.begin(), lodInData_.end(), lodParam_) == lodInData_.end())
+         {
+            std::string defaultMsg = "The provided 'CityJSON Level of Detail' parameter value " +
+                                     lodParam_ +
+                                     " is not present in the data. Defaulting to: 'Highest'";
+            gLogFile->logMessageString(defaultMsg.c_str(), FME_WARN);
+            lodParam_ = "Highest";
+         }
       }
    }
    else if (lodInData_.size() == 1)
