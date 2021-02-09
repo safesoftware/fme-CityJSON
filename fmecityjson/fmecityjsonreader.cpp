@@ -1550,7 +1550,6 @@ IFMEFace* FMECityJSONReader::parseSurfaceBoundaries(json::value_type& surface,
    // Set the texture/appearance
    if (not appearanceRefs.empty())
    {
-      // TODO: issue 74: I'm not sure if this texture should be on both sides.
       // TODO: issue 75: I'm not sure if rings can refer to different appearances, but if so,
       //       which would we use?  I am assuming they are all the same and pick the
       //       appearance from the outer ring "0".
@@ -1630,7 +1629,6 @@ void FMECityJSONReader::parseMaterials(IFMEFace& face, json::value_type& materia
    {
       FME_UInt32 fmeMatRef = materialsMap_[materialRef];
 
-      // TODO: issue 74: I'm not sure if this material should be on both sides.
       face.setAppearanceReference(fmeMatRef, FME_TRUE);
       //face.setAppearanceReference(fmeMatRef, FME_FALSE);
       //face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
