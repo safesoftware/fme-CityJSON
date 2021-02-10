@@ -298,6 +298,7 @@ private:
 
    // -----------------------------------------------------------------------
    json::value_type* fetchSemanticsValues(json::value_type& semantics);
+   json::value_type* fetchSemanticsValues(json::value_type& semanticsArray, std::size_t index);
 
    // Data members
 
