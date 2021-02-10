@@ -239,6 +239,9 @@ public:
                       std::optional<double>& maxz);
 
    //----------------------------------------------------------------------
+   json getTemplateJSON();
+
+   //----------------------------------------------------------------------
    // check if the surface semantics type is allowed for this CityObjectType
    bool semanticTypeAllowed(std::string trait);
 
@@ -272,7 +275,7 @@ private:
    // The vertex is added to the vertex pool.  It will not add duplicates.
    // The index of the vertex in the pool is returned.
    unsigned long addVertex(const FMECoord3D& vertex);
-   void acceptVertex(const std::string& vertex_string);
+   void acceptVertex(const std::string& vertex_string, VertexPool& output, bool updateBounds);
    unsigned long addTextureCoord(const FMECoord2D& texcoord);
 
    //---------------------------------------------------------------------
@@ -451,6 +454,16 @@ private:
    // CityJSON must explicitly set texture references on each level of the hierarchy, so we keep
    // track of the parent's appearance reference to be able to resolve appearance inheritance
    FME_UInt32 parentAppearanceRef_ = 0;
+
+   // Keep track of whether this visitor is currently visiting a geometry definition
+   // (a.k.a CityJSON template geometry). The template geometries and template vertices
+   // must go to tempateGeoms_ and templateVertices_ instead of outputgeoms_ and vertices_
+   // respectively.
+   bool insideTemplateGeom_ = false;
+   json templateGeoms_ = json::array();
+   std::unordered_map<std::string, unsigned long> templateVertexToIndex_;
+   VertexPool templateVertices_;
+   std::unordered_map<FME_UInt32, std::size_t> gdReferenceToTemplateIndex_;
 };
 
 #endif

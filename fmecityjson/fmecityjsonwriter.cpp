@@ -367,6 +367,16 @@ FME_Status FMECityJSONWriter::close()
       vertices_.clear();
    }
 
+   // Write out templates, if they exist
+   if (visitor_)
+   {
+      const json templates = visitor_->getTemplateJSON();
+      if (!templates.empty())
+      {
+         outputJSON_["geometry-templates"] = templates;
+      } 
+   }
+
    // Write out the appearances
    FME_Status badLuck = outputAppearances();
    if (badLuck != FME_SUCCESS) return badLuck;
