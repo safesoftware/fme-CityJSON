@@ -263,6 +263,17 @@ void FMECityJSONGeometryVisitor::getGeomBounds(std::optional<double>& minx,
    maxz = maxz_;
 }
 
+json FMECityJSONGeometryVisitor::getTemplateJSON()
+{
+   json result = json::object();
+   if (!templateGeoms_.empty())
+   {
+      result["templates"] = templateGeoms_;
+      result["vertices-templates"] = templateVertices_;
+   }
+   return result;
+}
+
 bool FMECityJSONGeometryVisitor::semanticTypeAllowed(std::string trait)
 {
    if (trait.compare(0, 1, "+") == 0) {
@@ -364,7 +375,9 @@ void tokenize(const std::string& str, std::vector<std::string>& tokens)
    }
 }
 
-void FMECityJSONGeometryVisitor::acceptVertex(const std::string& vertex_string)
+void FMECityJSONGeometryVisitor::acceptVertex(const std::string& vertex_string, 
+                                              VertexPool& vertices, // out
+                                              const bool updateBounds)
 {
    // Sadly, we need to calculate our bounds from the stringified vertex we
    // are using.  So back to float!
@@ -374,17 +387,20 @@ void FMECityJSONGeometryVisitor::acceptVertex(const std::string& vertex_string)
    double y = std::stod(ls[1]);
    double z = std::stod(ls[2]);
 
-   if (!minx_ || x < minx_) minx_ = x;
-   if (!maxx_ || x > maxx_) maxx_ = x;
-   if (!miny_ || y < miny_) miny_ = y;
-   if (!maxy_ || y > maxy_) maxy_ = y;
-   if (!std::isnan(z)) // have z
+   if (updateBounds)
    {
-      if (!minz_ || z < minz_) minz_ = z;
-      if (!maxz_ || z > maxz_) maxz_ = z;
+      if (!minx_ || x < minx_) minx_ = x;
+      if (!maxx_ || x > maxx_) maxx_ = x;
+      if (!miny_ || y < miny_) miny_ = y;
+      if (!maxy_ || y > maxy_) maxy_ = y;
+      if (!std::isnan(z)) // have z
+      {
+         if (!minz_ || z < minz_) minz_ = z;
+         if (!maxz_ || z > maxz_) maxz_ = z;
+      }
    }
 
-   vertices_.push_back({x, y, z});
+   vertices.push_back({x, y, z});
 }
 
 // This will make sure we don't add any vertex twice.
@@ -393,29 +409,35 @@ unsigned long FMECityJSONGeometryVisitor::addVertex(const FMECoord3D& vertex)
    // This is the vertex, as a string, which we'll use.
    std::string vertex_string = get_key(vertex, important_digits_);
 
+   // If we're inside a template geom the bounds should not be updated
+   // and the vertices should go into a separate vertex pool
+   auto& vertices = insideTemplateGeom_ ? templateVertices_ : vertices_;
+   auto& vertexToIndex = insideTemplateGeom_ ? templateVertexToIndex_ : vertexToIndex_;
+   const bool updateBounds = !insideTemplateGeom_;
+
    // This will be the index in the vertex pool if it is new
-   unsigned long index(vertices_.size());
+   unsigned long index(vertices.size());
 
    // A little more bookkeeping if we want to optimize the vertex pool
    // and not have duplicates.
    if (remove_duplicates_)
    {
       // Have we encountered this vertex before?
-      auto [entry, vertexAdded] = vertexToIndex_.try_emplace(vertex_string, index);
+      auto [entry, vertexAdded] = vertexToIndex.try_emplace(vertex_string, index);
       if (!vertexAdded) // We already have this in our vertex pool
       {
          index = entry->second;
       }
       else // We haven't seen this before, so insert it into the pool.
       {
-         acceptVertex(vertex_string);
+         acceptVertex(vertex_string, vertices, updateBounds);
 
          // index is already set correctly.
       }
    }
    else
    {
-      acceptVertex(vertex_string);
+      acceptVertex(vertex_string, vertices, updateBounds);
 
       // index is already set correctly.
    }
@@ -475,17 +497,25 @@ void FMECityJSONGeometryVisitor::completedGeometry(bool topLevel, const json& bo
    if (topLevel)
    {
       outputgeom_["boundaries"] = boundary;
-      if (!textureRefsToCJIndex_.empty()) // only if we've actually found a texture.
+      if (!texCoords.empty() && !textureRefsToCJIndex_.empty()) // only if we've actually found a texture.
       {
          outputgeom_["texture"]["default_theme"]["values"] = texCoords;
       }
 
       //-- write it to the JSON object
-      if (outputgeoms_ != nullptr && !outputgeom_.empty()) 
+      if (!outputgeom_.empty()) 
       {
          //-- TODO: write '2' or '2.0' is fine for the "lod"?
          outputgeom_["lod"] = lodAsDouble_;
-         outputgeoms_->push_back(outputgeom_);
+
+         if (insideTemplateGeom_)
+         {
+            templateGeoms_.push_back(outputgeom_);
+         }
+         else if (outputgeoms_ != nullptr)
+         {
+            outputgeoms_->push_back(outputgeom_);
+         }
       }
 
       outputgeom_.clear();
@@ -515,12 +545,89 @@ FME_Status FMECityJSONGeometryVisitor::visitAggregate(const IFMEAggregate& aggre
    // hierarchy, so we must resolve any inheritance that might exist.
    const FME_UInt32 oldParentAppearanceRef = updateParentAppearanceReference(aggregate);
 
-   // Visit all the parts in order. Each geometry part will become a separate
-   // geometry json object in outputgeoms_
-   for (FME_UInt32 i = 0; i < aggregate.numParts(); ++i)
+   // Check whether this is a geometry instance that can be written as a template
+   FME_UInt32 geometryDefinitionReference = 0;
+   IFMEGeometry* geometryDefinition = nullptr;
+   if (!insideTemplateGeom_ && parentAppearanceRef_ == 0)
    {
-      const FME_Status badLuck = aggregate.getPartAt(i)->acceptGeometryVisitorConst(*this);
-      if (badLuck) return badLuck;
+      if (aggregate.getGeometryDefinitionReference(geometryDefinitionReference))
+      {
+         geometryDefinition = fmeSession_->getLibrary()->getGeometryDefinitionCopy(geometryDefinitionReference);
+         // Templates in CityJSON may not contain aggregates
+         if (geometryDefinition->canCastAs<IFMEAggregate*>())
+         {
+            fmeGeometryTools_->destroyGeometry(geometryDefinition);
+            geometryDefinition = nullptr;
+         }
+      }
+   }
+
+   if (geometryDefinition != nullptr)
+   {
+      std::size_t templateIndex = templateGeoms_.size();
+      const auto insertResult = gdReferenceToTemplateIndex_.try_emplace(geometryDefinitionReference, templateIndex);
+      if (insertResult.second)
+      {
+         // This is the first time this geometry definition has been seen. Visit the geometry definition
+         insideTemplateGeom_ = true;
+         const FME_Status badLuck = geometryDefinition->acceptGeometryVisitorConst(*this);
+         fmeGeometryTools_->destroyGeometry(geometryDefinition); geometryDefinition = nullptr;
+         insideTemplateGeom_ = false;
+         if (badLuck) return badLuck;
+      }
+      else
+      {
+         // This geometry definition has already been visited. Let's just use that template index.
+         templateIndex = insertResult.first->second;
+      }
+
+      FMECoord3D origin;
+      if (!aggregate.getGeometryInstanceLocalOrigin(origin.x, origin.y, origin.z))
+      {
+         return FME_FAILURE;
+      }
+
+      FME_Real64 matrix[3][4];
+      if (!aggregate.getGeometryInstanceMatrix(matrix))
+      {
+         matrix[0][0] = 1;
+         matrix[0][1] = 0;
+         matrix[0][2] = 0;
+         matrix[0][3] = 0;
+         matrix[1][0] = 0;
+         matrix[1][1] = 1;
+         matrix[1][2] = 0;
+         matrix[1][3] = 0;
+         matrix[2][0] = 0;
+         matrix[2][1] = 0;
+         matrix[2][2] = 1;
+         matrix[2][3] = 0;
+      }
+
+      const bool topLevel = claimTopLevel("GeometryInstance");
+      if (!topLevel)
+      {
+         return FME_FAILURE;
+      }
+      
+      outputgeom_["template"] = templateIndex;
+      outputgeom_["transformationMatrix"] = 
+         {matrix[0][0], matrix[0][1], matrix[0][2], matrix[0][3],
+          matrix[1][0], matrix[1][1], matrix[1][2], matrix[1][3],
+          matrix[2][0], matrix[2][1], matrix[2][2], matrix[2][3],
+          0.0, 0.0, 0.0, 1.0};
+
+      completedGeometry(topLevel, {addVertex(origin)}, {});
+   }
+   else
+   {
+      // Visit all the parts in order. Each geometry part will become a separate
+      // geometry json object in outputgeoms_
+      for (FME_UInt32 i = 0; i < aggregate.numParts(); ++i)
+      {
+         const FME_Status badLuck = aggregate.getPartAt(i)->acceptGeometryVisitorConst(*this);
+         if (badLuck) return badLuck;
+      }
    }
 
    parentAppearanceRef_ = oldParentAppearanceRef;
