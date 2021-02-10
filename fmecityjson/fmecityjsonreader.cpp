@@ -621,18 +621,39 @@ FME_Status FMECityJSONReader::readMaterials()
             app->setName(*fmeVal, "fme-system");
          }
 
-         // Set the "ambientIntensity"
-         // I'm not sure how the ambient Intensity matches to FME's ambient colour.
-         // For now, I'll set all three colour values to be the same.
+         // Set the "ambientIntensity," and if it's present, the "diffuseColor" as well.
+         // "ambientIntensity" specifies how much ambient light from light sources this surface
+         // shall reflect. Ambient light is omnidirectional and depends only on the number of light
+         // sources, not their  positions with respect to the surface.
+         // https://www.web3d.org/documents/specifications/19775-1/V3.2/Part01/components/shape.html#Material
+         // FME_ambientColour = cityJSON_ambientIntensity × cityJSON_diffuseColor.
          if (not materials[i]["ambientIntensity"].is_null())
          {
-            app->setColorAmbient(materials[i]["ambientIntensity"],
-                                 materials[i]["ambientIntensity"],
-                                 materials[i]["ambientIntensity"]);
+            const FME_Real64 ambientIntensity = materials[i]["ambientIntensity"];
+            if (not materials[i]["diffuseColor"].is_null())
+            {
+               app->setColorDiffuse(materials[i]["diffuseColor"][0],
+                                    materials[i]["diffuseColor"][1],
+                                    materials[i]["diffuseColor"][2]);
+
+               app->setColorAmbient(ambientIntensity * materials[i]["diffuseColor"][0].get<FME_Real64>(),
+                                    ambientIntensity * materials[i]["diffuseColor"][1].get<FME_Real64>(),
+                                    ambientIntensity * materials[i]["diffuseColor"][2].get<FME_Real64>());
+            }
+            else
+            {
+               //  This is underdetermined.  We're going to assume a diffuse color of 0.5,0.5,0.5
+               gLogFile->logMessageString("A material with Ambient Intensity found, but without Diffuse Color.  Assuming (.5,.5,.5) for calculating Ambient Color.",
+                                          FME_WARN);
+               app->setColorAmbient(ambientIntensity * 0.5,
+                                    ambientIntensity * 0.5,
+                                    ambientIntensity * 0.5);
+            }
          }
 
-         // Set the "diffuseColor"
-         if (not materials[i]["diffuseColor"].is_null())
+         // Set the "diffuseColor."  Only need to do this if we haven't already set it while figuring
+         // out the ambient Intensity.
+         else if (not materials[i]["diffuseColor"].is_null())
          {
             app->setColorDiffuse(materials[i]["diffuseColor"][0],
                                  materials[i]["diffuseColor"][1],
