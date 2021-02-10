@@ -40,6 +40,7 @@
 #include <string>
 #include <map>
 #include <optional>
+#include <unordered_set>
 
 #include <fmefeat.h>
 #include <igeometry.h>
@@ -360,6 +361,8 @@ private:
    // These are when the reader is used as a "helper" to the writer
    bool writerHelperMode_;
    std::string writerStartingSchema_;
+
+   std::unordered_set<std::string> invalidAttributeValueTypesLogged_;
 };
 
 #endif

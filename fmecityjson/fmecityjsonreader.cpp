@@ -1949,8 +1949,12 @@ FME_Status FMECityJSONReader::readSchema(IFMEFeature& feature, FME_Boolean& endO
                   std::string attributeType = "logical";
                   sf->setSequencedAttribute(attributeName.c_str(), attributeType.c_str());
                }
-               else
+               else if (invalidAttributeValueTypesLogged_
+                           .insert(attributeName + it.value().type_name())
+                           .second)
                {
+                  // If this is the first time we've detected that an attribute with this name
+                  // has this type, log a warning
                   std::string msg = "Attribute value type '";
                   msg.append(it.value().type_name());
                   msg.append("' is not allowed, in '");
