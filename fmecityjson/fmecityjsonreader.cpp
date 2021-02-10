@@ -629,16 +629,16 @@ FME_Status FMECityJSONReader::readMaterials()
          // FME_ambientColour = cityJSON_ambientIntensity × cityJSON_diffuseColor.
          if (not materials[i]["ambientIntensity"].is_null())
          {
-            const auto ambientIntensity = materials[i]["ambientIntensity"];
+            const FME_Real64 ambientIntensity = materials[i]["ambientIntensity"];
             if (not materials[i]["diffuseColor"].is_null())
             {
                app->setColorDiffuse(materials[i]["diffuseColor"][0],
                                     materials[i]["diffuseColor"][1],
                                     materials[i]["diffuseColor"][2]);
 
-               app->setColorAmbient(ambientIntensity * materials[i]["diffuseColor"][0],
-                                    ambientIntensity * materials[i]["diffuseColor"][1],
-                                    ambientIntensity * materials[i]["diffuseColor"][2]);
+               app->setColorAmbient(ambientIntensity * materials[i]["diffuseColor"][0].get<FME_Real64>(),
+                                    ambientIntensity * materials[i]["diffuseColor"][1].get<FME_Real64>(),
+                                    ambientIntensity * materials[i]["diffuseColor"][2].get<FME_Real64>());
             }
             else
             {
