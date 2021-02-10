@@ -728,26 +728,14 @@ void FMECityJSONReader::readMetadata()
       // Scrape the coordinate system
       try
       {
-         std::string inputCoordSys = metaObject_.at("referenceSystem").get<std::string>();
-         // Looking to make the form EPSG:XXXX
-         inputCoordSys = inputCoordSys.substr(inputCoordSys.find_first_of("EPSG"));
-         if (inputCoordSys.find("::") != std::string::npos)
+         coordSys_ = metaObject_.at("referenceSystem").get<std::string>();
+
+         // In case of OGC URN 'urn:ogc:def:crs:EPSG::7415'
+         if (const auto pos = coordSys_.find("EPSG::"); pos != std::string::npos)
          {
-            // In case of OGC URN 'urn:ogc:def:crs:EPSG::7415
-            coordSys_ = inputCoordSys.erase(inputCoordSys.find_first_of(":"), 1);
+            coordSys_ = "EPSG:" + coordSys_.substr(pos + 6);
          }
-         else if (inputCoordSys.find(":") != std::string::npos)
-         {
-            // In case of legacy EPSG:7415
-            coordSys_ = inputCoordSys;
-         }
-         else
-         {
-            gLogFile->logMessageString("Cannot parse EPSG code. Please provide the EPSG code as "
-                                       "OGC URN, "
-                                       "for example 'urn:ogc:def:crs:EPSG::7415'.",
-                                       FME_WARN);
-         }
+
          gLogFile->logMessageString(("Coordinate Reference System is set to " + coordSys_).c_str(),
                                     FME_INFORM);
       }
