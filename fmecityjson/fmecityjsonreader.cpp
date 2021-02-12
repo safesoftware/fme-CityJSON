@@ -1533,15 +1533,6 @@ IFMEFace* FMECityJSONReader::createOneSurface(json::value_type& textureRefs,
    // Add traits onto the face.
    parseSemantics(*face, semanticSrf);
 
-   // TODO: issue 73: In the case where CityJSON has both textures and materials
-   // for this geometry, the code above will add the FMEAppearance for the texture
-   // and this code below will replace that with an FMEApeparance for the material.
-   // So basically the texture info is dropped.  I'm not sure what to do here, but
-   // one solution would be to *add* the two together into a new FMEApeparance that
-   // has both, and use that.  Might need to have a dictionary mapping a 
-   // (textureRef,materialRef) pair to appearanceRef so that these pairs can be
-   // reused.
-
    // Add materials to the face
    parseMaterials(*face, materialRefs);
 
@@ -1647,11 +1638,100 @@ void FMECityJSONReader::parseMaterials(IFMEFace& face, json::value_type& materia
 {
    if (not materialRef.is_null())
    {
-      FME_UInt32 fmeMatRef = materialsMap_[materialRef];
+      // This is the appearance (with the material) we will stick on.
+      FME_UInt32 fmeMatAppRef = materialsMap_[materialRef];
 
-      face.setAppearanceReference(fmeMatRef, FME_TRUE);
-      //face.setAppearanceReference(fmeMatRef, FME_FALSE);
-      //face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
+
+      // In the case where CityJSON has both textures and materials
+      // for this geometry, the code before this will have added the FMEAppearance
+      // for the texture and now this code below will need to
+      // *add* the two together into a new FMEApeparance that
+      // has both, and use that.  Need to have a dictionary mapping a
+      // (textureRef,materialRef) pair to appearanceRef so that these pairs can be
+      // reused.
+
+      // Does this have a texture already?  If so, which one?
+      FME_UInt32 texAppRef(0);
+      FME_UInt32 texRef(0);
+      IFMEAppearance* texApp(nullptr);
+      IFMEString* appName = gFMESession->createString();
+      if (FME_TRUE == face.getAppearanceReference(texAppRef, FME_TRUE))
+      {
+         // The only way it would have gotten an appearance is if it had a texture,
+         // So we do expect to find the reference.
+         IFMEAppearance* texApp = gFMESession->getLibrary()->getAppearanceCopy(texAppRef);
+         if (nullptr != texApp)
+         {
+            // We found a texture to "add to" our materials.
+            if (FME_TRUE != texApp->getTextureReference(texRef))
+            {
+               texRef = 0;
+            }
+            if (FME_TRUE != texApp->getName(*appName, nullptr))
+            {
+               appName->set("",0);
+            }
+         }
+      }
+
+      // clean up
+      if (nullptr != texApp)
+      {
+         fmeGeometryTools_->destroyAppearance(texApp); texApp = nullptr;
+      }
+
+
+      // Now, if we have no texture and a material only, this is simple.
+      if (texRef == 0)
+      {
+         face.setAppearanceReference(fmeMatAppRef, FME_TRUE);
+         //face.setAppearanceReference(fmeMatRef, FME_FALSE);
+         //face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
+      }
+      else
+      {
+         // We've got one of each.  Let's check to see if we've seen this pair before...
+         FME_UInt32 fmeMatTexRef(fmeMatAppRef);
+
+         std::pair<FME_UInt32, FME_UInt32> matTexPair{ fmeMatAppRef, texRef };
+         // One we've never seen before?
+         auto refIndex = matTexMap_.find(matTexPair);
+         if (refIndex == matTexMap_.end())
+         {
+            // Gotta make one that merges them together.  Let's just take the
+            // Material appearance, add the texture, and use that as the new
+            // appearance.
+            IFMEAppearance* matTexApp = gFMESession->getLibrary()->getAppearanceCopy(fmeMatAppRef);
+            if (nullptr != matTexApp)
+            {
+               // Let's add the texture.  (and the name?)
+               if (FME_TRUE != matTexApp->setTextureReference(texRef))
+               {
+                  // something went wrong!  Just skip it.
+                  fmeGeometryTools_->destroyAppearance(matTexApp); matTexApp = nullptr;
+                  gFMESession->destroyString(appName);
+                  return;
+               }
+
+               matTexApp->setName(*appName, nullptr);
+
+               // Add this to the library for use later
+               FME_Status unused = gFMESession->getLibrary()->addAppearance(fmeMatTexRef, matTexApp);
+
+               matTexMap_[matTexPair] = fmeMatTexRef;
+            }
+         }
+         else
+         {
+            fmeMatTexRef = refIndex->second;
+         }
+
+         gFMESession->destroyString(appName);
+
+         face.setAppearanceReference(fmeMatTexRef, FME_TRUE);
+         // face.setAppearanceReference(fmeMatRef, FME_FALSE);
+         // face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
+      }
    }
 }
 
