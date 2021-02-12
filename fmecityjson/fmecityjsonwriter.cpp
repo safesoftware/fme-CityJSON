@@ -138,9 +138,6 @@ FMECityJSONWriter::~FMECityJSONWriter()
 // Open
 FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArray& parameters)
 {
-   gLogFile->logMessageString("Thank you for using CityJSON, the better encoding for the CityGML data model.");
-
-
    // get the .fmf parameters
    IFMEString* pv = gFMESession->createString();
 
@@ -217,7 +214,7 @@ FME_Status FMECityJSONWriter::open(const char* datasetName, const IFMEStringArra
 
    // Create visitor to visit feature geometries
    visitor_ = new FMECityJSONGeometryVisitor(
-      fmeGeometryTools_, gFMESession, remove_duplicates_, important_digits_, textureRefsToCJIndex_);
+      fmeGeometryTools_, gFMESession, remove_duplicates_, important_digits_, textureRefsToCJIndex_, materialInfoToCJIndex_);
 
    dataset_ = datasetName;
 
@@ -1403,5 +1400,91 @@ FME_Status FMECityJSONWriter::outputAppearances()
          outputJSON_["appearance"]["vertices-texture"] = ftcjson;
       }
    }
+   
+   if (!materialInfoToCJIndex_.empty())
+   {
+      // we need to know what order to write out the material References
+      std::map<int, MaterialInfo> CJIndexToMaterialInfo;
+      for (auto& infoIndex : materialInfoToCJIndex_)
+      {
+         CJIndexToMaterialInfo[infoIndex.second] = infoIndex.first;
+      }
+
+      json allMaterials;
+      for (auto& indexInfo : CJIndexToMaterialInfo)
+      {
+         const MaterialInfo& mi = indexInfo.second;
+
+         json materialJSON;
+         // Set the "name"
+         if (std::get<0>(mi).has_value())
+         {
+            materialJSON["name"] = *std::get<0>(mi);
+         }
+
+         // Set the "ambientIntensity"
+         if (std::get<1>(mi).has_value())
+         {
+            materialJSON["ambientIntensity"] = *std::get<1>(mi);
+         }
+
+         // Set the "diffuseColor"
+         if (std::get<2>(mi).has_value())
+         {
+            json diffuseColor = json::array();
+            diffuseColor.push_back(*std::get<2>(mi));
+            diffuseColor.push_back(*std::get<3>(mi));
+            diffuseColor.push_back(*std::get<4>(mi));
+            materialJSON["diffuseColor"] = diffuseColor;
+         }
+
+         // Set the "emissiveColor"
+         if (std::get<5>(mi).has_value())
+         {
+            json emissiveColor = json::array();
+            emissiveColor.push_back(*std::get<5>(mi));
+            emissiveColor.push_back(*std::get<6>(mi));
+            emissiveColor.push_back(*std::get<7>(mi));
+            materialJSON["emissiveColor"] = emissiveColor;
+         }
+
+         // Set the "specularColor"
+         if (std::get<8>(mi).has_value())
+         {
+            json specularColor = json::array();
+            specularColor.push_back(*std::get<8>(mi));
+            specularColor.push_back(*std::get<9>(mi));
+            specularColor.push_back(*std::get<10>(mi));
+            materialJSON["specularColor"] = specularColor;
+         }
+
+         // Set the "shininess"
+         if (std::get<11>(mi).has_value())
+         {
+            materialJSON["shininess"] = *std::get<11>(mi);
+         }
+
+         // Set the "transparency"
+         if (std::get<12>(mi).has_value())
+         {
+            materialJSON["transparency"] = *std::get<12>(mi);
+         }
+
+         // Set the "isSmooth"
+         // currently there is no easy way to support this in FME.  Not yet.
+
+         // Add this to our array
+         allMaterials += materialJSON;
+      }
+
+      if (!allMaterials.is_null())
+      {
+         outputJSON_["appearance"]["materials"] = allMaterials;
+      }
+
+      // We're done with this
+      materialInfoToCJIndex_.clear();
+   }
+
    return FME_SUCCESS;
 }

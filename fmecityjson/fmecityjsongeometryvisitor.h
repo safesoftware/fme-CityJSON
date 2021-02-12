@@ -48,6 +48,19 @@ using json = nlohmann::json;
 using VertexPool = std::vector<std::tuple<double, double, double>>;
 using TexCoordPool = std::vector<std::string>;
 
+// I use a tuple here, so it can be easily used as a key to a std::map, for uniqueness.
+using MaterialInfo = std::tuple<
+   std::optional<std::string>, // matName
+   std::optional<FME_Real64>, // ambient intensity
+   std::optional<FME_Real64>, std::optional<FME_Real64>, std::optional<FME_Real64>, // Diffuse r,g,b
+   std::optional<FME_Real64>, std::optional<FME_Real64>, std::optional<FME_Real64>, // Emissive r,g,b
+   std::optional<FME_Real64>, std::optional<FME_Real64>, std::optional<FME_Real64>, // Specular r,g,b
+   std::optional<FME_Real64>, // shininess
+   std::optional<FME_Real64> // transparency
+                             // isSmooth ?
+>;
+
+
 class IFMEVoxelGrid;
 class IFMESession;
 
@@ -63,7 +76,8 @@ public:
                               IFMESession* session,
                               bool remove_duplicates,
                               int important_digits,
-                              std::map<FME_UInt32, int>& textureRefsToCJIndex);
+                              std::map<FME_UInt32, int>& textureRefsToCJIndex,
+                              std::map<MaterialInfo, int>& materialInfoToCJIndex);
 
    //---------------------------------------------------------------------
    // Destructor.
@@ -269,7 +283,8 @@ private:
    // them down to one level of hierarchy.
    FME_Status visitCompositeSurfaceParts(const IFMECompositeSurface& compositeSurface,
                                          json& jsonArray,
-                                         json& jsonTCArray);
+                                         json& jsonTCArray,
+                                         json& jsonMaterialRefs);
 
    //---------------------------------------------------------------------
    // The vertex is added to the vertex pool.  It will not add duplicates.
@@ -277,6 +292,9 @@ private:
    unsigned long addVertex(const FMECoord3D& vertex);
    void acceptVertex(const std::string& vertex_string, VertexPool& output, bool updateBounds);
    unsigned long addTextureCoord(const FMECoord2D& texcoord);
+
+   //---------------------------------------------------------------------
+   int getMaterialRefFromAppearance(const IFMEAppearance* app);
 
    //---------------------------------------------------------------------
    // This allows easy access to turn on/off debug logging throughout this class.
@@ -288,10 +306,10 @@ private:
    //----------------------------------------------------------------------
    // get the JSON object for the boundary that is "in progress"  
    // likely from the last visit call.
-   void takeWorkingBoundaries(json& jsonArray, json& jsonTCArray);
-   void takeWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray);
-   void addWorkingBoundaries(json& jsonArray, json& jsonTCArray);
-   void addWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray);
+   void takeWorkingBoundaries(json& jsonArray, json& jsonTCArray, json& jsonMaterialRefs);
+   void takeWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray, json& jsonMaterialRefs);
+   void addWorkingBoundaries(json& jsonArray, json& jsonTCArray, json& jsonMaterialRefs);
+   void addWorkingBoundaries_1Deep(json& jsonArray, json& jsonTCArray, json& jsonMaterialRefs);
 
    //----------------------------------------------------------------------
    // If we are the first in a hierarchy, let's put out "header" info about
@@ -302,7 +320,10 @@ private:
    //----------------------------------------------------------------------
    // If we are the first in a hierarchy, let's put out "boundary" and "semantic" info.
    // If we know we are just a sub-part we'll store our info away for it to use later.
-   void completedGeometry(bool topLevel, const json& boundary, const json& texCoords);
+   void completedGeometry(bool topLevel,
+                          const json& boundary,
+                          const json& texCoords,
+                          const json& materialRefs);
 
    //----------------------------------------------------------------------
    template <class T>
@@ -340,6 +361,7 @@ private:
       auto* iterator = compositeOrMultiSolid.getIterator();
       auto jsonArray = json::array();
       json jsonTCArray = json::array();
+      json jsonMaterialRefs = json::array();
       while (iterator->next())
       {
          // Get the next solid.
@@ -363,13 +385,13 @@ private:
          // nesting in the same way FME can.
          if (solid->canCastAs<const IFMECompositeSolid*>())
          {
-            addWorkingBoundaries_1Deep(jsonArray, jsonTCArray);
+            addWorkingBoundaries_1Deep(jsonArray, jsonTCArray, jsonMaterialRefs);
             multiSolidSemanticValues_.insert(multiSolidSemanticValues_.end(), solidSemanticValues_.begin(), solidSemanticValues_.end());
          }
          else
          {
             // Just a regular single solid.
-            addWorkingBoundaries(jsonArray, jsonTCArray);
+            addWorkingBoundaries(jsonArray, jsonTCArray, jsonMaterialRefs);
             multiSolidSemanticValues_.push_back(solidSemanticValues_);
          }
       }
@@ -381,7 +403,7 @@ private:
          outputgeom_["semantics"]["values"]   = multiSolidSemanticValues_;
       }
 
-      completedGeometry(topLevel, jsonArray, jsonTCArray);
+      completedGeometry(topLevel, jsonArray, jsonTCArray, jsonMaterialRefs);
 
       // Done with the iterator
       compositeOrMultiSolid.destroyIterator(iterator);
@@ -415,6 +437,7 @@ private:
    json outputgeom_;
    json workingBoundary_;
    json workingTexCoords_;
+   json workingMaterialRefs_;
    bool remove_duplicates_; 
    int important_digits_; 
 
@@ -434,6 +457,9 @@ private:
 
    // Keeping track of textures in appearances
    std::map<FME_UInt32, int>& textureRefsToCJIndex_;
+
+   // Keeping track of materials in appearances
+   std::map<MaterialInfo, int>& materialInfoToCJIndex_;
 
    // Maps a vertex to a specific index in the vertex pool.
    std::unordered_map<std::string, unsigned long> vertexToIndex_;

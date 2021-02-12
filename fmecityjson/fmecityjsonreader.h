@@ -347,6 +347,7 @@ private:
    std::map<int, FME_UInt32> texturesMap_;
    std::string defaultThemeTexture_;
    std::vector<std::string> lodInData_;
+   std::map<std::pair<FME_UInt32, FME_UInt32>, FME_UInt32> matTexMap_;
 
    // Let's track things so we don't log so much.
    std::map<std::string, int> limitLogging_;

@@ -253,6 +253,9 @@ private:
    std::map<FME_UInt32, std::string> rasterRefsToFileNames_;
    int uniqueFilenameCounter_;
 
+   // Keeping track of materials in appearances
+   std::map<MaterialInfo, int> materialInfoToCJIndex_;
+
    // A mapping from format name -> FME writer.
    std::map<std::string, IFMEUniversalWriter*> writers_;
    std::map<std::string, std::string> extensions_;
