@@ -1123,7 +1123,7 @@ FME_Status FMECityJSONGeometryVisitor::visitDonut(const IFMEDonut& donut)
    // nesting in the same way FME can.
    auto jsonArray = json::array();
    json jsonTCArray = json::array();
-   json unused;
+   json unused = json::array();
    takeWorkingBoundaries_1Deep(jsonArray, jsonTCArray, unused);
 
    // Get the inner boundary
