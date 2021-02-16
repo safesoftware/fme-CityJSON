@@ -1081,7 +1081,7 @@ FME_Status FMECityJSONGeometryVisitor::visitPolygon(const IFMEPolygon& polygon)
    // re-visit polygon curve geometry
    auto jsonArray = json::array();
    json jsonTCArray = json::array();
-   json unused;
+   json unused = json::array();
    FME_Status badNews = boundary->acceptGeometryVisitorConst(*this);
    if (badNews)
    {
