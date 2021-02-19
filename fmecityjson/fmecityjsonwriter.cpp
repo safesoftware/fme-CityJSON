@@ -1154,11 +1154,6 @@ FME_Status FMECityJSONWriter::writeRaster(FME_UInt32 rasterReference,
       gFMESession->getRasterTools()->convertInterpretation(
          FME_REINTERPRET_MODE_RASTER, FME_INTERPRETATION_RGB24, raster, nullptr);
    }
-   else if ((ofn != "PNGRASTER") && (fileType == "PNG"))
-   {
-      gFMESession->getRasterTools()->convertInterpretation(
-         FME_REINTERPRET_MODE_RASTER, FME_INTERPRETATION_RGBA32, raster, nullptr);
-   }
 
    if (rasterRefsToFileNames_.find(rasterReference) != rasterRefsToFileNames_.end())
    {
