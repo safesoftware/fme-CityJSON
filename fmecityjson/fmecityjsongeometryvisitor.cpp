@@ -121,7 +121,7 @@ const std::map< std::string, std::vector< std::string > > FMECityJSONGeometryVis
          "TrafficArea",
          "AuxiliaryTrafficArea"
       }},
-      {"TransportationSquare", {
+      {"TransportSquare", {
          "TrafficArea",
          "AuxiliaryTrafficArea"
       }},
