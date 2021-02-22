@@ -24,7 +24,7 @@ DEF_LINE_BREAK ATTRIB_CHANGE
 ! --------------------------------------------------------------------------------
 SOURCE_PREAMBLE
 _
-GUI MULTIFILE SourceDataset All_Files|* Source CityJSON File(s):
+GUI MULTIFILE SourceDataset CityJSON_Files(*.json)|*.json|All_Files|* Source CityJSON File(s):
 _
 END_SOURCE_PREAMBLE
 
@@ -59,7 +59,7 @@ SOURCE_DATASET \"$[SourceDataset]\"
 ! --------------------------------------------------------------------------------
 DESTINATION_PREAMBLE
 _
-GUI FILENAME DestDataset All_Files|* Destination CityJSON File:
+GUI FILENAME DestDataset CityJSON_Files(*.json)|*.json|All_Files|* Destination CityJSON File:
 __
 END_DESTINATION_PREAMBLE
 
