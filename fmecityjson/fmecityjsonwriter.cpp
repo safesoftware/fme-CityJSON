@@ -60,6 +60,7 @@
 #include <igeometryiterator.h>
 #include <ilibrary.h>
 #include <irastertools.h>
+#include <iband.h>
 
 #include <typeinfo>
 #include <iomanip>
@@ -1153,6 +1154,21 @@ FME_Status FMECityJSONWriter::writeRaster(FME_UInt32 rasterReference,
       gFMESession->getRasterTools()->resolvePalettes(raster);
       gFMESession->getRasterTools()->convertInterpretation(
          FME_REINTERPRET_MODE_RASTER, FME_INTERPRETATION_RGB24, raster, nullptr);
+   }
+   else if ((ofn != "PNGRASTER") && (fileType == "PNG"))
+   {
+      if (raster->getNumBands() == 1 && raster->getBandConst(0)->getNumPalettes() > 0)
+      {
+         gFMESession->getRasterTools()->convertInterpretation(
+            FME_REINTERPRET_MODE_BAND, FME_INTERPRETATION_UINT8, raster, nullptr);
+         gFMESession->getRasterTools()->convertInterpretation(
+            FME_REINTERPRET_MODE_PALETTE, FME_INTERPRETATION_RGBA32, raster, nullptr);
+      }
+      else
+      {
+         gFMESession->getRasterTools()->convertInterpretation(
+            FME_REINTERPRET_MODE_RASTER, FME_INTERPRETATION_RGBA32, raster, nullptr);
+      }
    }
 
    if (rasterRefsToFileNames_.find(rasterReference) != rasterRefsToFileNames_.end())
