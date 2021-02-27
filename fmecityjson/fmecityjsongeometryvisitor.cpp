@@ -1911,4 +1911,12 @@ FME_Status FMECityJSONGeometryVisitor::visitVoxelGrid(const IFMEVoxelGrid& /*vox
    return FME_SUCCESS;
 }
 
+//=====================================================================
+FME_Status FMECityJSONGeometryVisitor::visitPipe(const IFMEPipe& /*pipe*/)
+{
+   // TODO: [FMEENGINE-63998] This method should be written.
+   logDebugMessage(std::string(kMsgVisiting) + std::string("pipe"));
+   return FME_SUCCESS;
+}
+
 
