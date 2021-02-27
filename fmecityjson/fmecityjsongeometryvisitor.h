@@ -62,6 +62,7 @@ using MaterialInfo = std::tuple<
 
 
 class IFMEVoxelGrid;
+class IFMEPipe;
 class IFMESession;
 
 // This class fills outputgeoms_ with json geometry objects at the specified LOD
@@ -232,6 +233,10 @@ public:
    //----------------------------------------------------------------------
    // Visitor logs the values of the passed in IFMEVoxelGrid geometry object.
    FME_Status visitVoxelGrid(const IFMEVoxelGrid& voxelGrid);
+
+   //----------------------------------------------------------------------
+   // Visitor logs the values of the passed in IFMEPipe geometry object.
+   FME_Status visitPipe(const IFMEPipe& pipe);
 
    //----------------------------------------------------------------------
    // get the JSON object for the geometry (without the "lod")
