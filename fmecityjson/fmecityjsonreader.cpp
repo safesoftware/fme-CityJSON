@@ -1726,12 +1726,12 @@ void FMECityJSONReader::parseMaterials(IFMEFace& face, json::value_type& materia
             fmeMatTexRef = refIndex->second;
          }
 
-         gFMESession->destroyString(appName);
-
          face.setAppearanceReference(fmeMatTexRef, FME_TRUE);
          // face.setAppearanceReference(fmeMatRef, FME_FALSE);
          // face.deleteSide(FME_FALSE); // make the back face not exist, "transparent".
       }
+
+      gFMESession->destroyString(appName);
    }
 }
 
