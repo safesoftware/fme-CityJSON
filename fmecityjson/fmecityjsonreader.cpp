@@ -1659,7 +1659,7 @@ void FMECityJSONReader::parseMaterials(IFMEFace& face, json::value_type& materia
       {
          // The only way it would have gotten an appearance is if it had a texture,
          // So we do expect to find the reference.
-         IFMEAppearance* texApp = gFMESession->getLibrary()->getAppearanceCopy(texAppRef);
+         texApp = gFMESession->getLibrary()->getAppearanceCopy(texAppRef);
          if (nullptr != texApp)
          {
             // We found a texture to "add to" our materials.
